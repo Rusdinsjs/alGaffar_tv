@@ -1,0 +1,36 @@
+# Built application files
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Files for the ART/Dalvik VM
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+release/
+
+# Gradle & Kotlin files
+.gradle/
+.kotlin/
+build/
+app/build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Android Studio / IntelliJ
+*.iml
+.idea/
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Reference repository & local PRD documents (keep local only, exclude from Android git repo)
+_referensi_lama/
+PRD.md
+prd.pdf

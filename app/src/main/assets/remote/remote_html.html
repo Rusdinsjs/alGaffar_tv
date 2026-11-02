@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Smart JWS Remote</title>
+    <!-- PWA Support -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="apple-touch-icon" href="/alGaffar.png">
+
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --card: #16161a;
+            --card-hover: #1c1c22;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.4);
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-primary);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding-bottom: calc(100px + env(safe-area-inset-bottom));
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
+            -webkit-tap-highlight-color: transparent;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(10, 10, 12, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: calc(20px + env(safe-area-inset-top)) 16px 20px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent), #10b981);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+
+        .logo-icon {
+            width: 20px;
+            height: 20px;
+            fill: white;
+        }
+
+        .brand-text h1 {
+            font-size: 16px;
+            margin: 0;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .status {
+            font-size: 10px;
+            color: var(--success);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            background: var(--success);
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+
+        .container {
+            padding: 16px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .tab-content {
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 24px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-title {
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .d-pad-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+        }
+
+        .d-pad-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        button.remote-btn {
+            background: #25252b;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: white;
+            border-radius: 18px;
+            width: 64px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        button.remote-btn:active {
+            transform: scale(0.9);
+            background: #32323a;
+        }
+
+        button.remote-btn.ok {
+            width: 80px;
+            height: 80px;
+            background: var(--accent);
+            border-color: rgba(255, 255, 255, 0.2);
+            font-weight: 900;
+            font-size: 18px;
+            font-style: italic;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        button.remote-btn.ok:active {
+            background: #2563eb;
+        }
+
+        .nav-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        button.action-btn {
+            background: #25252b;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 14px;
+            border-radius: 16px;
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        button.action-btn.danger { color: var(--danger); }
+        button.action-btn.accent { color: var(--accent); }
+
+        button.action-btn.active {
+            background: var(--accent);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        button.action-btn.active span {
+            color: #ffffff !important;
+        }
+
+        button.action-btn.on {
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            border-color: #34d399;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+        }
+
+        .form-group { margin-bottom: 16px; }
+
+        label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-left: 4px;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            background: #0a0a0c;
+            border: 1px solid #25252b;
+            border-radius: 16px;
+            padding: 14px;
+            color: white;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        input:focus,
+        textarea:focus {
+            border-color: var(--accent);
+        }
+
+        button.submit-btn {
+            width: 100%;
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 16px;
+            font-weight: 700;
+            margin-top: 10px;
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(10, 10, 12, 0.9);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: space-around;
+            padding: 12px 16px calc(24px + env(safe-area-inset-bottom)) 16px;
+            z-index: 1000;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+
+        .nav-item.active { color: var(--accent); }
+        .nav-item svg { width: 24px; height: 24px; }
+        .nav-item span {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: var(--success);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-size: 13px;
+            font-weight: 700;
+            z-index: 2000;
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: none;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .toast.error { background: var(--danger); }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+        .icon { width: 20px; height: 20px; fill: currentColor; }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type=range]:focus { outline: none; }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #25252b;
+            border-radius: 3px;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .monitor-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 8px;
+        }
+
+        .monitor-item {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 12px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .monitor-label {
+            font-size: 9px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .monitor-bar-bg {
+            height: 4px;
+            background: #25252b;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .monitor-bar-fill {
+            height: 100%;
+            background: var(--accent);
+            width: 0%;
+            transition: width 1s ease-in-out, background 0.3s;
+        }
+
+        .uptime-text {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 12px;
+            display: block;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="brand">
+            <div class="logo">
+                <svg class="logo-icon" viewBox="0 0 24 24">
+                    <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" />
+                </svg>
+            </div>
+            <div class="brand-text">
+                <h1>JWS SMART REMOTE</h1>
+                <div class="status">SINKRON AKTIF</div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Tab: Beranda -->
+        <div id="tab-home" class="tab-content active">
+            <!-- System Monitor -->
+            <div class="card" style="padding: 16px; background: linear-gradient(145deg, #16161a 0%, #0f172a 100%);">
+                <span class="card-title" style="margin-bottom:12px;">JWS TV Health Monitor</span>
+                <div class="monitor-grid">
+                    <div class="monitor-item">
+                        <div class="monitor-label">
+                            <span>CPU LOAD</span>
+                            <span id="cpu-val">0%</span>
+                        </div>
+                        <div class="monitor-bar-bg">
+                            <div id="cpu-bar" class="monitor-bar-fill"></div>
+                        </div>
+                    </div>
+                    <div class="monitor-item">
+                        <div class="monitor-label">
+                            <span>RAM USAGE</span>
+                            <span id="ram-val">0%</span>
+                        </div>
+                        <div class="monitor-bar-bg">
+                            <div id="ram-bar" class="monitor-bar-fill"></div>
+                        </div>
+                    </div>
+                </div>
+                <span id="uptime-val" class="uptime-text">Uptime: loading...</span>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Navigasi Utama</span>
+                <div class="d-pad-container">
+                    <button class="remote-btn" onclick="sendCommand('nav_up')">
+                        <svg class="icon"><path d="M7 14l5-5 5 5z" /></svg>
+                    </button>
+                    <div class="d-pad-row">
+                        <button class="remote-btn" onclick="sendCommand('nav_left')">
+                            <svg class="icon"><path d="M14 7l-5 5 5 5z" /></svg>
+                        </button>
+                        <button class="remote-btn ok" onclick="sendCommand('nav_enter')">OK</button>
+                        <button class="remote-btn" onclick="sendCommand('nav_right')">
+                            <svg class="icon"><path d="M10 17l5-5-5-5z" /></svg>
+                        </button>
+                    </div>
+                    <button class="remote-btn" onclick="sendCommand('nav_down')">
+                        <svg class="icon"><path d="M7 10l5 5 5-5z" /></svg>
+                    </button>
+
+                    <div class="nav-actions">
+                        <button class="action-btn danger" onclick="sendCommand('nav_back')">
+                            <svg class="icon">
+                                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+                            </svg> KEMBALI
+                        </button>
+                        <button class="action-btn accent" onclick="sendCommand('open_settings')">
+                            <svg class="icon">
+                                <path
+                                    d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z" />
+                            </svg> PENGATURAN
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Aksi Cepat & Live</span>
+                <div class="grid-2">
+                    <button class="action-btn" onclick="sendCommand('play_infaq')">🪙 QR INFAQ</button>
+                    <button class="action-btn" onclick="sendCommand('play_online_finance')">📊 KEUANGAN ONLINE</button>
+                    <button id="live-Cm1v4bteXbI" class="action-btn" onclick="sendCommand('set_live_source', { videoId: 'Cm1v4bteXbI' })">🕋 MAKKAH</button>
+                    <button id="live-9A1S0xAPVIs" class="action-btn" onclick="sendCommand('set_live_source', { videoId: '9A1S0xAPVIs' })">🕌 MADINAH</button>
+                    <button class="action-btn" onclick="sendCommand('play_live')">🎥 LIVE AUTO</button>
+                    <button class="action-btn" onclick="sendCommand('screensaver')">🌙 LAYAR MATI</button>
+                    <button class="action-btn" onclick="sendCommand('next_theme')">🎨 TEMA BARU</button>
+                    <button class="action-btn" onclick="sendCommand('next_layout')">📐 GANTI LAYOUT</button>
+                </div>
+
+                <div class="grid-2" style="margin-top: 12px;">
+                    <button id="btn-cctv" class="action-btn" onclick="sendCommand('play_cctv')"
+                        style="flex-direction: column; gap: 4px; padding: 12px 5px;">
+                        <span style="font-size: 18px;">👁️</span>
+                        <span style="font-size: 9px;">CCTV</span>
+                    </button>
+                    <button id="btn-audio" class="action-btn" onclick="sendCommand('play_custom_audio')"
+                        style="flex-direction: column; gap: 4px; padding: 12px 5px;">
+                        <span style="font-size: 18px;">🎵</span>
+                        <span style="font-size: 9px;">AUDIO</span>
+                    </button>
+                </div>
+
+                <div style="margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <button class="action-btn" style="width: 100%" onclick="sendCommand('next_clock_style')">🕐 GANTI GAYA JAM</button>
+                    <button class="action-btn" style="width: 100%" onclick="sendCommand('refresh')">🔄 RELOAD APP</button>
+                    <button class="action-btn danger" style="width: 100%; grid-column: span 2"
+                        onclick="sendCommand('stop')">⏹ KEMBALI KE STANDBY</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Settings Text -->
+        <div id="tab-brand" class="tab-content">
+            <div class="card">
+                <span class="card-title">Identitas Masjid</span>
+                <div class="form-group">
+                    <label>Nama Masjid</label>
+                    <input type="text" id="mosqueName" placeholder="Nama Masjid...">
+                </div>
+                <div class="form-group">
+                    <label>Alamat Masjid</label>
+                    <input type="text" id="mosqueAddress" placeholder="Alamat...">
+                </div>
+                <button class="submit-btn" onclick="updateIdentity()">SIMPAN IDENTITAS</button>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Text Overlay (Running Text)</span>
+                <div class="form-group">
+                    <label>Pesan Baru</label>
+                    <textarea id="runningText" rows="3" placeholder="Tulis pengumuman berjalan..."></textarea>
+                </div>
+                <div class="grid-2">
+                    <button class="submit-btn" onclick="addRunningText()">+ TAMBAH</button>
+                    <button class="submit-btn" style="background:var(--danger); box-shadow:none"
+                        onclick="clearRunningText()">KOSONGKAN</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Info Card (Pengumuman)</span>
+                <div class="form-group">
+                    <label>Judul</label>
+                    <input type="text" id="infoTitle" placeholder="Contoh: INFO JUMAT">
+                </div>
+                <div class="form-group">
+                    <label>Sub-judul</label>
+                    <input type="text" id="infoSubtitle" placeholder="Contoh: Petugas Khutbah">
+                </div>
+                <div class="form-group">
+                    <label>Isi Pesan</label>
+                    <textarea id="infoContent" rows="3" placeholder="Masukkan detail pengumuman..."></textarea>
+                </div>
+                <div class="grid-2">
+                    <button class="submit-btn" onclick="addInfoCard()">+ TAMBAH INFO</button>
+                    <button class="submit-btn" style="background:var(--danger); box-shadow:none"
+                        onclick="clearInfoCard()">KOSONGKAN</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Media -->
+        <div id="tab-media" class="tab-content">
+            <div class="card">
+                <span class="card-title">Kontrol Suara (Master)</span>
+                <div class="form-group">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+                        <label>Volume Player</label>
+                        <span id="volumeVal" style="font-size:12px; color:var(--accent); font-weight:bold">80%</span>
+                    </div>
+                    <input type="range" id="masterVolume" min="0" max="100" value="80"
+                        oninput="updateVolume(this.value)">
+                </div>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Master Aktifasi Mode</span>
+                <div class="grid-2" style="gap: 10px;">
+                    <button id="toggle-jumat" class="action-btn"
+                        onclick="sendCommand('toggle_mode', { mode: 'jumat' })">🕌 JUMAT</button>
+                    <button id="toggle-ramadhan" class="action-btn"
+                        onclick="sendCommand('toggle_mode', { mode: 'ramadhan' })">🌙 RAMADHAN</button>
+                    <button id="toggle-idul_fitri" class="action-btn"
+                        onclick="sendCommand('toggle_mode', { mode: 'idul_fitri' })">🕋 IDUL FITRI</button>
+                    <button id="toggle-idul_adha" class="action-btn"
+                        onclick="sendCommand('toggle_mode', { mode: 'idul_adha' })">🐑 IDUL ADHA</button>
+                    <button id="toggle-slideshow" class="action-btn" style="grid-column: span 2"
+                        onclick="sendCommand('toggle_mode', { mode: 'slideshow' })">🎞️ SLIDESHOW</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Mode Tampilan</span>
+                <div class="grid-2">
+                    <button class="action-btn" onclick="sendCommand('play_slideshow')">🎞️ SLIDESHOW</button>
+                    <button class="action-btn" onclick="sendCommand('play_jumat')">🕌 MODE JUMAT</button>
+                    <button class="action-btn" onclick="sendCommand('play_ramadhan')">🌙 RAMADHAN</button>
+                    <button class="action-btn" onclick="sendCommand('play_idul_fitri')">🕋 IDUL FITRI</button>
+                    <button class="action-btn" style="grid-column: span 2" onclick="sendCommand('play_idul_adha')">🐑 IDUL ADHA</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-sholat" class="tab-content">
+            <!-- Subuh -->
+            <div class="card">
+                <span class="card-title">SUBUH</span>
+                <div class="grid-3">
+                    <button id="fajr-isTartil" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'fajr', setting: 'isTartil' })">📖 TARTIL</button>
+                    <button id="fajr-isTarhim" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'fajr', setting: 'isTarhim' })">🕯️ TARHIM</button>
+                    <button id="fajr-isAdzan" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'fajr', setting: 'isAdzan' })">📢 ADZAN</button>
+                </div>
+            </div>
+            <!-- Dzuhur -->
+            <div class="card">
+                <span class="card-title">DZUHUR</span>
+                <div class="grid-3">
+                    <button id="dhuhr-isTartil" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'dhuhr', setting: 'isTartil' })">📖 TARTIL</button>
+                    <button id="dhuhr-isTarhim" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'dhuhr', setting: 'isTarhim' })">🕯️ TARHIM</button>
+                    <button id="dhuhr-isAdzan" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'dhuhr', setting: 'isAdzan' })">📢 ADZAN</button>
+                </div>
+            </div>
+            <!-- Ashar -->
+            <div class="card">
+                <span class="card-title">ASHAR</span>
+                <div class="grid-3">
+                    <button id="asr-isTartil" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'asr', setting: 'isTartil' })">📖 TARTIL</button>
+                    <button id="asr-isTarhim" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'asr', setting: 'isTarhim' })">🕯️ TARHIM</button>
+                    <button id="asr-isAdzan" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'asr', setting: 'isAdzan' })">📢 ADZAN</button>
+                </div>
+            </div>
+            <!-- Maghrib -->
+            <div class="card">
+                <span class="card-title">MAGHRIB</span>
+                <div class="grid-3">
+                    <button id="maghrib-isTartil" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'maghrib', setting: 'isTartil' })">📖 TARTIL</button>
+                    <button id="maghrib-isTarhim" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'maghrib', setting: 'isTarhim' })">🕯️ TARHIM</button>
+                    <button id="maghrib-isAdzan" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'maghrib', setting: 'isAdzan' })">📢 ADZAN</button>
+                </div>
+            </div>
+            <!-- Isya -->
+            <div class="card">
+                <span class="card-title">ISYA</span>
+                <div class="grid-3">
+                    <button id="isha-isTartil" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'isha', setting: 'isTartil' })">📖 TARTIL</button>
+                    <button id="isha-isTarhim" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'isha', setting: 'isTarhim' })">🕯️ TARHIM</button>
+                    <button id="isha-isAdzan" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'isha', setting: 'isAdzan' })">📢 ADZAN</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" onclick="switchTab('home', event)">
+            <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
+            <span>Beranda</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('brand', event)">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+            </svg>
+            <span>Settings Text</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('media', event)">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+            </svg>
+            <span>Media</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('sholat', event)">
+            <svg viewBox="0 0 24 24">
+                <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+            </svg>
+            <span>Sholat</span>
+        </button>
+    </nav>
+
+    <div id="toast" class="toast">Berhasil Terkirim!</div>
+
+    <script>
+        const API = '/api/command';
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('token')) {
+            sessionStorage.setItem('jws_auth_token', urlParams.get('token').trim());
+        }
+        let AUTH_TOKEN = sessionStorage.getItem('jws_auth_token');
+        let pendingUpdates = {};
+
+        function vibe() { if ('vibrate' in navigator) navigator.vibrate(10); }
+
+        function checkAuth() {
+            if (!AUTH_TOKEN) {
+                let input = prompt('🔐 Masukkan PIN (superadmin / admin) atau Token Akses JWS:');
+                AUTH_TOKEN = input ? input.trim() : '';
+                if (AUTH_TOKEN) sessionStorage.setItem('jws_auth_token', AUTH_TOKEN);
+            }
+        }
+        checkAuth();
+
+        async function sendCommand(action, payload = {}) {
+            vibe();
+            if (!AUTH_TOKEN) {
+                showToast('❌ Token tidak diatur!', true);
+                return;
+            }
+
+            if (action === 'toggle_mode' && payload.mode) {
+                const id = `toggle-${payload.mode}`;
+                const btn = document.getElementById(id);
+                if (btn) {
+                    btn.classList.toggle('on');
+                    pendingUpdates[id] = Date.now();
+                }
+            } else if (action === 'toggle_prayer_setting' && payload.prayer && payload.setting) {
+                const id = `${payload.prayer}-${payload.setting}`;
+                const btn = document.getElementById(id);
+                if (btn) {
+                    btn.classList.toggle('on');
+                    pendingUpdates[id] = Date.now();
+                }
+            } else if (action === 'set_live_source' && payload.videoId) {
+                document.querySelectorAll('[id^="live-"]').forEach(b => {
+                    b.classList.remove('active');
+                    pendingUpdates[b.id] = Date.now();
+                });
+                const id = `live-${payload.videoId}`;
+                const btn = document.getElementById(id);
+                if (btn) {
+                    btn.classList.add('active');
+                    pendingUpdates[id] = Date.now();
+                }
+            }
+
+            try {
+                const response = await fetch(API, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${AUTH_TOKEN}`
+                    },
+                    body: JSON.stringify({ action, ...payload })
+                });
+
+                if (response.status === 401) {
+                    sessionStorage.removeItem('jws_auth_token');
+                    showToast('❌ PIN / Token Salah!', true);
+                    setTimeout(() => window.location.reload(), 1000);
+                } else if (!response.ok) {
+                    showToast('❌ Gagal Kirim!', true);
+                } else {
+                    showToast();
+                }
+            } catch (e) {
+                showToast('❌ Error Jaringan!', true);
+            }
+        }
+
+        function switchTab(tabId, evt) {
+            vibe();
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+            document.getElementById('tab-' + tabId).classList.add('active');
+            if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+        }
+
+        function updateIdentity() {
+            const name = document.getElementById('mosqueName').value;
+            const address = document.getElementById('mosqueAddress').value;
+            if (name || address) {
+                sendCommand('update_identity', { name, address });
+            } else {
+                showToast('Isi nama atau alamat', true);
+            }
+        }
+
+        function addRunningText() {
+            const text = document.getElementById('runningText').value;
+            if (text) {
+                sendCommand('add_overlay_text', { text });
+                document.getElementById('runningText').value = '';
+            }
+        }
+
+        function clearRunningText() {
+            if (confirm('Hapus semua pesan berjalan?')) sendCommand('clear_overlay_text');
+        }
+
+        function addInfoCard() {
+            const title = document.getElementById('infoTitle').value;
+            const subtitle = document.getElementById('infoSubtitle').value;
+            const content = document.getElementById('infoContent').value;
+
+            if (content) {
+                sendCommand('add_info', { title, subtitle, content });
+                document.getElementById('infoTitle').value = '';
+                document.getElementById('infoSubtitle').value = '';
+                document.getElementById('infoContent').value = '';
+            } else {
+                showToast('Isi pesan pengumuman wajib diisi', true);
+            }
+        }
+
+        function clearInfoCard() {
+            if (confirm('Hapus semua kartu pengumuman (Info Card)?')) sendCommand('clear_info');
+        }
+
+        function updateVolume(val) {
+            document.getElementById('volumeVal').innerText = val + '%';
+            sendCommand('update_volume', { volume: parseInt(val) / 100 });
+        }
+
+        async function pollStatus() {
+            if (!AUTH_TOKEN) return;
+            try {
+                const response = await fetch('/api/status', {
+                    headers: { 'Authorization': `Bearer ${AUTH_TOKEN}` }
+                });
+                if (response.ok) {
+                    const status = await response.json();
+
+                    const btnCctv = document.getElementById('btn-cctv');
+                    const btnAudio = document.getElementById('btn-audio');
+
+                    if (status.state === 'cctv') btnCctv.classList.add('active'); else btnCctv.classList.remove('active');
+                    if (status.customAudio) btnAudio.classList.add('active'); else btnAudio.classList.remove('active');
+
+                    const toggleIds = ['toggle-jumat', 'toggle-ramadhan', 'toggle-idul_fitri', 'toggle-idul_adha', 'toggle-slideshow'];
+                    const statusKeys = ['jumatEnabled', 'ramadhanEnabled', 'idulFitriEnabled', 'idulAdhaEnabled', 'slideshowEnabled'];
+
+                    toggleIds.forEach((id, idx) => {
+                        if (pendingUpdates[id] && (Date.now() - pendingUpdates[id] < 3000)) return;
+                        const btn = document.getElementById(id);
+                        if (btn) {
+                            if (status[statusKeys[idx]]) btn.classList.add('on');
+                            else btn.classList.remove('on');
+                        }
+                    });
+
+                    document.querySelectorAll('[id^="live-"]').forEach(b => {
+                        if (pendingUpdates[b.id] && (Date.now() - pendingUpdates[b.id] < 3000)) return;
+                        b.classList.remove('active');
+                        if (status.activeLiveVideoId && b.id === `live-${status.activeLiveVideoId}`) {
+                            b.classList.add('active');
+                        }
+                    });
+
+                    if (status.prayerSettings) {
+                        const prayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+                        const settings = ['isTartil', 'isTarhim', 'isAdzan'];
+
+                        prayers.forEach(p => {
+                            if (!status.prayerSettings[p]) return;
+                            settings.forEach(s => {
+                                const id = `${p}-${s}`;
+                                if (pendingUpdates[id] && (Date.now() - pendingUpdates[id] < 3000)) return;
+                                const btn = document.getElementById(id);
+                                if (btn) {
+                                    if (status.prayerSettings[p][s]) btn.classList.add('on');
+                                    else btn.classList.remove('on');
+                                }
+                            });
+                        });
+                    }
+
+                    if (status.system) {
+                        updateSystemUI(status.system);
+                    }
+                }
+            } catch (e) {
+                console.error('Status poll failed', e);
+            }
+        }
+
+        function updateSystemUI(sys) {
+            const cpuBar = document.getElementById('cpu-bar');
+            const ramBar = document.getElementById('ram-bar');
+            const cpuVal = document.getElementById('cpu-val');
+            const ramVal = document.getElementById('ram-val');
+            const uptimeVal = document.getElementById('uptime-val');
+
+            if (cpuBar) {
+                cpuBar.style.width = sys.cpu + '%';
+                cpuBar.style.background = sys.cpu > 80 ? 'var(--danger)' : (sys.cpu > 50 ? 'var(--warning)' : 'var(--accent)');
+                cpuVal.innerText = sys.cpu + '%';
+            }
+
+            if (ramBar) {
+                ramBar.style.width = sys.ram + '%';
+                ramBar.style.background = sys.ram > 85 ? 'var(--danger)' : (sys.ram > 70 ? 'var(--warning)' : 'var(--success)');
+                ramVal.innerText = sys.ram + '%';
+            }
+
+            if (uptimeVal) {
+                uptimeVal.innerText = 'JWS TV Uptime: ' + sys.uptime;
+            }
+        }
+
+        setInterval(pollStatus, 1000);
+        pollStatus();
+
+        function showToast(message = 'Perintah Terkirim!', isError = false) {
+            const t = document.getElementById('toast');
+            t.textContent = message;
+            if (isError) t.classList.add('error'); else t.classList.remove('error');
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2000);
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('SW Registered', reg))
+                    .catch(err => console.log('SW Failed', err));
+            });
+        }
+    </script>
+</body>
+
+</html>
