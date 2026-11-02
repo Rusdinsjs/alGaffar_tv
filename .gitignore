@@ -30,7 +30,6 @@ captures/
 .externalNativeBuild/
 .cxx/
 
-# Reference repository & local PRD documents (keep local only, exclude from Android git repo)
+# Reference repository & large PDF document (keep local only, exclude from Android git repo)
 _referensi_lama/
-PRD.md
 prd.pdf
