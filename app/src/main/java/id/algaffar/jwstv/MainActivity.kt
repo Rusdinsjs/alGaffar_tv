@@ -1,6 +1,8 @@
 package id.algaffar.jwstv
 
+import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -46,6 +48,7 @@ import id.algaffar.jwstv.service.JwsForegroundService
 import id.algaffar.jwstv.ui.MainViewModel
 import id.algaffar.jwstv.ui.components.Responsive1080pCanvas
 import id.algaffar.jwstv.ui.screens.fullscreen.FullScreenRouter
+import id.algaffar.jwstv.ui.settings.SettingsActions
 import id.algaffar.jwstv.ui.settings.SettingsModal
 import id.algaffar.jwstv.ui.theme.IslamicAmbientBackground
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
@@ -97,6 +100,52 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var pendingImageSubFolder: String = "media"
+    private var pendingImageCallback: ((String) -> Unit)? = null
+    private val pickImageAssetLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        val cb = pendingImageCallback
+        if (uri != null && cb != null) {
+            val fileName = resolveFileName(uri) ?: "image_${System.currentTimeMillis()}.png"
+            contentResolver.openInputStream(uri)?.let { input ->
+                viewModel.importImageAsset(pendingImageSubFolder, fileName, input, cb)
+            }
+        }
+        pendingImageCallback = null
+    }
+
+    private var pendingAudioCategory: String = "tartil"
+    private var pendingAudioSlot: String = "fajr"
+    private val pickPrayerAudioLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            contentResolver.openInputStream(uri)?.let { input ->
+                viewModel.importPrayerAudioSlot(pendingAudioCategory, pendingAudioSlot, input)
+            }
+        }
+    }
+
+    private val pickCustomAudioLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val fileName = resolveFileName(uri) ?: "custom_${System.currentTimeMillis()}.mp3"
+            contentResolver.openInputStream(uri)?.let { input ->
+                viewModel.importCustomAudioFile(fileName, input)
+            }
+        }
+    }
+
+    private fun resolveFileName(uri: Uri): String? {
+        return runCatching {
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+        }.getOrNull()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Always keep TV screen awake for 24/7 digital signage
@@ -110,6 +159,9 @@ class MainActivity : ComponentActivity() {
                 val takjilPreview by viewModel.takjilPreviewFlow.collectAsState()
                 val relayPinStates by viewModel.relayPinStatesFlow.collectAsState()
                 val openSettingsReq by viewModel.openSettingsRequestCount.collectAsState()
+                val onlineFinanceTestResult by viewModel.onlineFinanceTestResult.collectAsState()
+                val audioInventoryTick by viewModel.audioInventoryTick.collectAsState()
+                val previewingAudioKey by viewModel.previewingAudioKey.collectAsState()
 
                 val activePalette = remember(snapshot.settings.themeSettings, snapshot.now.hour) {
                     ThemeEngine.resolveActivePalette(
@@ -150,38 +202,89 @@ class MainActivity : ComponentActivity() {
                                     takjilImportPreview = takjilPreview,
                                     onConfirmTakjilImport = { viewModel.confirmTakjilImport() },
                                     onDismissTakjilImport = { viewModel.dismissTakjilImport() },
-                                    onUpdateSettings = { viewModel.updateSettings(it) },
-                                    onRequestExportTakjilTemplate = {
-                                        exportTakjilExcelLauncher.launch("Template_Takjil_Ramadhan_AlGaffar.xlsx")
-                                    },
-                                    onRequestImportTakjilExcel = {
-                                        importTakjilExcelLauncher.launch(
-                                            arrayOf(
-                                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                                "application/vnd.ms-excel"
+                                    actions = SettingsActions(
+                                        onUpdateSettings = { viewModel.updateSettings(it) },
+                                        onExportTakjilTemplate = {
+                                            exportTakjilExcelLauncher.launch("Template_Takjil_Ramadhan_AlGaffar.xlsx")
+                                        },
+                                        onImportTakjilExcel = {
+                                            importTakjilExcelLauncher.launch(
+                                                arrayOf(
+                                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                                    "application/vnd.ms-excel"
+                                                )
                                             )
-                                        )
-                                    },
-                                    onRequestExportBackupZip = {
-                                        exportBackupZipLauncher.launch("Backup_JWS_Masjid_AlGaffar.zip")
-                                    },
-                                    onRequestImportBackupZip = {
-                                        importBackupZipLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
-                                    },
-                                    onOpenDebugSimulator = {
+                                        },
+                                        onExportBackupZip = {
+                                            exportBackupZipLauncher.launch("Backup_JWS_Masjid_AlGaffar.zip")
+                                        },
+                                        onImportBackupZip = {
+                                            importBackupZipLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
+                                        },
+                                        onOpenDebugSimulator = {
+                                            isSettingsModalOpen = false
+                                            isDebugModalOpen = true
+                                        },
+                                        onToggleManualRelay = { pin, turnOn ->
+                                            viewModel.toggleManualRelay(pin, turnOn)
+                                        },
+                                        onDiscoverOnvifCameras = {
+                                            viewModel.discoverOnvifCameras()
+                                        },
+                                        onTestOnlineFinance = {
+                                            viewModel.testOnlineFinanceConnection()
+                                        },
+                                        onStartDirectLive = { src, customId, mins ->
+                                            viewModel.startDirectLive(src, customId, mins)
+                                            isSettingsModalOpen = false
+                                        },
+                                        onStopDirectLive = {
+                                            viewModel.stopDirectLive()
+                                        },
+                                        onPickImageAsset = { subFolder, onSaved ->
+                                            pendingImageSubFolder = subFolder
+                                            pendingImageCallback = onSaved
+                                            pickImageAssetLauncher.launch(arrayOf("image/*"))
+                                        },
+                                        onPickPrayerAudio = { category, slotName ->
+                                            pendingAudioCategory = category
+                                            pendingAudioSlot = slotName
+                                            pickPrayerAudioLauncher.launch(arrayOf("audio/*", "application/octet-stream"))
+                                        },
+                                        onDeletePrayerAudio = { category, slotName ->
+                                            viewModel.deletePrayerAudioSlot(category, slotName)
+                                        },
+                                        onTogglePreviewPrayerAudio = { category, slotName ->
+                                            viewModel.togglePreviewPrayerAudio(category, slotName)
+                                        },
+                                        onPickCustomAudio = {
+                                            pickCustomAudioLauncher.launch(arrayOf("audio/*", "application/octet-stream"))
+                                        },
+                                        onDeleteCustomAudio = { fileName ->
+                                            viewModel.deleteCustomAudioFile(fileName)
+                                        },
+                                        onTogglePreviewCustomAudio = { fileName ->
+                                            viewModel.togglePreviewCustomAudio(fileName)
+                                        },
+                                        onFindPrayerAudioSlot = { category, slotName ->
+                                            viewModel.findPrayerAudioSlot(category, slotName)
+                                        },
+                                        onListCustomAudioFiles = {
+                                            viewModel.listCustomAudioFilesWithDurations()
+                                        },
+                                        assetsRootDir = viewModel.assetsRootDir,
+                                        remoteServerUrl = snapshot.remoteServerUrl,
+                                        remoteQrPairingUrl = snapshot.remoteQrPairingUrl,
+                                        remoteAuthToken = snapshot.remoteAuthToken,
+                                        relayPinStates = relayPinStates,
+                                        onlineFinanceTestResult = onlineFinanceTestResult,
+                                        audioInventoryTick = audioInventoryTick,
+                                        previewingAudioKey = previewingAudioKey,
+                                        isLiveActiveNow = snapshot.tickResult.state == AppState.LIVE
+                                    ),
+                                    onClose = {
+                                        viewModel.stopAudioPreview()
                                         isSettingsModalOpen = false
-                                        isDebugModalOpen = true
-                                    },
-                                    onClose = { isSettingsModalOpen = false },
-                                    remoteServerUrl = snapshot.remoteServerUrl,
-                                    remoteQrPairingUrl = snapshot.remoteQrPairingUrl,
-                                    remoteAuthToken = snapshot.remoteAuthToken,
-                                    relayPinStates = relayPinStates,
-                                    onToggleManualRelay = { pin, turnOn ->
-                                        viewModel.toggleManualRelay(pin, turnOn)
-                                    },
-                                    onDiscoverOnvifCameras = {
-                                        viewModel.discoverOnvifCameras()
                                     }
                                 )
                             }
@@ -260,7 +363,7 @@ private fun QuickDebugModalOverlay(
             ) {
                 Column {
                     Text(
-                        text = "Panel Simulasi 27-State & Uji Audio (D-Pad / Touch)",
+                        text = "Panel Simulasi 31-State & Uji Audio (D-Pad / Touch)",
                         color = palette.textPrimary,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.ExtraBold

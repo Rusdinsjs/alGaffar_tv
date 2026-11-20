@@ -10,8 +10,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,12 +21,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.QrCode2
@@ -67,11 +62,13 @@ import id.algaffar.jwstv.domain.model.JumatPetugasRecord
 import id.algaffar.jwstv.domain.model.MasjidQrSettings
 import id.algaffar.jwstv.domain.model.RamadhanSettings
 import id.algaffar.jwstv.domain.model.SlideItem
+import id.algaffar.jwstv.ui.components.clock.BigAnalogClock
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
 import kotlinx.coroutines.delay
 import java.io.File
 import java.text.NumberFormat
 import java.time.LocalDate
+import java.time.ZonedDateTime
 import java.util.Locale
 
 private sealed interface MainDeckSlide {
@@ -240,71 +237,6 @@ fun MainSlideContainer(
             }
         }
 
-        // Top-Right Slide Navigation & Indicator Pill (Hybrid D-Pad + Touch)
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(16.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(palette.bgPrimary.copy(alpha = 0.72f))
-                .border(1.dp, palette.border, RoundedCornerShape(14.dp))
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(26.dp)
-                    .clip(CircleShape)
-                    .focusable()
-                    .clickable {
-                        currentIndex = (safeIndex - 1 + deck.size) % deck.size
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ChevronLeft,
-                    contentDescription = "Slide Sebelumnya",
-                    tint = palette.textPrimary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                deck.indices.forEach { idx ->
-                    Box(
-                        modifier = Modifier
-                            .width(if (idx == safeIndex) 20.dp else 7.dp)
-                            .height(7.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (idx == safeIndex) palette.accent
-                                else palette.textSecondary.copy(alpha = 0.35f)
-                            )
-                            .clickable { currentIndex = idx }
-                    )
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(26.dp)
-                    .clip(CircleShape)
-                    .focusable()
-                    .clickable {
-                        currentIndex = (safeIndex + 1) % deck.size
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ChevronRight,
-                    contentDescription = "Slide Berikutnya",
-                    tint = palette.textPrimary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
-
         // Floating Masjid QR Infaq Badge (Bottom-Right)
         if (settings.masjidQr.enabled && settings.masjidQr.showFloatingOnMain) {
             FloatingMasjidQrBadge(
@@ -460,10 +392,56 @@ private fun CustomSlideView(
     assetsRootDir: File?
 ) {
     val palette = LocalJwsTheme.current
+
+    if (slide.type == "analog_clock") {
+        BigAnalogClock(
+            now = ZonedDateTime.now(),
+            modifier = Modifier.fillMaxSize()
+        )
+        return
+    }
+
+    if (slide.type == "text" && slide.imageUrl.isBlank()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(palette.bgPrimary, palette.bgSecondary)
+                    )
+                )
+                .padding(horizontal = 64.dp, vertical = 48.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            if (slide.title.isNotBlank()) {
+                Text(
+                    text = slide.title,
+                    color = palette.accentSecondary,
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+            }
+            if (slide.content.isNotBlank()) {
+                Text(
+                    text = slide.content,
+                    color = palette.textPrimary,
+                    fontSize = 28.sp,
+                    lineHeight = 40.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        return
+    }
+
     val imageModel: Any? = remember(slide.imageUrl, assetsRootDir) {
         if (slide.imageUrl.isBlank()) {
             null
-        } else if (slide.imageUrl.startsWith("http://") || slide.imageUrl.startsWith("https://") || slide.imageUrl.startsWith("file://")) {
+        } else if (slide.imageUrl.startsWith("http://") || slide.imageUrl.startsWith("https://") || slide.imageUrl.startsWith("file://") || slide.imageUrl.startsWith("content://")) {
             slide.imageUrl
         } else if (assetsRootDir != null) {
             val clean = slide.imageUrl.removePrefix("jws-assets/").removePrefix("/")

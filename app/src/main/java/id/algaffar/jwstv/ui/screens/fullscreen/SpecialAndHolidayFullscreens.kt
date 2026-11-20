@@ -58,9 +58,11 @@ import id.algaffar.jwstv.domain.model.JumatPetugasRecord
 import id.algaffar.jwstv.domain.model.QurbanGroup
 import id.algaffar.jwstv.ui.JwsRuntimeSnapshot
 import id.algaffar.jwstv.ui.components.clock.ArtisticClock
+import id.algaffar.jwstv.ui.components.clock.BigAnalogClock
 import id.algaffar.jwstv.ui.components.clock.ClockVariant
 import id.algaffar.jwstv.ui.screens.standby.JumatKeuanganSlideView
 import id.algaffar.jwstv.ui.screens.standby.JumatPetugasSlideView
+import id.algaffar.jwstv.ui.screens.standby.NextPrayerCountdownCard
 import id.algaffar.jwstv.ui.screens.standby.generateQrBitmap
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
 import kotlinx.coroutines.delay
@@ -697,7 +699,9 @@ fun StandbySlideshowFullscreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        if (activeSlide != null && activeSlide.imageUrl.isNotBlank()) {
+        if (activeSlide?.type == "analog_clock") {
+            BigAnalogClock(now = snapshot.now, modifier = Modifier.fillMaxSize())
+        } else if (activeSlide != null && activeSlide.imageUrl.isNotBlank()) {
             val clean = activeSlide.imageUrl.removePrefix("jws-assets/").removePrefix("/")
             val fileModel = assetsRootDir?.let { File(it, clean).takeIf { f -> f.exists() } }
                 ?: activeSlide.imageUrl
@@ -709,28 +713,42 @@ fun StandbySlideshowFullscreen(
             )
         }
 
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .background(palette.bgPrimary.copy(alpha = 0.85f))
-                .padding(36.dp)
-        ) {
-            Text(
-                text = activeSlide?.title?.ifBlank { snapshot.settings.brand.name }
-                    ?: snapshot.settings.brand.name,
-                color = palette.textPrimary,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
-            if (!activeSlide?.content.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
+        if (activeSlide?.type != "analog_clock") {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(palette.bgPrimary.copy(alpha = 0.85f))
+                    .padding(36.dp)
+            ) {
                 Text(
-                    text = activeSlide?.content.orEmpty(),
-                    color = palette.textSecondary,
-                    fontSize = 20.sp
+                    text = activeSlide?.title?.ifBlank { snapshot.settings.brand.name }
+                        ?: snapshot.settings.brand.name,
+                    color = palette.textPrimary,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold
                 )
+                if (!activeSlide?.content.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = activeSlide?.content.orEmpty(),
+                        color = palette.textSecondary,
+                        fontSize = 20.sp
+                    )
+                }
             }
+        }
+
+        // Optional floating Next Prayer Card in bottom-right when nearing Adzan
+        val standbyCfg = snapshot.settings.standbySlideshow
+        val thresholdSec = standbyCfg.nextPrayerThresholdMinutes.coerceIn(5, 120) * 60L
+        if (standbyCfg.showNextPrayerCard && snapshot.schedule.secondsToNextPrayer in 1L..thresholdSec) {
+            NextPrayerCountdownCard(
+                schedule = snapshot.schedule,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp)
+            )
         }
     }
 }

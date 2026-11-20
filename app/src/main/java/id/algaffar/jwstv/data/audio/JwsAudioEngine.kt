@@ -108,6 +108,8 @@ class JwsAudioEngine(
             else -> null
         }
 
+        val baseVolume = settings.globalVolume.coerceIn(0f, 1.0f)
+
         if (desiredCategory != null) {
             val key = "$desiredCategory:${prayerId.id}"
             if (activePlaybackKey != key) {
@@ -116,7 +118,8 @@ class JwsAudioEngine(
                     startPlaylist(
                         key = key,
                         files = files,
-                        loop = (desiredCategory == "tartil")
+                        loop = (desiredCategory == "tartil"),
+                        volume = baseVolume
                     )
                 } else {
                     stopPlayback()
@@ -127,15 +130,15 @@ class JwsAudioEngine(
             val player = exoPlayer
             if (player != null) {
                 if (tickResult.shouldFadeOutAudio) {
-                    val targetVolume = when (tickResult.countdownSeconds) {
+                    val factor = when (tickResult.countdownSeconds) {
                         3L -> 0.72f
                         2L -> 0.42f
                         1L -> 0.16f
                         else -> 1.0f
                     }
-                    player.volume = targetVolume
-                } else if (player.volume < 1.0f) {
-                    player.volume = 1.0f
+                    player.volume = baseVolume * factor
+                } else {
+                    player.volume = baseVolume
                 }
             }
             return
@@ -147,7 +150,9 @@ class JwsAudioEngine(
                 val file = resolveSingleAssetFile(settings.customAudio.liveAudioFile)
                 val key = "custom_live:${settings.customAudio.liveAudioFile}"
                 if (file != null && activePlaybackKey != key) {
-                    startPlaylist(key, listOf(file), loop = false)
+                    startPlaylist(key, listOf(file), loop = false, volume = baseVolume)
+                } else if (exoPlayer != null) {
+                    exoPlayer?.volume = baseVolume
                 }
                 return
             }
@@ -155,13 +160,14 @@ class JwsAudioEngine(
             checkAndTriggerScheduledCustomAudio(now, settings)
             if (activePlaybackKey?.startsWith("tartil:") == true ||
                 activePlaybackKey?.startsWith("tarhim:") == true ||
-                activePlaybackKey?.startsWith("adzan:") == true
+                activePlaybackKey?.startsWith("adzan:") == true ||
+                activePlaybackKey?.startsWith("custom_live:") == true
             ) {
                 stopPlayback()
             }
         } else {
             // Any quiet prayer execution state immediately stops background audio
-            if (state.isQuietPrayerExecution || state == AppState.MENUNGGU_IQOMAH) {
+            if (state.isQuietPrayerExecution || state == AppState.MENUNGGU_IQOMAH || state == AppState.DOA_ADZAN) {
                 stopPlayback()
             }
         }
@@ -228,7 +234,7 @@ class JwsAudioEngine(
         }
     }
 
-    private fun startPlaylist(key: String, files: List<File>, loop: Boolean) {
+    private fun startPlaylist(key: String, files: List<File>, loop: Boolean, volume: Float = 1.0f) {
         runCatching {
             val player = getOrCreatePlayer()
             player.stop()
@@ -237,11 +243,49 @@ class JwsAudioEngine(
                 player.addMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
             }
             player.repeatMode = if (loop) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
-            player.volume = 1.0f
+            player.volume = volume.coerceIn(0f, 1.0f)
             player.prepare()
             player.play()
             activePlaybackKey = key
         }
+    }
+
+    fun previewAudioFile(file: File, volume: Float = 1.0f): Boolean {
+        if (!file.exists() || !file.isFile) return false
+        startPlaylist("preview:${file.absolutePath}", listOf(file), loop = false, volume = volume)
+        return true
+    }
+
+    fun readDurationFormatted(file: File): String {
+        val sec = readAudioDurationSeconds(file)
+        val m = sec / 60
+        val s = sec % 60
+        return "%d:%02d".format(m, s)
+    }
+
+    fun listCustomAudioFiles(): List<File> {
+        val dir = File(assetsRootDir, "audio/custom")
+        if (!dir.exists()) return emptyList()
+        return dir.listFiles()
+            ?.filter { it.isFile && it.extension.lowercase() in SUPPORTED_AUDIO_EXTENSIONS }
+            ?.sortedBy { it.name.lowercase() }
+            .orEmpty()
+    }
+
+    fun findSlotAudioFile(category: String, slotName: String): File? {
+        val categoryDir = File(assetsRootDir, "audio/$category")
+        if (!categoryDir.exists()) return null
+        val subFolder = File(categoryDir, slotName)
+        if (subFolder.exists() && subFolder.isDirectory) {
+            subFolder.listFiles()
+                ?.firstOrNull { it.isFile && it.extension.lowercase() in SUPPORTED_AUDIO_EXTENSIONS }
+                ?.let { return it }
+        }
+        for (ext in SUPPORTED_AUDIO_EXTENSIONS) {
+            val candidate = File(categoryDir, "$slotName.$ext")
+            if (candidate.exists() && candidate.isFile) return candidate
+        }
+        return null
     }
 
     fun stopPlayback() {

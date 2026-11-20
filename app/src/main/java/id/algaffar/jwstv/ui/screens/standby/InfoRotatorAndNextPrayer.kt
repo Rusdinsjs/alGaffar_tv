@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
@@ -97,41 +96,21 @@ fun MosqueInfoRotatorCard(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Campaign,
-                        contentDescription = null,
-                        tint = palette.accent,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = "INFO & KEGIATAN MASJID",
-                        color = palette.accent,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-
-                // Dots
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    activeItems.indices.forEach { idx ->
-                        Box(
-                            modifier = Modifier
-                                .size(if (idx == safeIndex) 8.dp else 6.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (idx == safeIndex) palette.accent
-                                    else palette.textSecondary.copy(alpha = 0.35f)
-                                )
-                        )
-                    }
-                }
+                Icon(
+                    imageVector = Icons.Default.Campaign,
+                    contentDescription = null,
+                    tint = palette.accent,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "INFO & KEGIATAN MASJID",
+                    color = palette.accent,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
             }
 
             AnimatedContent(
@@ -152,10 +131,20 @@ fun MosqueInfoRotatorCard(
                         text = item.content,
                         color = palette.textSecondary,
                         fontSize = 15.sp,
-                        lineHeight = 21.sp,
-                        maxLines = 3,
+                        lineHeight = 20.sp,
+                        maxLines = if (item.subtitle.isNotBlank()) 2 else 3,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (item.subtitle.isNotBlank()) {
+                        Text(
+                            text = item.subtitle,
+                            color = palette.accent,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }
@@ -203,42 +192,23 @@ fun IslamicFastingAndPhbiRotatorCard(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = if (safeSlide < 2) Icons.Default.AutoAwesome else Icons.Default.EventAvailable,
-                        contentDescription = null,
-                        tint = palette.accentSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = if (safeSlide == 0) "AMALAN PUASA HARI INI"
-                        else if (safeSlide == 1) "PERSIAPAN PUASA BESOK"
-                        else "HARI BESAR ISLAM TERDEKAT",
-                        color = palette.accentSecondary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    for (idx in 0 until totalSlides) {
-                        Box(
-                            modifier = Modifier
-                                .size(if (idx == safeSlide) 8.dp else 6.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (idx == safeSlide) palette.accentSecondary
-                                    else palette.textSecondary.copy(alpha = 0.35f)
-                                )
-                        )
-                    }
-                }
+                Icon(
+                    imageVector = if (safeSlide < 2) Icons.Default.AutoAwesome else Icons.Default.EventAvailable,
+                    contentDescription = null,
+                    tint = palette.accentSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = if (safeSlide == 0) "AMALAN PUASA HARI INI"
+                    else if (safeSlide == 1) "PERSIAPAN PUASA BESOK"
+                    else "HARI BESAR ISLAM TERDEKAT",
+                    color = palette.accentSecondary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
             }
 
             AnimatedContent(

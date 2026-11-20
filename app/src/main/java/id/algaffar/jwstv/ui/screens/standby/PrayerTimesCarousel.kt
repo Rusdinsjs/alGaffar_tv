@@ -12,21 +12,14 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,8 +33,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.algaffar.jwstv.domain.engine.DailyPrayerSchedule
@@ -108,22 +104,11 @@ fun PrayerTimesCarousel(
                     currentWindow.forEach { prayerItem ->
                         PrayerTimeCard(
                             item = prayerItem,
-                            isVerticalLayout = true,
                             modifier = Modifier.size(width = 480.dp, height = 240.dp)
                         )
                     }
                 }
             }
-
-            // Carousel pagination dots (8 dots) overlaid at bottom-center
-            CarouselPaginationIndicator(
-                totalCount = totalCount,
-                activeIndex = startIndex,
-                onSelectIndex = { startIndex = it },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 10.dp)
-            )
         }
     } else {
         Box(
@@ -148,21 +133,11 @@ fun PrayerTimesCarousel(
                     currentWindow.forEach { prayerItem ->
                         PrayerTimeCard(
                             item = prayerItem,
-                            isVerticalLayout = false,
                             modifier = Modifier.size(width = 480.dp, height = 240.dp)
                         )
                     }
                 }
             }
-
-            CarouselPaginationIndicator(
-                totalCount = totalCount,
-                activeIndex = startIndex,
-                onSelectIndex = { startIndex = it },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 10.dp)
-            )
         }
     }
 }
@@ -170,7 +145,6 @@ fun PrayerTimesCarousel(
 @Composable
 private fun PrayerTimeCard(
     item: PrayerTimeItem,
-    isVerticalLayout: Boolean,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
@@ -205,93 +179,70 @@ private fun PrayerTimeCard(
             .clip(RoundedCornerShape(18.dp))
             .background(cardBgBrush)
             .border(borderWidth, borderColor, RoundedCornerShape(18.dp))
-            .padding(horizontal = 24.dp, vertical = 20.dp)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
     ) {
-        if (isVerticalLayout) {
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
             Row(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                Column(verticalArrangement = Arrangement.Center) {
+                Text(
+                    text = item.label.uppercase(),
+                    color = titleColor,
+                    fontSize = 56.sp,
+                    lineHeight = 56.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(
+                        platformStyle = PlatformTextStyle(includeFontPadding = false)
+                    ),
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     if (isNext) {
-                        NextPrayerPillBadge(bgColor = palette.bgPrimary, textColor = palette.accentSecondary)
-                        Spacer(modifier = Modifier.height(6.dp))
+                        NextPrayerPillBadge(
+                            bgColor = palette.bgPrimary,
+                            textColor = palette.accentSecondary
+                        )
                     }
-                    Text(
-                        text = item.label.uppercase(),
-                        color = titleColor,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
+
                     Text(
                         text = item.id.arabicName,
                         color = subColor,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Medium
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
+            }
 
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
                     text = item.formattedTime,
                     color = timeColor,
-                    fontSize = 52.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.ExtraBold
+                    fontSize = 112.sp,
+                    lineHeight = 112.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false,
+                    textAlign = TextAlign.Center,
+                    style = TextStyle(
+                        fontFeatureSettings = "tnum",
+                        platformStyle = PlatformTextStyle(includeFontPadding = false)
+                    )
                 )
-            }
-        } else {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = item.label.uppercase(),
-                        color = titleColor,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-
-                    if (isNext) {
-                        NextPrayerPillBadge(bgColor = palette.bgPrimary, textColor = palette.accentSecondary)
-                    } else {
-                        Text(
-                            text = item.id.arabicName,
-                            color = subColor,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    Text(
-                        text = item.formattedTime,
-                        color = timeColor,
-                        fontSize = 56.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-
-                    if (isNext) {
-                        Text(
-                            text = item.id.arabicName,
-                            color = subColor,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
             }
         }
     }
@@ -314,40 +265,5 @@ private fun NextPrayerPillBadge(
             fontSize = 11.sp,
             fontWeight = FontWeight.ExtraBold
         )
-    }
-}
-
-@Composable
-private fun CarouselPaginationIndicator(
-    totalCount: Int,
-    activeIndex: Int,
-    onSelectIndex: (Int) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val palette = LocalJwsTheme.current
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        for (i in 0 until totalCount) {
-            val isVisibleInWindow = (0 until 4).any { offset -> (activeIndex + offset) % totalCount == i }
-            val isPrimaryHead = (i == activeIndex)
-            Box(
-                modifier = Modifier
-                    .width(if (isPrimaryHead) 22.dp else if (isVisibleInWindow) 12.dp else 6.dp)
-                    .height(6.dp)
-                    .clip(CircleShape)
-                    .background(
-                        when {
-                            isPrimaryHead -> palette.accent
-                            isVisibleInWindow -> palette.accent.copy(alpha = 0.45f)
-                            else -> palette.textSecondary.copy(alpha = 0.25f)
-                        }
-                    )
-                    .focusable()
-                    .clickable { onSelectIndex(i) }
-            )
-        }
     }
 }

@@ -105,6 +105,13 @@ fun FullScreenRouter(
                     AdzanFullscreen(snapshot = snapshot)
                 }
 
+                AppState.DOA_ADZAN -> {
+                    DoaAdzanFullscreen(
+                        snapshot = snapshot,
+                        assetsRootDir = assetsRootDir
+                    )
+                }
+
                 AppState.MENUNGGU_IQOMAH -> {
                     IqomahFullscreen(snapshot = snapshot)
                 }
@@ -113,7 +120,7 @@ fun FullScreenRouter(
                     CctvStateOverlayFullscreen(
                         snapshot = snapshot,
                         stageTitle = "PELAKSANAAN SHOLAT ${prayerLabel.uppercase()}",
-                        stageSubtitle = "Harap tenang, sholat berjamaah sedang berlangsung.",
+                        stageSubtitle = stageCfg.sholatMessage.ifBlank { "Harap tenang, sholat berjamaah sedang berlangsung." },
                         officerRoleLabel = "IMAM SHOLAT",
                         officerName = stageCfg.imam
                     )
@@ -127,7 +134,9 @@ fun FullScreenRouter(
                     CctvStateOverlayFullscreen(
                         snapshot = snapshot,
                         stageTitle = "PELAKSANAAN KHUTBAH JUM'AT",
-                        stageSubtitle = "“Jika engkau berkata kepada sahabatmu pada hari Jum'at: ‘Diamlah!’ sewaktu imam berkhotbah, maka sungguh engkau telah sia-sia.” (HR. Bukhari & Muslim)",
+                        stageSubtitle = snapshot.settings.jumat.khutbahMessage.ifBlank {
+                            "“Jika engkau berkata kepada sahabatmu pada hari Jum'at: ‘Diamlah!’ sewaktu imam berkhotbah, maka sungguh engkau telah sia-sia.” (HR. Bukhari & Muslim)"
+                        },
                         officerRoleLabel = "KHOTIB JUM'AT",
                         officerName = jumatPetugas?.khotib.orEmpty()
                     )
@@ -137,7 +146,9 @@ fun FullScreenRouter(
                     CctvStateOverlayFullscreen(
                         snapshot = snapshot,
                         stageTitle = "PELAKSANAAN SHOLAT JUM'AT",
-                        stageSubtitle = "Luruskan dan rapatkan shaf untuk kesempurnaan sholat berjamaah.",
+                        stageSubtitle = snapshot.settings.jumat.sholatMessage.ifBlank {
+                            "Luruskan dan rapatkan shaf untuk kesempurnaan sholat berjamaah."
+                        },
                         officerRoleLabel = "IMAM SHOLAT JUM'AT",
                         officerName = jumatPetugas?.imam.orEmpty()
                     )
@@ -147,13 +158,29 @@ fun FullScreenRouter(
                     TarawihFullscreen(snapshot = snapshot)
                 }
 
+                AppState.CERAMAH_TARAWIH -> {
+                    val nightIdx = (snapshot.settings.ramadhan.currentNight - 1).coerceIn(0, 29)
+                    val ramadhanPetugas = snapshot.settings.ramadhan.petugas.getOrNull(nightIdx)
+                    CctvStateOverlayFullscreen(
+                        snapshot = snapshot,
+                        stageTitle = "CERAMAH / KULTUM TARAWIH RAMADHAN",
+                        stageSubtitle = snapshot.settings.ramadhan.ceramahMessage.ifBlank {
+                            "Harap tenang dan menyimak ceramah Ramadhan malam ke-${snapshot.settings.ramadhan.currentNight}."
+                        },
+                        officerRoleLabel = "PENCERAMAH KULTUM",
+                        officerName = ramadhanPetugas?.penceramah ?: "-"
+                    )
+                }
+
                 AppState.SHOLAT_TARAWIH -> {
                     val nightIdx = (snapshot.settings.ramadhan.currentNight - 1).coerceIn(0, 29)
                     val ramadhanPetugas = snapshot.settings.ramadhan.petugas.getOrNull(nightIdx)
                     CctvStateOverlayFullscreen(
                         snapshot = snapshot,
                         stageTitle = "PELAKSANAAN SHOLAT TARAWIH & WITIR",
-                        stageSubtitle = "Malam Ramadhan Ke-${snapshot.settings.ramadhan.currentNight} • ${snapshot.settings.brand.name}",
+                        stageSubtitle = snapshot.settings.ramadhan.sholatMessage.ifBlank {
+                            "Malam Ramadhan Ke-${snapshot.settings.ramadhan.currentNight} • ${snapshot.settings.brand.name}"
+                        },
                         officerRoleLabel = "IMAM TARAWIH & WITIR",
                         officerName = "${ramadhanPetugas?.imamTarawih ?: "-"} / ${ramadhanPetugas?.imamWitir ?: "-"}"
                     )
@@ -236,6 +263,14 @@ fun FullScreenRouter(
 
                 AppState.MASJID_QR -> {
                     MasjidQrFullscreen(snapshot = snapshot)
+                }
+
+                AppState.FINANCE_QR -> {
+                    FinanceQrFullscreen(snapshot = snapshot)
+                }
+
+                AppState.JUMAT_QR -> {
+                    JumatQrFullscreen(snapshot = snapshot)
                 }
 
                 AppState.ONLINE_FINANCE -> {

@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,7 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ToggleOff
@@ -38,52 +40,136 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.algaffar.jwstv.data.auth.AuthManager
+import id.algaffar.jwstv.data.cctv.FinancialSummaryData
+import id.algaffar.jwstv.domain.model.AppStateSettings
 import id.algaffar.jwstv.domain.model.UserAccount
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
+import java.io.File
+import java.util.Locale
+
+/** High-contrast Amber focus ring color modeled after `MobileSettingsLayout.tsx` for TV D-Pad visibility. */
+val TvFocusAmber = Color(0xFFFBBF24)
 
 /**
- * Reusable Hybrid (TV D-Pad Focus + Tablet Touchscreen) Settings UI Primitives.
+ * Bundled callbacks passed to the modular settings tab screens.
  */
+data class SettingsActions(
+    val onUpdateSettings: ((AppStateSettings) -> AppStateSettings) -> Unit,
+    val onExportTakjilTemplate: () -> Unit,
+    val onImportTakjilExcel: () -> Unit,
+    val onExportBackupZip: () -> Unit,
+    val onImportBackupZip: () -> Unit,
+    val onOpenDebugSimulator: () -> Unit,
+    val onToggleManualRelay: (Int, Boolean) -> Unit,
+    val onDiscoverOnvifCameras: () -> Unit,
+    val onTestOnlineFinance: () -> Unit,
+    val onStartDirectLive: (source: String, customId: String, durationMinutes: Int) -> Unit,
+    val onStopDirectLive: () -> Unit,
+    val onPickImageAsset: (subFolder: String, onSaved: (String) -> Unit) -> Unit,
+    val onPickPrayerAudio: (category: String, slotName: String) -> Unit,
+    val onDeletePrayerAudio: (category: String, slotName: String) -> Unit,
+    val onTogglePreviewPrayerAudio: (category: String, slotName: String) -> Unit,
+    val onPickCustomAudio: () -> Unit,
+    val onDeleteCustomAudio: (fileName: String) -> Unit,
+    val onTogglePreviewCustomAudio: (fileName: String) -> Unit,
+    val onFindPrayerAudioSlot: (category: String, slotName: String) -> Pair<Boolean, String>,
+    val onListCustomAudioFiles: () -> List<Pair<String, String>>,
+    val assetsRootDir: File?,
+    val remoteServerUrl: String,
+    val remoteQrPairingUrl: String,
+    val remoteAuthToken: String,
+    val relayPinStates: Map<Int, Boolean>,
+    val onlineFinanceTestResult: FinancialSummaryData?,
+    val audioInventoryTick: Int,
+    val previewingAudioKey: String?,
+    val isLiveActiveNow: Boolean
+)
 
 @Composable
 fun HybridSectionCard(
     title: String,
     subtitle: String = "",
     modifier: Modifier = Modifier,
+    headerAction: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val palette = LocalJwsTheme.current
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(palette.bgPrimary.copy(alpha = 0.65f))
-            .border(1.5.dp, palette.border, RoundedCornerShape(18.dp))
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(palette.bgSecondary.copy(alpha = 0.72f))
+            .border(1.5.dp, palette.border, RoundedCornerShape(20.dp))
+            .padding(22.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Column {
-            Text(
-                text = title,
-                color = palette.accent,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
-            if (subtitle.isNotBlank()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = subtitle,
-                    color = palette.textSecondary,
-                    fontSize = 13.sp
+                    text = title,
+                    color = palette.accent,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.ExtraBold
                 )
+                if (subtitle.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = subtitle,
+                        color = palette.textSecondary,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+            if (headerAction != null) {
+                Spacer(modifier = Modifier.width(12.dp))
+                headerAction()
             }
         }
         content()
+    }
+}
+
+@Composable
+fun HybridInfoBanner(
+    text: String,
+    accentColor: Color = Color(0xFF38BDF8),
+    icon: ImageVector = Icons.Default.Info,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(accentColor.copy(alpha = 0.12f))
+            .border(1.dp, accentColor.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = accentColor,
+            modifier = Modifier.size(20.dp)
+        )
+        Text(
+            text = text,
+            color = Color.White.copy(alpha = 0.88f),
+            fontSize = 13.sp,
+            lineHeight = 19.sp
+        )
     }
 }
 
@@ -93,35 +179,48 @@ fun HybridButton(
     onClick: () -> Unit,
     isPrimary: Boolean = false,
     isDanger: Boolean = false,
+    enabled: Boolean = true,
+    icon: ImageVector? = null,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
     var isFocused by remember { mutableStateOf(false) }
 
     val bgColor = when {
+        !enabled -> palette.bgSecondary.copy(alpha = 0.35f)
         isDanger -> if (isFocused) Color(0xFFEF4444) else Color(0xFF991B1B)
         isPrimary -> if (isFocused) palette.accentSecondary else palette.accent
         isFocused -> palette.accent.copy(alpha = 0.35f)
-        else -> palette.bgSecondary
+        else -> palette.bgPrimary.copy(alpha = 0.85f)
     }
     val textColor = when {
+        !enabled -> palette.textSecondary.copy(alpha = 0.45f)
         isDanger -> Color.White
         isPrimary -> palette.bgPrimary
         else -> palette.textPrimary
     }
-    val borderColor = if (isFocused) palette.accentSecondary else palette.border
+    val borderColor = if (isFocused) TvFocusAmber else palette.border
 
-    Box(
+    Row(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(bgColor)
-            .border(if (isFocused) 2.5.dp else 1.dp, borderColor, RoundedCornerShape(12.dp))
+            .border(if (isFocused) 3.dp else 1.dp, borderColor, RoundedCornerShape(12.dp))
             .onFocusChanged { isFocused = it.isFocused }
-            .focusable()
-            .clickable { onClick() }
-            .padding(horizontal = 18.dp, vertical = 11.dp),
-        contentAlignment = Alignment.Center
+            .focusable(enabled = enabled)
+            .clickable(enabled = enabled) { onClick() }
+            .padding(horizontal = 16.dp, vertical = 11.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = textColor,
+                modifier = Modifier.size(18.dp)
+            )
+        }
         Text(
             text = label,
             color = textColor,
@@ -131,11 +230,35 @@ fun HybridButton(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun HybridSegmentedRow(
+    options: List<Pair<String, String>>,
+    selectedId: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.forEach { (id, label) ->
+            HybridButton(
+                label = label,
+                isPrimary = (id == selectedId),
+                onClick = { onSelect(id) }
+            )
+        }
+    }
+}
+
 @Composable
 fun HybridToggleRow(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    description: String = "",
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
@@ -146,12 +269,12 @@ fun HybridToggleRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(
-                if (isFocused) palette.accent.copy(alpha = 0.18f)
-                else palette.bgSecondary.copy(alpha = 0.6f)
+                if (isFocused) palette.accent.copy(alpha = 0.2f)
+                else palette.bgPrimary.copy(alpha = 0.7f)
             )
             .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) palette.accentSecondary else palette.border,
+                width = if (isFocused) 3.dp else 1.dp,
+                color = if (isFocused) TvFocusAmber else palette.border,
                 shape = RoundedCornerShape(14.dp)
             )
             .onFocusChanged { isFocused = it.isFocused }
@@ -161,12 +284,22 @@ fun HybridToggleRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            color = palette.textPrimary,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                color = palette.textPrimary,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold
+            )
+            if (description.isNotBlank()) {
+                Text(
+                    text = description,
+                    color = palette.textSecondary,
+                    fontSize = 12.sp
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -181,7 +314,7 @@ fun HybridToggleRow(
                 imageVector = if (checked) Icons.Default.ToggleOn else Icons.Default.ToggleOff,
                 contentDescription = null,
                 tint = if (checked) palette.accent else palette.textSecondary,
-                modifier = Modifier.size(34.dp)
+                modifier = Modifier.size(36.dp)
             )
         }
     }
@@ -196,6 +329,7 @@ fun HybridNumberStepper(
     max: Int = 999,
     step: Int = 1,
     unit: String = "menit",
+    enabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
@@ -206,7 +340,7 @@ fun HybridNumberStepper(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(palette.bgSecondary.copy(alpha = 0.6f))
+            .background(palette.bgPrimary.copy(alpha = if (enabled) 0.7f else 0.35f))
             .border(1.dp, palette.border, RoundedCornerShape(14.dp))
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -214,9 +348,10 @@ fun HybridNumberStepper(
     ) {
         Text(
             text = label,
-            color = palette.textPrimary,
+            color = if (enabled) palette.textPrimary else palette.textSecondary.copy(alpha = 0.5f),
             fontSize = 15.sp,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f)
         )
 
         Row(
@@ -225,19 +360,18 @@ fun HybridNumberStepper(
         ) {
             Box(
                 modifier = Modifier
-                    .size(38.dp)
+                    .size(40.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(if (decFocused) palette.accent else palette.bgPrimary)
+                    .background(if (decFocused) palette.accent else palette.bgSecondary)
                     .border(
-                        width = if (decFocused) 2.dp else 1.dp,
-                        color = if (decFocused) palette.accentSecondary else palette.border,
+                        width = if (decFocused) 3.dp else 1.dp,
+                        color = if (decFocused) TvFocusAmber else palette.border,
                         shape = RoundedCornerShape(10.dp)
                     )
                     .onFocusChanged { decFocused = it.isFocused }
-                    .focusable()
-                    .clickable {
-                        val next = (value - step).coerceAtLeast(min)
-                        onValueChange(next)
+                    .focusable(enabled = enabled)
+                    .clickable(enabled = enabled) {
+                        onValueChange((value - step).coerceAtLeast(min))
                     },
                 contentAlignment = Alignment.Center
             ) {
@@ -250,29 +384,29 @@ fun HybridNumberStepper(
             }
 
             Text(
-                text = "$value $unit",
+                text = if (unit.isBlank()) "$value" else "$value $unit",
                 color = palette.accentSecondary,
                 fontSize = 16.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier.width(96.dp)
+                textAlign = TextAlign.Center,
+                modifier = Modifier.width(102.dp)
             )
 
             Box(
                 modifier = Modifier
-                    .size(38.dp)
+                    .size(40.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(if (incFocused) palette.accent else palette.bgPrimary)
+                    .background(if (incFocused) palette.accent else palette.bgSecondary)
                     .border(
-                        width = if (incFocused) 2.dp else 1.dp,
-                        color = if (incFocused) palette.accentSecondary else palette.border,
+                        width = if (incFocused) 3.dp else 1.dp,
+                        color = if (incFocused) TvFocusAmber else palette.border,
                         shape = RoundedCornerShape(10.dp)
                     )
                     .onFocusChanged { incFocused = it.isFocused }
-                    .focusable()
-                    .clickable {
-                        val next = (value + step).coerceAtMost(max)
-                        onValueChange(next)
+                    .focusable(enabled = enabled)
+                    .clickable(enabled = enabled) {
+                        onValueChange((value + step).coerceAtMost(max))
                     },
                 contentAlignment = Alignment.Center
             ) {
@@ -283,6 +417,75 @@ fun HybridNumberStepper(
                     modifier = Modifier.size(20.dp)
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun HybridCoordinateStepper(
+    label: String,
+    value: Double,
+    min: Double,
+    max: Double,
+    onValueChange: (Double) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalJwsTheme.current
+    var textVal by remember(value) { mutableStateOf(String.format(Locale.US, "%.4f", value)) }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(palette.bgPrimary.copy(alpha = 0.7f))
+            .border(1.dp, palette.border, RoundedCornerShape(14.dp))
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            color = palette.textPrimary,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f)
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            HybridButton(
+                label = "-0.01",
+                onClick = { onValueChange((value - 0.01).coerceIn(min, max)) }
+            )
+            BasicTextField(
+                value = textVal,
+                onValueChange = { raw ->
+                    textVal = raw
+                    raw.toDoubleOrNull()?.let { parsed ->
+                        if (parsed in min..max) onValueChange(parsed)
+                    }
+                },
+                singleLine = true,
+                textStyle = TextStyle(
+                    color = palette.accentSecondary,
+                    fontSize = 16.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center
+                ),
+                cursorBrush = SolidColor(palette.accent),
+                modifier = Modifier
+                    .width(120.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(palette.bgSecondary)
+                    .border(1.dp, palette.border, RoundedCornerShape(10.dp))
+                    .padding(horizontal = 10.dp, vertical = 10.dp)
+            )
+            HybridButton(
+                label = "+0.01",
+                onClick = { onValueChange((value + 0.01).coerceIn(min, max)) }
+            )
         }
     }
 }
@@ -302,12 +505,14 @@ fun HybridTextInput(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        Text(
-            text = label.uppercase(),
-            color = palette.textSecondary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold
-        )
+        if (label.isNotBlank()) {
+            Text(
+                text = label.uppercase(),
+                color = palette.textSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
@@ -320,10 +525,10 @@ fun HybridTextInput(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(palette.bgSecondary)
+                .background(palette.bgPrimary.copy(alpha = 0.85f))
                 .border(
-                    width = if (isFocused) 2.dp else 1.dp,
-                    color = if (isFocused) palette.accent else palette.border,
+                    width = if (isFocused) 2.5.dp else 1.dp,
+                    color = if (isFocused) TvFocusAmber else palette.border,
                     shape = RoundedCornerShape(12.dp)
                 )
                 .onFocusChanged { isFocused = it.isFocused }
@@ -374,15 +579,15 @@ fun PinLoginGuardScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f)),
+            .background(Color.Black.copy(alpha = 0.88f)),
         contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
-                .width(520.dp)
-                .clip(RoundedCornerShape(24.dp))
+                .width(540.dp)
+                .clip(RoundedCornerShape(26.dp))
                 .background(palette.bgPrimary)
-                .border(2.dp, palette.accent, RoundedCornerShape(24.dp))
+                .border(2.dp, palette.accent, RoundedCornerShape(26.dp))
                 .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -390,8 +595,8 @@ fun PinLoginGuardScreen(
             Icon(
                 imageVector = Icons.Default.Lock,
                 contentDescription = null,
-                tint = palette.accentSecondary,
-                modifier = Modifier.size(44.dp)
+                tint = TvFocusAmber,
+                modifier = Modifier.size(46.dp)
             )
             Text(
                 text = "Autentikasi PIN Pengurus DKM",
@@ -402,10 +607,10 @@ fun PinLoginGuardScreen(
             Text(
                 text = "Masukkan 6 digit PIN menggunakan Remote TV (D-Pad) atau sentuh tombol angka",
                 color = palette.textSecondary,
-                fontSize = 14.sp
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
             )
 
-            // Masked PIN Display
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -433,7 +638,6 @@ fun PinLoginGuardScreen(
                 )
             }
 
-            // 3x4 On-Screen Numeric Keypad (D-Pad & Touch friendly)
             val rows = listOf(
                 listOf("1", "2", "3"),
                 listOf("4", "5", "6"),
@@ -455,20 +659,13 @@ fun PinLoginGuardScreen(
                                 onClick = {
                                     errorMessage = ""
                                     when (key) {
-                                        "HAPUS" -> {
-                                            if (pinInput.isNotEmpty()) {
-                                                pinInput = pinInput.dropLast(1)
-                                            }
-                                        }
+                                        "HAPUS" -> if (pinInput.isNotEmpty()) pinInput = pinInput.dropLast(1)
                                         "MASUK" -> attemptLogin(pinInput)
                                         else -> {
                                             if (pinInput.length < 8) {
                                                 pinInput += key
                                                 if (pinInput.length == 6) {
-                                                    val autoCheck = AuthManager.authenticate("", pinInput, users)
-                                                    if (autoCheck != null) {
-                                                        onAuthenticated(autoCheck)
-                                                    }
+                                                    AuthManager.authenticate("", pinInput, users)?.let(onAuthenticated)
                                                 }
                                             }
                                         }
@@ -476,7 +673,7 @@ fun PinLoginGuardScreen(
                                 },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(52.dp)
+                                    .height(54.dp)
                             )
                         }
                     }

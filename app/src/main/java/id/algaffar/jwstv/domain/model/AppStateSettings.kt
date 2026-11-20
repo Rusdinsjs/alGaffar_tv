@@ -66,9 +66,14 @@ data class PrayerStageConfig(
     val adzanDuration: Int = 4,       // minutes (auto-synced with audio length if isAdzan == true)
     val iqomahDuration: Int = 10,     // minutes countdown before sholat
     val sholatDuration: Int = 15,     // minutes quiet sholat screen
+    val isTartil: Boolean = true,     // enable tartil stage before prayer
+    val isTarhim: Boolean = true,     // enable tarhim stage before adzan
     val isAdzan: Boolean = true,      // play adzan audio or visual-only
     val imam: String = "",
-    val muadzin: String = ""
+    val muadzin: String = "",
+    val sholatMessage: String = "Rapatkan Shaf dan Matikan Gadget",
+    val adzanTagline: String = "Panggilan Suci",
+    val adzanMessage: String = ""
 )
 
 @Serializable
@@ -157,7 +162,11 @@ data class JumatKeuanganRecord(
 data class JumatKeuanganSettings(
     val selectedDate: String = "",
     val saldoKasLalu: Long = 0L,
-    val records: Map<String, JumatKeuanganRecord> = emptyMap()
+    val records: Map<String, JumatKeuanganRecord> = emptyMap(),
+    val source: String = "manual", // "manual" | "online"
+    val customTitle: String = "Laporan Infaq Kas Jum'at",
+    val qrType: String = "text_summary", // "text_summary" | "custom_url"
+    val qrCustomUrl: String = ""
 )
 
 @Serializable
@@ -173,6 +182,8 @@ data class JumatSettings(
     val waktuJumatDuration: Int = 12,     // minutes before khutbah
     val khutbahDuration: Int = 30,        // minutes
     val sholatJumatDuration: Int = 20,    // minutes
+    val khutbahMessage: String = "Harap Tenang dan Menyimak Khutbah",
+    val sholatMessage: String = "Rapatkan Shaf dan Matikan Gadget",
     val petugas: JumatPetugasSettings = JumatPetugasSettings(),
     val keuangan: JumatKeuanganSettings = JumatKeuanganSettings(),
     val slideshow: JumatSlideshowSettings = JumatSlideshowSettings()
@@ -236,8 +247,12 @@ data class SirineSettings(
 data class RamadhanSettings(
     val isRamadhan: Boolean = false,
     val currentNight: Int = 1,
+    val hijriYear: String = "1447",
     val tarawihDuration: Int = 15,        // minutes for kultum/info before sholat tarawih
+    val ceramahDuration: Int = 0,         // optional dedicated ceramah tarawih phase (minutes)
     val sholatTarawihDuration: Int = 45,  // minutes
+    val ceramahMessage: String = "Harap Tenang dan Menyimak Ceramah",
+    val sholatMessage: String = "Khusyuk dalam Melaksanakan Sholat",
     val petugas: List<RamadhanPetugasItem> = (1..30).map { RamadhanPetugasItem(malamKe = it) },
     val keuangan: List<RamadhanKeuanganItem> = (1..30).map { RamadhanKeuanganItem(malamKe = it) },
     val takjil: Map<String, List<String>> = emptyMap(), // key: "1".."30", value: list of donor names
@@ -276,11 +291,15 @@ data class EidKeuangan(
 @Serializable
 data class IdulFitriSettings(
     val enabled: Boolean = false,
-    val timeSlots: List<TimeSlot> = emptyList(),
+    val timeSlots: List<TimeSlot> = listOf(TimeSlot(id = "1", startTime = "06:00", endTime = "09:00", enabled = true)),
     val fullscreenDuration: Int = 30, // seconds in idul_fitri before alternating to idul_fitri_standby
     val standbyDuration: Int = 30,    // seconds in idul_fitri_standby
     val sholatDuration: Int = 45,     // minutes
     val khutbahDuration: Int = 30,    // minutes
+    val date: String = "",
+    val hijriYear: String = "1447",
+    val sholatMessage: String = "Gema Idul Fitri - Raih Kemenangan",
+    val khutbahMessage: String = "Menyimak Khutbah Idul Fitri",
     val petugas: EidPetugas = EidPetugas(),
     val keuangan: EidKeuangan = EidKeuangan(),
     val slideDuration: Int = 10
@@ -297,11 +316,15 @@ data class QurbanGroup(
 @Serializable
 data class IdulAdhaSettings(
     val enabled: Boolean = false,
-    val timeSlots: List<TimeSlot> = emptyList(),
+    val timeSlots: List<TimeSlot> = listOf(TimeSlot(id = "1", startTime = "06:00", endTime = "09:00", enabled = true)),
     val fullscreenDuration: Int = 30,
     val standbyDuration: Int = 30,
     val sholatDuration: Int = 45,
     val khutbahDuration: Int = 30,
+    val date: String = "",
+    val hijriYear: String = "1447",
+    val sholatMessage: String = "Semangat Qurban dan Ketaatan",
+    val khutbahMessage: String = "Menyimak Khutbah Idul Adha",
     val petugas: EidPetugas = EidPetugas(),
     val qurbanGroups: List<QurbanGroup> = emptyList(),
     val slideDuration: Int = 10
@@ -310,7 +333,7 @@ data class IdulAdhaSettings(
 @Serializable
 data class InfoQurbanSettings(
     val enabled: Boolean = false,
-    val timeSlots: List<TimeSlot> = emptyList(),
+    val timeSlots: List<TimeSlot> = listOf(TimeSlot(id = "1", startTime = "06:00", endTime = "09:00", enabled = true)),
     val fullscreenDuration: Int = 30,
     val standbyDuration: Int = 30,
     val slideDuration: Int = 10
@@ -340,7 +363,9 @@ data class SlideItem(
 data class StandbySlideshowSettings(
     val enabled: Boolean = false,
     val durationMain: Int = 60, // seconds staying in `standby` before entering `standby_slideshow`
-    val repeatCount: Int = 1    // number of full slide cycles in `standby_slideshow` before returning
+    val repeatCount: Int = 1,   // number of full slide cycles in `standby_slideshow` before returning
+    val showNextPrayerCard: Boolean = true, // Show floating Next Prayer Card in bottom-right when near Adzan
+    val nextPrayerThresholdMinutes: Int = 30
 )
 
 @Serializable
@@ -410,6 +435,9 @@ data class LiveSettings(
     val madinahVideoId: String = "9A1S0xAPVIs",
     val muted: Boolean = true,
     val showInMainSlide: Boolean = false,
+    val directLiveEnabled: Boolean = false,
+    val directLiveDurationMinutes: Int = 30, // 0 = non-stop / manual stop
+    val directLiveStartEpochMs: Long = 0L,
     val schedules: List<LiveScheduleTrigger> = emptyList()
 ) {
     val activeYoutubeId: String
@@ -426,13 +454,20 @@ data class MasjidQrSettings(
     val label: String = "Infaq & Sedekah Digital Masjid Al-Gaffar",
     val link: String = "https://masjidalgaffar.id/infaq",
     val customQrImage: String = "",
-    val showFloatingOnMain: Boolean = true
+    val showFloatingOnMain: Boolean = true,
+    val bankName: String = "",
+    val nomorRekening: String = "",
+    val atasNama: String = ""
 )
 
 @Serializable
 data class OnlineFinanceSettings(
     val enabled: Boolean = false,
     val sheetUrl: String = "",
+    val reportUrl: String = "",
+    val bankName: String = "",
+    val nomorRekening: String = "",
+    val atasNama: String = "",
     val refreshIntervalMinutes: Int = 15,
     val showInMainSlide: Boolean = false,
     val slideDuration: Int = 15
@@ -580,7 +615,60 @@ data class InfoCardItem(
     val id: String = "",
     val title: String = "",
     val content: String = "",
+    val subtitle: String = "",
     val enabled: Boolean = true
+)
+
+@Serializable
+data class CustomIslamicEventItem(
+    val id: String = "",
+    val name: String = "",
+    val type: String = "hijri", // "hijri" | "gregorian" | "custom"
+    val hijriMonth: Int = 1,
+    val hijriDay: Int = 1,
+    val gregorianDate: String = "",
+    val customSubtitle: String = "",
+    val enabled: Boolean = true
+)
+
+@Serializable
+data class InfoDisplaySettings(
+    val enableSunnahFasting: Boolean = true,
+    val lookaheadDays: Int = 60,
+    val islamicEvents: List<CustomIslamicEventItem> = defaultIslamicEvents()
+) {
+    companion object {
+        fun defaultIslamicEvents(): List<CustomIslamicEventItem> = listOf(
+            CustomIslamicEventItem("phbi-1", "Tahun Baru Islam", "hijri", 1, 1),
+            CustomIslamicEventItem("phbi-2", "Hari Asyura", "hijri", 1, 10),
+            CustomIslamicEventItem("phbi-3", "Maulid Nabi SAW", "hijri", 3, 12),
+            CustomIslamicEventItem("phbi-4", "Isra Mi'raj", "hijri", 7, 27),
+            CustomIslamicEventItem("phbi-5", "Nisfu Sya'ban", "hijri", 8, 15),
+            CustomIslamicEventItem("phbi-6", "Bulan Ramadhan", "hijri", 9, 1),
+            CustomIslamicEventItem("phbi-7", "Nuzulul Qur'an", "hijri", 9, 17),
+            CustomIslamicEventItem("phbi-8", "Idul Fitri", "hijri", 10, 1),
+            CustomIslamicEventItem("phbi-9", "Puasa Arafah", "hijri", 12, 9),
+            CustomIslamicEventItem("phbi-10", "Idul Adha", "hijri", 12, 10)
+        )
+    }
+}
+
+@Serializable
+data class MediaDisplaySettings(
+    val tartilMediaType: String = "image", // "image" | "video"
+    val tarhimMediaType: String = "image", // "image" | "video"
+    val tartilImages: List<String> = emptyList(),
+    val tarhimImages: List<String> = emptyList(),
+    val tartilSlideInterval: Int = 12,
+    val tarhimSlideInterval: Int = 12,
+    val doaAdzanEnabled: Boolean = false,
+    val doaAdzanDuration: Int = 45, // seconds (30-60)
+    val doaAdzanImage: String = "",
+    val khutbahJumatImage: String = "",
+    val ceramahTarawihImage: String = "",
+    val sholat5WaktuImage: String = "",
+    val sholatJumatImage: String = "",
+    val sholatTarawihWitirImage: String = ""
 )
 
 // ==================== ROOT SETTINGS OBJECT ====================
@@ -608,6 +696,10 @@ data class AppStateSettings(
     val switchSettings: SwitchSettings = SwitchSettings(),
     val layoutSettings: LayoutSettings = LayoutSettings(),
     val themeSettings: ThemeSettings = ThemeSettings(),
+    val infoSettings: InfoDisplaySettings = InfoDisplaySettings(),
+    val media: MediaDisplaySettings = MediaDisplaySettings(),
+    val globalVolume: Float = 1.0f,
+    val performanceMode: Boolean = true,
     val overlayTextList: List<String> = listOf(
         "Selamat datang di Masjid Al-Gaffar — Mohon luruskan dan rapatkan shaf serta nonaktifkan dering HP saat sholat berlangsung.",
         "Mari makmurkan masjid dengan sholat berjamaah tepat waktu dan infaq terbaik melalui QRIS Masjid Al-Gaffar."
@@ -619,12 +711,14 @@ data class AppStateSettings(
         InfoCardItem(
             id = "info-1",
             title = "Kajian Rutin Ba'da Maghrib",
-            content = "Hadirilah kajian tafsir & fiqih setiap malam Jum'at dan Ahad di ruang utama Masjid Al-Gaffar."
+            content = "Hadirilah kajian tafsir & fiqih setiap malam Jum'at dan Ahad di ruang utama Masjid Al-Gaffar.",
+            subtitle = "Ba'da Maghrib @ Ruang Utama"
         ),
         InfoCardItem(
             id = "info-2",
             title = "Layanan Zakat, Infaq & Sedekah",
-            content = "Salurkan infaq terbaik Anda melalui kotak amal atau scan QRIS Digital Masjid Al-Gaffar."
+            content = "Salurkan infaq terbaik Anda melalui kotak amal atau scan QRIS Digital Masjid Al-Gaffar.",
+            subtitle = "Setiap Hari • DKM Al-Gaffar"
         )
     ),
     val users: List<UserAccount> = listOf(UserAccount())

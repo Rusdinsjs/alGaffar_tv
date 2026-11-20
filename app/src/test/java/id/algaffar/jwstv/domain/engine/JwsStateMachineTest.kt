@@ -1,10 +1,14 @@
 package id.algaffar.jwstv.domain.engine
 
+import id.algaffar.jwstv.data.logging.AppLogger
+import id.algaffar.jwstv.data.logging.LogLevel
 import id.algaffar.jwstv.data.repository.SettingsRepository
 import id.algaffar.jwstv.domain.model.AppState
 import id.algaffar.jwstv.domain.model.AppStateSettings
 import id.algaffar.jwstv.domain.model.IdulFitriSettings
 import id.algaffar.jwstv.domain.model.JumatPetugasRecord
+import id.algaffar.jwstv.domain.model.LiveSettings
+import id.algaffar.jwstv.domain.model.MediaDisplaySettings
 import id.algaffar.jwstv.domain.model.PrayerId
 import id.algaffar.jwstv.domain.model.RamadhanSettings
 import id.algaffar.jwstv.domain.model.ScreenSaverSchedule
@@ -231,5 +235,54 @@ class JwsStateMachineTest {
         val legacyJson = """{"logo":"https://asset.localhost/C%3A/Users/dkm/AppData/jws-assets/images/logo%20masjid.png"}"""
         val migrated = SettingsRepository.migrateLegacyJsonPaths(legacyJson)
         assertEquals("""{"logo":"jws-assets/images/logo masjid.png"}""", migrated)
+    }
+
+    @Test
+    fun `DOA_ADZAN, CERAMAH_TARAWIH, Direct Live and AppLogger work end-to-end`() {
+        val settings = AppStateSettings(
+            media = MediaDisplaySettings(doaAdzanEnabled = true, doaAdzanDuration = 45),
+            ramadhan = RamadhanSettings(
+                isRamadhan = true,
+                tarawihDuration = 10,
+                ceramahDuration = 15,
+                sholatTarawihDuration = 45
+            )
+        )
+        val day = ZonedDateTime.of(2026, 3, 10, 19, 0, 0, 0, makassarZone)
+        val schedule = prayerCalculator.calculateSchedule(day, settings.prayerSettings)
+        val ishaTime = schedule.timeFor(PrayerId.ISHA)
+
+        // Immediately after 4m Adzan -> DOA_ADZAN for 45 seconds
+        val tickDoa = stateMachine.evaluateTick(ishaTime.plusMinutes(4).plusSeconds(10), settings, schedule)
+        assertEquals(AppState.DOA_ADZAN, tickDoa.state)
+        assertEquals(35L, tickDoa.countdownSeconds)
+
+        // After 4m Adzan + 45s Doa + 10m Iqomah + 15m Sholat + 10m Tarawih = 39m 45s -> CERAMAH_TARAWIH
+        val tickCeramah = stateMachine.evaluateTick(ishaTime.plusMinutes(42), settings, schedule)
+        assertEquals(AppState.CERAMAH_TARAWIH, tickCeramah.state)
+
+        // Direct Live On-Demand activates LIVE state when enabled
+        val liveNow = ZonedDateTime.of(2026, 3, 10, 10, 0, 0, 0, makassarZone)
+        val liveSettings = AppStateSettings(
+            live = LiveSettings(
+                enabled = true,
+                source = "makkah",
+                directLiveEnabled = true,
+                directLiveDurationMinutes = 30,
+                directLiveStartEpochMs = liveNow.minusMinutes(5).toInstant().toEpochMilli()
+            )
+        )
+        val tickLive = stateMachine.evaluateTick(liveNow, liveSettings)
+        assertEquals(AppState.LIVE, tickLive.state)
+        assertEquals(25 * 60L, tickLive.countdownSeconds)
+
+        // AppLogger records and clears logs
+        AppLogger.clear()
+        AppLogger.info("TEST", "Halo JWS")
+        AppLogger.warn("TEST", "Peringatan")
+        assertEquals(2, AppLogger.logsFlow.value.size)
+        assertEquals(LogLevel.WARN, AppLogger.logsFlow.value.last().level)
+        AppLogger.clear()
+        assertTrue(AppLogger.logsFlow.value.isEmpty())
     }
 }

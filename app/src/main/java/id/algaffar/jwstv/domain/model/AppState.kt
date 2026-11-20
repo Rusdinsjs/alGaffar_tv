@@ -27,6 +27,9 @@ enum class AppState(val serialName: String, val displayLabel: String) {
     @SerialName("adzan")
     ADZAN("adzan", "Saatnya Adzan"),
 
+    @SerialName("doa_adzan")
+    DOA_ADZAN("doa_adzan", "Do'a Setelah Adzan"),
+
     @SerialName("menunggu_iqomah")
     MENUNGGU_IQOMAH("menunggu_iqomah", "Menunggu Iqomah"),
 
@@ -44,6 +47,9 @@ enum class AppState(val serialName: String, val displayLabel: String) {
 
     @SerialName("tarawih")
     TARAWIH("tarawih", "Pengumuman & Kultum Tarawih"),
+
+    @SerialName("ceramah_tarawih")
+    CERAMAH_TARAWIH("ceramah_tarawih", "Ceramah Tarawih Ramadhan"),
 
     @SerialName("sholat_tarawih")
     SHOLAT_TARAWIH("sholat_tarawih", "Pelaksanaan Sholat Tarawih"),
@@ -87,6 +93,12 @@ enum class AppState(val serialName: String, val displayLabel: String) {
     @SerialName("masjid_qr")
     MASJID_QR("masjid_qr", "QR Code Infaq Masjid"),
 
+    @SerialName("finance_qr")
+    FINANCE_QR("finance_qr", "QR Laporan Keuangan Online"),
+
+    @SerialName("jumat_qr")
+    JUMAT_QR("jumat_qr", "QR Laporan Kas Jum'at"),
+
     @SerialName("online_finance")
     ONLINE_FINANCE("online_finance", "Laporan Keuangan Online");
 
@@ -100,6 +112,7 @@ enum class AppState(val serialName: String, val displayLabel: String) {
         get() = this == PELAKSANAAN_SHOLAT ||
             this == KHUTBAH ||
             this == PELAKSANAAN_JUMAT ||
+            this == CERAMAH_TARAWIH ||
             this == SHOLAT_TARAWIH ||
             this == SHOLAT_IDUL_FITRI ||
             this == KHUTBAH_IDUL_FITRI ||

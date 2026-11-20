@@ -303,9 +303,17 @@ class JwsStateMachine(
                 prayerTime.dayOfWeek == DayOfWeek.FRIDAY &&
                 settings.jumat.enabled)
 
-            val tarhimSec = (audioDurations.tarhimSecondsFor(prayerId)
-                ?: (stageConfig.tarhimDuration.toLong().coerceAtLeast(0L) * 60L))
-            val tartilWindowSec = stageConfig.tartilDuration.toLong().coerceAtLeast(0L) * 60L
+            val tarhimSec = if (stageConfig.isTarhim) {
+                audioDurations.tarhimSecondsFor(prayerId)
+                    ?: (stageConfig.tarhimDuration.toLong().coerceAtLeast(0L) * 60L)
+            } else {
+                0L
+            }
+            val tartilWindowSec = if (stageConfig.isTartil) {
+                stageConfig.tartilDuration.toLong().coerceAtLeast(0L) * 60L
+            } else {
+                0L
+            }
             // Pre-Adzan total window starts at maxOf(tartilWindowSec + tarhimSec, tartilWindowSec)
             // Note: In reference app, tartilDuration is minutes before Adzan (or before Tarhim if tartilDuration > tarhimDuration).
             // If tartilDuration = 10m and tarhimDuration = 5m, Tartil runs from -10m to -5m, and Tarhim runs from -5m to 0m.
@@ -374,6 +382,27 @@ class JwsStateMachine(
                     )
                 }
 
+                // 1b) Optional DOA_ADZAN phase immediately after Adzan
+                val doaAdzanSec = if (settings.media.doaAdzanEnabled && !isFridayDhuhr) {
+                    settings.media.doaAdzanDuration.coerceIn(15, 120).toLong()
+                } else {
+                    0L
+                }
+                val endDoaAdzan = adzanSec + doaAdzanSec
+                if (doaAdzanSec > 0L && elapsedSec in adzanSec until endDoaAdzan) {
+                    val rem = endDoaAdzan - elapsedSec
+                    return StateMachineTickResult(
+                        state = AppState.DOA_ADZAN,
+                        activePrayerId = prayerId,
+                        countdownSeconds = rem,
+                        totalStageSeconds = doaAdzanSec,
+                        secondsUntilAdzan = null,
+                        shouldTriggerBeep = false,
+                        shouldFadeOutAudio = false,
+                        isNoSunnahWarningActive = false
+                    )
+                }
+
                 // 2) Friday (Jum'at) sequence: WAKTU_JUMAT -> KHUTBAH -> PELAKSANAAN_JUMAT
                 if (isFridayDhuhr) {
                     val waktuJumatSec = settings.jumat.waktuJumatDuration.toLong().coerceAtLeast(1L) * 60L
@@ -426,14 +455,14 @@ class JwsStateMachine(
                         }
                     }
                 } else {
-                    // 3) Regular 5-time prayer sequence: MENUNGGU_IQOMAH -> PELAKSANAAN_SHOLAT
+                    // 3) Regular 5-time prayer sequence: [DOA_ADZAN ->] MENUNGGU_IQOMAH -> PELAKSANAAN_SHOLAT
                     val iqomahSec = stageConfig.iqomahDuration.toLong().coerceAtLeast(1L) * 60L
                     val sholatSec = stageConfig.sholatDuration.toLong().coerceAtLeast(1L) * 60L
 
-                    val endIqomah = adzanSec + iqomahSec
+                    val endIqomah = endDoaAdzan + iqomahSec
                     val endSholat = endIqomah + sholatSec
 
-                    if (elapsedSec in adzanSec until endIqomah) {
+                    if (elapsedSec in endDoaAdzan until endIqomah) {
                         val rem = endIqomah - elapsedSec
                         return StateMachineTickResult(
                             state = AppState.MENUNGGU_IQOMAH,
@@ -461,13 +490,15 @@ class JwsStateMachine(
                         )
                     }
 
-                    // 4) Ramadhan Post-Isha sequence: TARAWIH -> SHOLAT_TARAWIH
+                    // 4) Ramadhan Post-Isha sequence: TARAWIH -> [CERAMAH_TARAWIH ->] SHOLAT_TARAWIH
                     if (prayerId == PrayerId.ISHA && settings.ramadhan.isRamadhan) {
                         val tarawihSec = settings.ramadhan.tarawihDuration.toLong().coerceAtLeast(1L) * 60L
+                        val ceramahSec = settings.ramadhan.ceramahDuration.toLong().coerceAtLeast(0L) * 60L
                         val sholatTarawihSec = settings.ramadhan.sholatTarawihDuration.toLong().coerceAtLeast(1L) * 60L
 
                         val endTarawihInfo = endSholat + tarawihSec
-                        val endSholatTarawih = endTarawihInfo + sholatTarawihSec
+                        val endCeramah = endTarawihInfo + ceramahSec
+                        val endSholatTarawih = endCeramah + sholatTarawihSec
 
                         if (elapsedSec in endSholat until endTarawihInfo) {
                             val rem = endTarawihInfo - elapsedSec
@@ -483,7 +514,21 @@ class JwsStateMachine(
                             )
                         }
 
-                        if (elapsedSec in endTarawihInfo until endSholatTarawih) {
+                        if (ceramahSec > 0L && elapsedSec in endTarawihInfo until endCeramah) {
+                            val rem = endCeramah - elapsedSec
+                            return StateMachineTickResult(
+                                state = AppState.CERAMAH_TARAWIH,
+                                activePrayerId = PrayerId.ISHA,
+                                countdownSeconds = rem,
+                                totalStageSeconds = ceramahSec,
+                                secondsUntilAdzan = null,
+                                shouldTriggerBeep = false,
+                                shouldFadeOutAudio = false,
+                                isNoSunnahWarningActive = false
+                            )
+                        }
+
+                        if (elapsedSec in endCeramah until endSholatTarawih) {
                             val rem = endSholatTarawih - elapsedSec
                             return StateMachineTickResult(
                                 state = AppState.SHOLAT_TARAWIH,
@@ -528,6 +573,40 @@ class JwsStateMachine(
                         activePrayerId = prayerId,
                         countdownSeconds = rem,
                         totalStageSeconds = durationSec,
+                        secondsUntilAdzan = null,
+                        shouldTriggerBeep = false,
+                        shouldFadeOutAudio = false,
+                        isNoSunnahWarningActive = false
+                    )
+                }
+            }
+        }
+
+        // 4B-0. Direct Live On-Demand
+        if (settings.live.directLiveEnabled) {
+            val durMin = settings.live.directLiveDurationMinutes
+            val nowMs = now.toInstant().toEpochMilli()
+            val startMs = settings.live.directLiveStartEpochMs
+            if (durMin <= 0 || startMs <= 0L) {
+                return StateMachineTickResult(
+                    state = AppState.LIVE,
+                    activePrayerId = null,
+                    countdownSeconds = 0L,
+                    totalStageSeconds = 0L,
+                    secondsUntilAdzan = null,
+                    shouldTriggerBeep = false,
+                    shouldFadeOutAudio = false,
+                    isNoSunnahWarningActive = false
+                )
+            } else {
+                val totalSec = durMin.toLong() * 60L
+                val elapsedSec = ((nowMs - startMs) / 1000L).coerceAtLeast(0L)
+                if (elapsedSec < totalSec) {
+                    return StateMachineTickResult(
+                        state = AppState.LIVE,
+                        activePrayerId = null,
+                        countdownSeconds = totalSec - elapsedSec,
+                        totalStageSeconds = totalSec,
                         secondsUntilAdzan = null,
                         shouldTriggerBeep = false,
                         shouldFadeOutAudio = false,

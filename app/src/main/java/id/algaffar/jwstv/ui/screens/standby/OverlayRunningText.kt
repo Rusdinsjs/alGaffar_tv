@@ -116,7 +116,7 @@ fun OverlayRunningText(
     val overlayShape = RoundedCornerShape(
         topStartPercent = 0,
         bottomStartPercent = 0,
-        bottomEndPercent = 0,
+        bottomEndPercent = 100,
         topEndPercent = 100
     )
 
@@ -156,9 +156,9 @@ fun OverlayRunningText(
                 Text(
                     text = messageText.uppercase(),
                     color = palette.bgPrimary,
-                    fontSize = 22.sp,
+                    fontSize = 28.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    lineHeight = 28.sp,
+                    lineHeight = 32.sp,
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .wrapContentWidth()
@@ -167,7 +167,7 @@ fun OverlayRunningText(
 
                 Box(
                     modifier = Modifier
-                        .size(14.dp)
+                        .size(24.dp)
                         .alpha(dotAlpha)
                         .clip(CircleShape)
                         .background(palette.bgPrimary)

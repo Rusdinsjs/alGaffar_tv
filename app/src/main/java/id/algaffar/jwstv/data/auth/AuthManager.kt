@@ -66,17 +66,26 @@ object AuthManager {
         }
     }
 
+    private val RESTRICTED_FOR_USER = setOf(
+        "users_security",
+        "userManagement",
+        "audio_hardware",
+        "prayer",
+        "audio",
+        "customAudio",
+        "state",
+        "switches",
+        "network",
+        "backup",
+        "logs",
+        "hardware"
+    )
+
     fun canAccessTab(role: UserRole, tabCategory: String): Boolean {
         return when (role) {
             UserRole.SUPERADMIN -> true
-            UserRole.ADMIN -> tabCategory != "users_security"
-            UserRole.USER -> tabCategory in setOf(
-                "brand",
-                "jumat",
-                "ramadhan",
-                "holiday_qurban",
-                "slides_overlay"
-            )
+            UserRole.ADMIN -> tabCategory != "users_security" && tabCategory != "userManagement"
+            UserRole.USER -> tabCategory !in RESTRICTED_FOR_USER
         }
     }
 }

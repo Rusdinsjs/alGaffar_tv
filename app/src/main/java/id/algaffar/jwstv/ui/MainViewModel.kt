@@ -8,10 +8,13 @@ import id.algaffar.jwstv.AppContainer
 import id.algaffar.jwstv.data.audio.JwsAudioEngine
 import id.algaffar.jwstv.data.backup.BackupRestoreManager
 import id.algaffar.jwstv.data.cctv.DiscoveredOnvifCamera
+import id.algaffar.jwstv.data.cctv.FinancialSummaryData
+import id.algaffar.jwstv.data.cctv.OnlineFinanceManager
 import id.algaffar.jwstv.data.cctv.OnvifDiscoveryManager
 import id.algaffar.jwstv.data.excel.TakjilExcelManager
 import id.algaffar.jwstv.data.excel.TakjilImportPreviewRow
 import id.algaffar.jwstv.data.hardware.SwitchController
+import id.algaffar.jwstv.data.logging.AppLogger
 import id.algaffar.jwstv.data.repository.SettingsRepository
 import id.algaffar.jwstv.data.server.KtorRemoteServer
 import id.algaffar.jwstv.data.server.RemoteCommandPayload
@@ -107,12 +110,27 @@ class MainViewModel(
     private val _openSettingsRequestCount = MutableStateFlow(0)
     val openSettingsRequestCount: StateFlow<Int> = _openSettingsRequestCount.asStateFlow()
 
+    private val onlineFinanceManager = OnlineFinanceManager()
+
+    private val _onlineFinanceTestResult = MutableStateFlow<FinancialSummaryData?>(null)
+    val onlineFinanceTestResult: StateFlow<FinancialSummaryData?> = _onlineFinanceTestResult.asStateFlow()
+
+    private val _audioInventoryTick = MutableStateFlow(0)
+    val audioInventoryTick: StateFlow<Int> = _audioInventoryTick.asStateFlow()
+
+    private val _previewingAudioKey = MutableStateFlow<String?>(null)
+    val previewingAudioKey: StateFlow<String?> = _previewingAudioKey.asStateFlow()
+
+    private var lastLoggedState: AppState? = null
+
     init {
+        AppLogger.info("SYSTEM", "JWS TV Masjid Al-Gaffar dimulai (31-State Engine aktif)")
         refreshAudioDurationsAsync()
 
         // Start Embedded Ktor Remote Server on Port 1421
         viewModelScope.launch(Dispatchers.IO) {
             remoteServer.start()
+            AppLogger.info("REMOTE", "Ktor Remote Server aktif di ${remoteServer.getRemoteUrl(false)}")
             _snapshotFlow.value = computeSnapshot(ZonedDateTime.now())
         }
 
@@ -121,6 +139,10 @@ class MainViewModel(
             while (isActive) {
                 val snap = computeSnapshot(ZonedDateTime.now())
                 _snapshotFlow.value = snap
+                if (snap.tickResult.state != lastLoggedState) {
+                    AppLogger.info("STATE", "Transisi state -> ${snap.tickResult.state.serialName} (${snap.tickResult.state.displayLabel})")
+                    lastLoggedState = snap.tickResult.state
+                }
                 audioEngine.onTick(
                     now = snap.now,
                     settings = snap.settings,
@@ -168,7 +190,7 @@ class MainViewModel(
             now = zonedNow,
             maghribTime = maghribTime,
             hijriAdjustment = hijriAdjustment,
-            maxDays = 60
+            maxDays = settings.infoSettings.lookaheadDays.coerceIn(7, 365)
         )
         val tickResult = stateMachine.evaluateTick(
             now = zonedNow,
@@ -427,13 +449,203 @@ class MainViewModel(
     }
 
     fun cycleClockStyle() {
-        val styles = listOf("classic", "golden", "glass", "wood", "neon")
+        val styles = listOf("classic", "golden", "glass", "wood", "neon", "segmented", "emerald", "monochrome")
         updateSettings { prev ->
             val currentIdx = styles.indexOf(prev.brand.clockStyle.lowercase())
             val nextStyle = styles[(currentIdx + 1) % styles.size]
             prev.copy(
                 brand = prev.brand.copy(clockStyle = nextStyle)
             )
+        }
+    }
+
+    fun startDirectLive(source: String, customId: String, durationMinutes: Int) {
+        updateSettings { prev ->
+            prev.copy(
+                live = prev.live.copy(
+                    enabled = true,
+                    source = source,
+                    customVideoId = customId,
+                    directLiveEnabled = true,
+                    directLiveDurationMinutes = durationMinutes,
+                    directLiveStartEpochMs = System.currentTimeMillis()
+                )
+            )
+        }
+        AppLogger.info("LIVE", "Direct Live dimulai: sumber=$source, durasi=${durationMinutes}m")
+        _statusBannerMessage.value = "Siaran Langsung ($source) dimulai!"
+    }
+
+    fun stopDirectLive() {
+        updateSettings { prev ->
+            prev.copy(
+                live = prev.live.copy(
+                    directLiveEnabled = false,
+                    directLiveStartEpochMs = 0L
+                )
+            )
+        }
+        clearSimulation()
+        AppLogger.info("LIVE", "Direct Live dihentikan")
+        _statusBannerMessage.value = "Siaran Langsung dihentikan."
+    }
+
+    fun testOnlineFinanceConnection() {
+        viewModelScope.launch {
+            _statusBannerMessage.value = "Menguji koneksi Google Sheets Keuangan Online..."
+            val s = settingsRepository.currentSettings
+            val result = onlineFinanceManager.fetchFinancialData(
+                onlineFinance = s.onlineFinance.copy(enabled = true),
+                localJumatKeuangan = s.jumat.keuangan
+            )
+            _onlineFinanceTestResult.value = result
+            if (result.isLocalFallback) {
+                AppLogger.warn("FINANCE", "Koneksi Google Sheets gagal, fallback ke kas lokal")
+                _statusBannerMessage.value = "Gagal terhubung ke Google Sheets (menggunakan fallback kas lokal)."
+            } else {
+                AppLogger.info("FINANCE", "Google Sheets terhubung: ${result.recentTransactions.size} transaksi terbaca")
+                _statusBannerMessage.value = "Berhasil terhubung ke Google Sheets (${result.recentTransactions.size} transaksi)!"
+            }
+        }
+    }
+
+    // ==================== AUDIO & MEDIA ASSET MANAGEMENT ====================
+
+    fun findPrayerAudioSlot(category: String, slotName: String): Pair<Boolean, String> {
+        val f = audioEngine.findSlotAudioFile(category, slotName)
+        return if (f != null) true to audioEngine.readDurationFormatted(f) else false to ""
+    }
+
+    fun listCustomAudioFilesWithDurations(): List<Pair<String, String>> {
+        return audioEngine.listCustomAudioFiles().map { file ->
+            file.name to audioEngine.readDurationFormatted(file)
+        }
+    }
+
+    fun togglePreviewPrayerAudio(category: String, slotName: String) {
+        val key = "$category:$slotName"
+        if (_previewingAudioKey.value == key) {
+            audioEngine.stopPlayback()
+            _previewingAudioKey.value = null
+            return
+        }
+        val f = audioEngine.findSlotAudioFile(category, slotName)
+        if (f != null) {
+            val vol = settingsRepository.currentSettings.globalVolume
+            if (audioEngine.previewAudioFile(f, vol)) {
+                _previewingAudioKey.value = key
+                AppLogger.info("AUDIO", "Pratinjau audio: $category/$slotName")
+            }
+        }
+    }
+
+    fun togglePreviewCustomAudio(fileName: String) {
+        val key = "custom:$fileName"
+        if (_previewingAudioKey.value == key) {
+            audioEngine.stopPlayback()
+            _previewingAudioKey.value = null
+            return
+        }
+        val f = File(assetsRootDir, "audio/custom/$fileName")
+        if (f.exists()) {
+            val vol = settingsRepository.currentSettings.globalVolume
+            if (audioEngine.previewAudioFile(f, vol)) {
+                _previewingAudioKey.value = key
+                AppLogger.info("AUDIO", "Pratinjau audio kustom: $fileName")
+            }
+        }
+    }
+
+    fun stopAudioPreview() {
+        audioEngine.stopPlayback()
+        _previewingAudioKey.value = null
+    }
+
+    fun importPrayerAudioSlot(category: String, slotName: String, inputStream: InputStream) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val targetDir = File(assetsRootDir, "audio/$category").apply { mkdirs() }
+                val targetFile = File(targetDir, "$slotName.mp3")
+                inputStream.use { input ->
+                    targetFile.outputStream().use { out -> input.copyTo(out) }
+                }
+            }.onSuccess {
+                refreshAudioDurationsAsync()
+                _audioInventoryTick.value += 1
+                AppLogger.info("AUDIO", "Audio $category/$slotName berhasil diunggah")
+                _statusBannerMessage.value = "Audio $category ($slotName) berhasil disimpan!"
+            }.onFailure { err ->
+                AppLogger.error("AUDIO", "Gagal impor audio $category/$slotName: ${err.message}")
+                _statusBannerMessage.value = "Gagal menyimpan audio: ${err.message}"
+            }
+        }
+    }
+
+    fun deletePrayerAudioSlot(category: String, slotName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val f = audioEngine.findSlotAudioFile(category, slotName)
+            if (f != null && f.delete()) {
+                refreshAudioDurationsAsync()
+                _audioInventoryTick.value += 1
+                AppLogger.info("AUDIO", "Audio $category/$slotName dihapus")
+                _statusBannerMessage.value = "Audio $category ($slotName) dihapus."
+            }
+        }
+    }
+
+    fun importCustomAudioFile(rawName: String, inputStream: InputStream) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val cleanName = rawName.replace(Regex("[^a-zA-Z0-9._-]"), "_").ifBlank { "audio_${System.currentTimeMillis()}.mp3" }
+                val finalName = if (cleanName.contains('.')) cleanName else "$cleanName.mp3"
+                val targetDir = File(assetsRootDir, "audio/custom").apply { mkdirs() }
+                val targetFile = File(targetDir, finalName)
+                inputStream.use { input ->
+                    targetFile.outputStream().use { out -> input.copyTo(out) }
+                }
+                finalName
+            }.onSuccess { name ->
+                _audioInventoryTick.value += 1
+                AppLogger.info("AUDIO", "Audio kustom diimpor: $name")
+                _statusBannerMessage.value = "Audio kustom '$name' berhasil ditambahkan!"
+            }.onFailure { err ->
+                AppLogger.error("AUDIO", "Gagal impor audio kustom: ${err.message}")
+                _statusBannerMessage.value = "Gagal mengimpor audio kustom: ${err.message}"
+            }
+        }
+    }
+
+    fun deleteCustomAudioFile(fileName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val f = File(assetsRootDir, "audio/custom/$fileName")
+            if (f.exists() && f.delete()) {
+                _audioInventoryTick.value += 1
+                AppLogger.info("AUDIO", "Audio kustom dihapus: $fileName")
+                _statusBannerMessage.value = "Audio kustom '$fileName' dihapus."
+            }
+        }
+    }
+
+    fun importImageAsset(subFolder: String, fileName: String, inputStream: InputStream, onSaved: (String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val cleanName = "${System.currentTimeMillis()}_${fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")}"
+                val targetDir = File(assetsRootDir, "images/$subFolder").apply { mkdirs() }
+                val targetFile = File(targetDir, cleanName)
+                inputStream.use { input ->
+                    targetFile.outputStream().use { out -> input.copyTo(out) }
+                }
+                "jws-assets/images/$subFolder/$cleanName"
+            }.onSuccess { relPath ->
+                withContext(Dispatchers.Main) {
+                    onSaved(relPath)
+                }
+                AppLogger.info("MEDIA", "Gambar disimpan: $relPath")
+                _statusBannerMessage.value = "Gambar berhasil disimpan ($relPath)"
+            }.onFailure { err ->
+                AppLogger.error("MEDIA", "Gagal menyimpan gambar: ${err.message}")
+                _statusBannerMessage.value = "Gagal menyimpan gambar: ${err.message}"
+            }
         }
     }
 
