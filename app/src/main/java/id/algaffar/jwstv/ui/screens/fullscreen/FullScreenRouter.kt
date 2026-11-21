@@ -158,7 +158,12 @@ fun FullScreenRouter(
                 }
 
                 AppState.WAKTU_JUMAT -> {
-                    WaktuJumatFullscreen(snapshot = snapshot)
+                    WaktuJumatFullscreen(
+                        snapshot = snapshot,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
+                    )
                 }
 
                 AppState.KHUTBAH -> {
@@ -208,7 +213,12 @@ fun FullScreenRouter(
                 }
 
                 AppState.TARAWIH -> {
-                    TarawihFullscreen(snapshot = snapshot)
+                    TarawihFullscreen(
+                        snapshot = snapshot,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
+                    )
                 }
 
                 AppState.CERAMAH_TARAWIH -> {
@@ -233,7 +243,9 @@ fun FullScreenRouter(
                         backgroundImagePath = snapshot.settings.media.ceramahTarawihImage,
                         assetsRootDir = assetsRootDir,
                         isLogoMenuOpen = isLogoMenuOpen,
-                        onLogoClick = onToggleLogoMenu
+                        onLogoClick = onToggleLogoMenu,
+                        mainTitleFontSize = 144.sp,
+                        mainTitleMaxLines = 1
                     )
                 }
 
@@ -242,9 +254,16 @@ fun FullScreenRouter(
                     val ramadhanPetugas = snapshot.settings.ramadhan.petugas.getOrNull(nightIdx)
                     val imamTarawih = ramadhanPetugas?.imamTarawih?.trim().orEmpty().ifBlank { "Ust. Fulan Imam" }
                     val imamWitir = ramadhanPetugas?.imamWitir?.trim().orEmpty()
+                    val hasSeparateWitir = imamWitir.isNotBlank() && imamWitir != "-" && imamWitir != imamTarawih
                     val tarawihOfficers = buildList {
-                        add(OverlayOfficerInfo("Imam Tarawih", imamTarawih, Icons.Default.Person))
-                        if (imamWitir.isNotBlank() && imamWitir != imamTarawih) {
+                        add(
+                            OverlayOfficerInfo(
+                                role = if (hasSeparateWitir) "Imam Tarawih" else "Imam Tarawih & Witir",
+                                name = imamTarawih,
+                                icon = Icons.Default.Person
+                            )
+                        )
+                        if (hasSeparateWitir) {
                             add(OverlayOfficerInfo("Imam Witir", imamWitir, Icons.Default.Person))
                         }
                     }
@@ -264,7 +283,9 @@ fun FullScreenRouter(
                         },
                         assetsRootDir = assetsRootDir,
                         isLogoMenuOpen = isLogoMenuOpen,
-                        onLogoClick = onToggleLogoMenu
+                        onLogoClick = onToggleLogoMenu,
+                        mainTitleFontSize = 112.sp,
+                        mainTitleMaxLines = 2
                     )
                 }
 
@@ -272,7 +293,10 @@ fun FullScreenRouter(
                     HolidayAndQurbanFullscreen(
                         snapshot = snapshot,
                         isIdulFitri = true,
-                        isInfoQurbanOnly = false
+                        isInfoQurbanOnly = false,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
                     )
                 }
 
@@ -326,7 +350,10 @@ fun FullScreenRouter(
                     HolidayAndQurbanFullscreen(
                         snapshot = snapshot,
                         isIdulFitri = false,
-                        isInfoQurbanOnly = false
+                        isInfoQurbanOnly = false,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
                     )
                 }
 
@@ -380,7 +407,10 @@ fun FullScreenRouter(
                     HolidayAndQurbanFullscreen(
                         snapshot = snapshot,
                         isIdulFitri = false,
-                        isInfoQurbanOnly = true
+                        isInfoQurbanOnly = true,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
                     )
                 }
 
@@ -392,19 +422,39 @@ fun FullScreenRouter(
                 }
 
                 AppState.SCREENSAVER -> {
-                    ScreenSaverFullscreen(snapshot = snapshot)
+                    ScreenSaverFullscreen(
+                        snapshot = snapshot,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
+                    )
                 }
 
                 AppState.MASJID_QR -> {
-                    MasjidQrFullscreen(snapshot = snapshot)
+                    MasjidQrFullscreen(
+                        snapshot = snapshot,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
+                    )
                 }
 
                 AppState.FINANCE_QR -> {
-                    FinanceQrFullscreen(snapshot = snapshot)
+                    FinanceQrFullscreen(
+                        snapshot = snapshot,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
+                    )
                 }
 
                 AppState.JUMAT_QR -> {
-                    JumatQrFullscreen(snapshot = snapshot)
+                    JumatQrFullscreen(
+                        snapshot = snapshot,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
+                    )
                 }
 
                 AppState.ONLINE_FINANCE -> {

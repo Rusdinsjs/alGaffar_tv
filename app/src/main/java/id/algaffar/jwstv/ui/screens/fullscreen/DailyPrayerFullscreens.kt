@@ -57,7 +57,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -66,6 +69,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -346,7 +350,7 @@ fun TartilTarhimFullscreen(
 }
 
 @Composable
-private fun FullscreenBrandHeader(
+internal fun FullscreenBrandHeader(
     brand: id.algaffar.jwstv.domain.model.BrandSettings,
     assetsRootDir: File?,
     isLogoMenuOpen: Boolean,
@@ -1048,6 +1052,8 @@ fun SimpleStateOverlayFullscreen(
     assetsRootDir: File? = null,
     isLogoMenuOpen: Boolean = false,
     onLogoClick: () -> Unit = {},
+    mainTitleFontSize: TextUnit? = null,
+    mainTitleMaxLines: Int = 2,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
@@ -1251,8 +1257,8 @@ fun SimpleStateOverlayFullscreen(
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .fillMaxHeight()
-                .fillMaxWidth(0.52f)
-                .padding(start = 52.dp, end = 36.dp, top = 28.dp, bottom = 32.dp),
+                .fillMaxWidth(0.54f)
+                .padding(start = 52.dp, end = 24.dp, top = 28.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.Start
         ) {
@@ -1294,34 +1300,41 @@ fun SimpleStateOverlayFullscreen(
                 }
             }
 
-            // Middle: Prefix + 2x Prayer/Khutbah Name (Distinct Font & Theme Color) + 2x Adab Message
+            // Middle: 1.5x Prefix + 2x Prayer/Khutbah Name (Distinct Font & Theme Color) + Proportional Adab Message
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 if (prefixTitle.isNotBlank()) {
                     Text(
                         text = prefixTitle.uppercase(),
-                        color = palette.textPrimary,
-                        fontSize = 36.sp,
-                        lineHeight = 42.sp,
+                        color = palette.textPrimary.copy(alpha = 0.92f),
+                        fontSize = 54.sp,
+                        lineHeight = 60.sp,
                         fontFamily = FontFamily.SansSerif,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp,
+                        letterSpacing = 2.5.sp,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
                     )
                 }
 
+                val resolvedMainFontSize = mainTitleFontSize ?: 208.sp
+                val resolvedMainLineHeight = if (mainTitleFontSize != null) {
+                    (mainTitleFontSize.value * 1.04f).sp
+                } else {
+                    204.sp
+                }
                 Text(
                     text = mainNameTitle.uppercase(),
                     color = secondaryRibbonColor,
-                    fontSize = 104.sp,
-                    lineHeight = 108.sp,
+                    fontSize = resolvedMainFontSize,
+                    lineHeight = resolvedMainLineHeight,
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Black,
-                    letterSpacing = 2.sp,
-                    maxLines = 2,
+                    letterSpacing = 1.sp,
+                    maxLines = mainTitleMaxLines,
                     overflow = TextOverflow.Ellipsis,
                     style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
                 )
@@ -1329,15 +1342,15 @@ fun SimpleStateOverlayFullscreen(
                 Text(
                     text = "“$stageMessage”",
                     color = palette.textSecondary,
-                    fontSize = 48.sp,
-                    lineHeight = 56.sp,
+                    fontSize = 44.sp,
+                    lineHeight = 52.sp,
                     fontStyle = FontStyle.Italic,
                     fontWeight = FontWeight.Medium,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .fillMaxWidth(0.92f)
-                        .padding(top = 4.dp)
+                        .padding(top = 10.dp)
                 )
             }
 
@@ -1399,61 +1412,83 @@ fun SimpleStateOverlayFullscreen(
             )
         }
 
-        // 5. Bottom-Right Officer Card(s) (Imam / Khotib / Penceramah) - Right-Aligned, 2.5x Font
+        // 5. Bottom-Right Officer Card(s) (Imam / Khotib / Penceramah) - Role outside card, Name inside pill card
         if (officers.isNotEmpty()) {
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = 36.dp, bottom = 32.dp),
                 horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 officers.forEach { officer ->
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(palette.bgPrimary.copy(alpha = 0.88f))
-                            .border(2.dp, secondaryRibbonColor.copy(alpha = 0.60f), RoundedCornerShape(50))
-                            .padding(horizontal = 36.dp, vertical = 18.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(20.dp)
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.widthIn(max = 860.dp),
-                            horizontalAlignment = Alignment.End
+                        Row(
+                            modifier = Modifier.padding(end = 24.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(36.dp)
+                                    .height(3.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(secondaryRibbonColor)
+                            )
                             Text(
                                 text = officer.role.uppercase(),
                                 color = secondaryRibbonColor,
-                                fontSize = 32.sp,
+                                fontSize = 30.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 2.5.sp,
-                                textAlign = TextAlign.End
+                                letterSpacing = 3.sp,
+                                textAlign = TextAlign.End,
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                    shadow = androidx.compose.ui.graphics.Shadow(
+                                        color = Color.Black.copy(alpha = 0.75f),
+                                        offset = Offset(0f, 2f),
+                                        blurRadius = 8f
+                                    )
+                                )
                             )
+                        }
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(palette.bgPrimary.copy(alpha = 0.88f))
+                                .border(2.dp, secondaryRibbonColor.copy(alpha = 0.60f), RoundedCornerShape(50))
+                                .padding(horizontal = 32.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(20.dp)
+                        ) {
                             Text(
                                 text = officer.name.trim().ifBlank { "Ust. Fulan" },
                                 color = palette.textPrimary,
-                                fontSize = 65.sp,
-                                lineHeight = 72.sp,
+                                fontSize = 62.sp,
+                                lineHeight = 68.sp,
                                 fontWeight = FontWeight.Black,
                                 textAlign = TextAlign.End,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 860.dp),
                                 style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
                             )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(secondaryRibbonColor.copy(alpha = 0.18f))
-                                .padding(16.dp)
-                        ) {
-                            Icon(
-                                imageVector = officer.icon,
-                                contentDescription = null,
-                                tint = secondaryRibbonColor,
-                                modifier = Modifier.size(48.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(secondaryRibbonColor.copy(alpha = 0.18f))
+                                    .padding(14.dp)
+                            ) {
+                                Icon(
+                                    imageVector = officer.icon,
+                                    contentDescription = null,
+                                    tint = secondaryRibbonColor,
+                                    modifier = Modifier.size(44.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -1597,14 +1632,14 @@ fun IqomahFullscreen(
                     imageVector = Icons.Default.Schedule,
                     contentDescription = null,
                     tint = theme.accentStart,
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(52.dp)
                 )
                 Text(
                     text = "MENUNGGU",
                     color = theme.accentStart.copy(alpha = 0.85f),
-                    fontSize = 28.sp,
+                    fontSize = 56.sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 10.sp
+                    letterSpacing = 20.sp
                 )
                 Box(
                     modifier = Modifier
@@ -1614,7 +1649,7 @@ fun IqomahFullscreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Main Title: IQOMAH [SHOLAT]
             Row(
@@ -1625,39 +1660,33 @@ fun IqomahFullscreen(
                     text = "IQOMAH",
                     color = Color.White,
                     fontSize = 172.sp,
-                    lineHeight = 136.sp,
                     fontWeight = FontWeight.Black,
                     letterSpacing = (-4).sp,
                     maxLines = 1,
                     softWrap = false,
+                    modifier = Modifier.tightTextBounds(172.sp),
                     style = TextStyle(
-                        platformStyle = PlatformTextStyle(includeFontPadding = false),
-                        lineHeightStyle = LineHeightStyle(
-                            alignment = LineHeightStyle.Alignment.Center,
-                            trim = LineHeightStyle.Trim.Both
-                        )
+                        platformStyle = PlatformTextStyle(includeFontPadding = false)
                     )
                 )
                 Text(
                     text = prayerLabel.uppercase(),
+                    modifier = Modifier.tightTextBounds(172.sp),
                     style = TextStyle(
                         brush = Brush.horizontalGradient(listOf(theme.accentStart, theme.accentEnd)),
                         fontSize = 172.sp,
-                        lineHeight = 136.sp,
                         fontWeight = FontWeight.Black,
                         letterSpacing = (-4).sp,
-                        platformStyle = PlatformTextStyle(includeFontPadding = false),
-                        lineHeightStyle = LineHeightStyle(
-                            alignment = LineHeightStyle.Alignment.Center,
-                            trim = LineHeightStyle.Trim.Both
-                        )
+                        platformStyle = PlatformTextStyle(includeFontPadding = false)
                     ),
                     maxLines = 1,
                     softWrap = false
                 )
             }
 
-            // Massive Countdown Timer (MM : SS) — 80% of 690.sp = 552.sp
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Massive Countdown Timer (MM : SS) — 1.1x scaled (607.sp)
             Row(
                 modifier = Modifier
                     .graphicsLayer {
@@ -1670,53 +1699,42 @@ fun IqomahFullscreen(
                 Text(
                     text = mins,
                     color = Color.White,
-                    fontSize = 552.sp,
-                    lineHeight = 410.sp,
+                    fontSize = 607.sp,
                     fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.SansSerif,
                     maxLines = 1,
                     softWrap = false,
+                    modifier = Modifier.tightTextBounds(607.sp),
                     style = TextStyle(
                         platformStyle = PlatformTextStyle(includeFontPadding = false),
-                        lineHeightStyle = LineHeightStyle(
-                            alignment = LineHeightStyle.Alignment.Center,
-                            trim = LineHeightStyle.Trim.Both
-                        ),
                         fontFeatureSettings = "tnum"
                     )
                 )
                 Text(
                     text = ":",
                     color = Color.White.copy(alpha = 0.80f),
-                    fontSize = 504.sp,
-                    lineHeight = 410.sp,
+                    fontSize = 554.sp,
                     fontWeight = FontWeight.Black,
                     maxLines = 1,
                     softWrap = false,
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .tightTextBounds(554.sp),
                     style = TextStyle(
-                        platformStyle = PlatformTextStyle(includeFontPadding = false),
-                        lineHeightStyle = LineHeightStyle(
-                            alignment = LineHeightStyle.Alignment.Center,
-                            trim = LineHeightStyle.Trim.Both
-                        )
+                        platformStyle = PlatformTextStyle(includeFontPadding = false)
                     )
                 )
                 Text(
                     text = secs,
                     color = Color.White,
-                    fontSize = 552.sp,
-                    lineHeight = 410.sp,
+                    fontSize = 607.sp,
                     fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.SansSerif,
                     maxLines = 1,
                     softWrap = false,
+                    modifier = Modifier.tightTextBounds(607.sp),
                     style = TextStyle(
                         platformStyle = PlatformTextStyle(includeFontPadding = false),
-                        lineHeightStyle = LineHeightStyle(
-                            alignment = LineHeightStyle.Alignment.Center,
-                            trim = LineHeightStyle.Trim.Both
-                        ),
                         fontFeatureSettings = "tnum"
                     )
                 )
@@ -1772,6 +1790,27 @@ fun IqomahFullscreen(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Trims empty vertical font-metric padding (above cap-height and below baseline)
+ * on single-line uppercase/digit [Text] composables so large display typography
+ * sits tightly against adjacent elements.
+ */
+private fun Modifier.tightTextBounds(fontSize: TextUnit): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    val baseline = placeable[FirstBaseline]
+    if (baseline == AlignmentLine.Unspecified) {
+        layout(placeable.width, placeable.height) { placeable.placeRelative(0, 0) }
+    } else {
+        val fontSizePx = fontSize.toPx()
+        val visualTop = (baseline - fontSizePx * 0.74f).roundToInt().coerceAtLeast(0)
+        val visualBottom = (baseline + fontSizePx * 0.03f).roundToInt().coerceAtMost(placeable.height)
+        val tightHeight = (visualBottom - visualTop).coerceAtLeast(1)
+        layout(placeable.width, tightHeight) {
+            placeable.placeRelative(0, -visualTop)
         }
     }
 }

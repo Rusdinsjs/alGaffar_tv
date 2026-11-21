@@ -553,7 +553,7 @@ fun IdulAdhaQurbanSettingsTab(
 ) {
     val palette = LocalJwsTheme.current
     val adha = settings.idulAdha
-    var groupNameInput by remember { mutableStateOf("Kelompok Sapi Baru") }
+    var groupNameInput by remember { mutableStateOf("Kelompok Qurban Baru") }
     var animalTypeInput by remember { mutableStateOf("Sapi") }
     var membersCsvInput by remember { mutableStateOf("") }
 

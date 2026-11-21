@@ -20,14 +20,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.NightsStay
@@ -46,7 +50,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,10 +69,14 @@ import id.algaffar.jwstv.ui.JwsRuntimeSnapshot
 import id.algaffar.jwstv.ui.components.clock.ArtisticClock
 import id.algaffar.jwstv.ui.components.clock.BigAnalogClock
 import id.algaffar.jwstv.ui.components.clock.ClockVariant
+import id.algaffar.jwstv.ui.screens.standby.FinanceMetricBox
+import id.algaffar.jwstv.ui.screens.standby.HeaderBar
+import id.algaffar.jwstv.ui.screens.standby.HeaderClockCard
 import id.algaffar.jwstv.ui.screens.standby.JumatKeuanganSlideView
 import id.algaffar.jwstv.ui.screens.standby.JumatPetugasSlideView
 import id.algaffar.jwstv.ui.screens.standby.LocalSlideVideoPlayer
 import id.algaffar.jwstv.ui.screens.standby.NextPrayerCountdownCard
+import id.algaffar.jwstv.ui.screens.standby.OfficerRoleRowCard
 import id.algaffar.jwstv.ui.screens.standby.WelcomeMasjidSlideView
 import id.algaffar.jwstv.ui.screens.standby.generateQrBitmap
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
@@ -83,6 +94,9 @@ import kotlin.math.roundToInt
 @Composable
 fun WaktuJumatFullscreen(
     snapshot: JwsRuntimeSnapshot,
+    assetsRootDir: File? = null,
+    isLogoMenuOpen: Boolean = false,
+    onLogoClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
@@ -122,60 +136,34 @@ fun WaktuJumatFullscreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(36.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Top Header with Countdown to Khutbah
+        // Top Header: Standby HeaderBar + Standby-sized HeaderClockCard (480x180dp)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(palette.bgCard)
-                .border(1.5.dp, palette.border, RoundedCornerShape(20.dp))
-                .padding(horizontal = 28.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .height(180.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = "MENJELANG KHUTBAH JUM'AT — ${snapshot.settings.brand.name}",
-                    color = palette.textPrimary,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
-                Text(
-                    text = "Mohon tenang dan dengarkan pengumuman serta laporan kas masjid sebelum Khotib naik mimbar.",
-                    color = palette.textSecondary,
-                    fontSize = 15.sp
-                )
-            }
+            HeaderBar(
+                now = snapshot.now,
+                brand = snapshot.settings.brand,
+                hijriDate = snapshot.hijriDate,
+                assetsRootDir = assetsRootDir,
+                isReversed = false,
+                isLogoMenuOpen = isLogoMenuOpen,
+                onLogoClick = onLogoClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(180.dp)
+            )
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(18.dp)
-            ) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "MENUJU KHUTBAH",
-                        color = palette.accent,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = formattedRem,
-                        color = palette.accentSecondary,
-                        fontSize = 36.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-
-                ArtisticClock(
-                    now = snapshot.now,
-                    style = snapshot.settings.brand.clockStyle,
-                    variant = ClockVariant.HEADER
-                )
-            }
+            HeaderClockCard(
+                now = snapshot.now,
+                clockStyle = snapshot.settings.brand.clockStyle
+            )
         }
 
         // Main Rotating Slide Area
@@ -193,25 +181,99 @@ fun WaktuJumatFullscreen(
                 label = "WaktuJumatSlide"
             ) { page ->
                 if (page == 0) {
-                    JumatPetugasSlideView(fridayDate = effPetugasDate, record = petugasRec)
+                    JumatPetugasSlideView(
+                        fridayDate = effPetugasDate,
+                        record = petugasRec,
+                        isRowLayout = true
+                    )
                 } else {
-                    JumatKeuanganSlideView(fridayDate = effKeuDate, record = keuRec)
+                    JumatKeuanganSlideView(
+                        fridayDate = effKeuDate,
+                        record = keuRec,
+                        isExpanded = true
+                    )
                 }
             }
+        }
+
+        // Bottom Row: Left = Card Menuju Khutbah, Right = Quoted Reminder Text (2x font size)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(28.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(palette.bgCard)
+                    .border(2.dp, palette.accent.copy(alpha = 0.65f), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 28.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(palette.accent.copy(alpha = 0.18f))
+                        .padding(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AccessTime,
+                        contentDescription = null,
+                        tint = palette.accent,
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = "MENUJU KHUTBAH",
+                        color = palette.accent,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 2.sp
+                    )
+                    Text(
+                        text = formattedRem,
+                        color = palette.accentSecondary,
+                        fontSize = 46.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.ExtraBold,
+                        style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
+                    )
+                }
+            }
+
+            Text(
+                text = "“Mohon tenang dan dengarkan pengumuman serta laporan kas masjid sebelum Khotib naik mimbar.”",
+                color = palette.textSecondary,
+                fontSize = 40.sp,
+                lineHeight = 48.sp,
+                fontStyle = FontStyle.Italic,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
 
 /**
  * 2. TARAWIH RAMADHAN FULLSCREEN (`TarawihContent.tsx`)
- * Rotates:
- * - Page 0: Petugas Tarawih & Kultum Malam Ke-N
- * - Page 1: Laporan Kas Ramadhan (Penerimaan Jamaah Pria & Wanita)
- * - Page 2: Daftar Penyumbang Ta'jil (30 Hari)
+ * Mengacu pada UI/UX `WaktuJumatFullscreen`:
+ * - Top Header: `HeaderBar` + `HeaderClockCard`
+ * - Main Rotating Slide Area:
+ *   - Page 0: Petugas Kultum, Tarawih & Witir (Row cards ala `JumatPetugasSlideView`)
+ *   - Page 1: Laporan Infaq Malam Ramadhan (2x2 Grid ala `JumatKeuanganSlideView`, termasuk "Jumlah Infaq Malam Ini")
+ *   - Page 2: Daftar Penyumbang Ta'jil Buka Puasa
+ * - Bottom Row: Countdown Card (`MENUJU SHOLAT TARAWIH`) + Quoted Reminder Text
  */
 @Composable
 fun TarawihFullscreen(
     snapshot: JwsRuntimeSnapshot,
+    assetsRootDir: File? = null,
+    isLogoMenuOpen: Boolean = false,
+    onLogoClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
@@ -223,90 +285,54 @@ fun TarawihFullscreen(
     val petugas = ramadhan.petugas.getOrNull(nightIdx)
     val keuangan = ramadhan.keuangan.getOrNull(nightIdx)
     val takjilDonors = ramadhan.takjil[ramadhan.currentNight.toString()].orEmpty()
+    val takjilPages = remember(takjilDonors) {
+        if (takjilDonors.isEmpty()) listOf(emptyList()) else takjilDonors.chunked(10)
+    }
+    val totalPages = 2 + takjilPages.size
 
     var page by remember { mutableIntStateOf(0) }
-    LaunchedEffect(ramadhan.slideshow.slideDuration) {
+    LaunchedEffect(ramadhan.slideshow.slideDuration, totalPages) {
+        if (page >= totalPages) page = 0
         while (true) {
             delay(ramadhan.slideshow.slideDuration.coerceIn(5, 60) * 1000L)
-            page = (page + 1) % 3
+            page = (page + 1) % totalPages
         }
-    }
-
-    val rupiahFormat = remember {
-        NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply { maximumFractionDigits = 0 }
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(36.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
+        // Top Header: Standby HeaderBar + Standby-sized HeaderClockCard (480x180dp)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(palette.bgCard)
-                .border(1.5.dp, palette.border, RoundedCornerShape(20.dp))
-                .padding(horizontal = 28.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .height(180.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.NightsStay,
-                    contentDescription = null,
-                    tint = palette.accentSecondary,
-                    modifier = Modifier.size(38.dp)
-                )
-                Column {
-                    Text(
-                        text = "IBADAH MALAM RAMADHAN KE-${ramadhan.currentNight}",
-                        color = palette.textPrimary,
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = snapshot.settings.brand.name,
-                        color = palette.accent,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
+            HeaderBar(
+                now = snapshot.now,
+                brand = snapshot.settings.brand,
+                hijriDate = snapshot.hijriDate,
+                assetsRootDir = assetsRootDir,
+                isReversed = false,
+                isLogoMenuOpen = isLogoMenuOpen,
+                onLogoClick = onLogoClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(180.dp)
+            )
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(18.dp)
-            ) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "MENUJU SHOLAT TARAWIH",
-                        color = palette.accent,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = formattedRem,
-                        color = palette.accentSecondary,
-                        fontSize = 36.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-                ArtisticClock(
-                    now = snapshot.now,
-                    style = snapshot.settings.brand.clockStyle,
-                    variant = ClockVariant.HEADER
-                )
-            }
+            HeaderClockCard(
+                now = snapshot.now,
+                clockStyle = snapshot.settings.brand.clockStyle
+            )
         }
 
-        // Rotating Content
+        // Main Rotating Slide Area
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -314,7 +340,6 @@ fun TarawihFullscreen(
                 .clip(RoundedCornerShape(24.dp))
                 .background(palette.bgCard)
                 .border(1.5.dp, palette.border, RoundedCornerShape(24.dp))
-                .padding(36.dp)
         ) {
             AnimatedContent(
                 targetState = page,
@@ -322,173 +347,432 @@ fun TarawihFullscreen(
                 label = "TarawihSlide"
             ) { idx ->
                 when (idx) {
-                    0 -> {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "PETUGAS KULTUM, TARAWIH & WITIR (MALAM KE-${ramadhan.currentNight})",
-                                color = palette.accentSecondary,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                                    .padding(vertical = 20.dp),
-                                horizontalArrangement = Arrangement.spacedBy(20.dp)
-                            ) {
-                                RamadhanInfoCard(
-                                    title = "PENCERAMAH KULTUM",
-                                    value = petugas?.penceramah ?: "-",
-                                    modifier = Modifier.weight(1f)
-                                )
-                                RamadhanInfoCard(
-                                    title = "IMAM SHOLAT TARAWIH",
-                                    value = petugas?.imamTarawih ?: "-",
-                                    modifier = Modifier.weight(1f)
-                                )
-                                RamadhanInfoCard(
-                                    title = "IMAM SHOLAT WITIR",
-                                    value = petugas?.imamWitir ?: "-",
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
-                    1 -> {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "LAPORAN INFAQ MALAM RAMADHAN KE-${ramadhan.currentNight}",
-                                color = palette.accentSecondary,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                                    .padding(vertical = 20.dp),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                RamadhanInfoCard(
-                                    title = "INFAQ JAMAAH PRIA",
-                                    value = rupiahFormat.format(keuangan?.penerimaanPria ?: 0L),
-                                    modifier = Modifier.weight(1f)
-                                )
-                                RamadhanInfoCard(
-                                    title = "INFAQ JAMAAH WANITA",
-                                    value = rupiahFormat.format(keuangan?.penerimaanWanita ?: 0L),
-                                    modifier = Modifier.weight(1f)
-                                )
-                                RamadhanInfoCard(
-                                    title = "SALDO AKHIR KAS RAMADHAN",
-                                    value = rupiahFormat.format(keuangan?.saldoAkhir ?: 0L),
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
+                    0 -> TarawihPetugasSlideView(
+                        night = ramadhan.currentNight,
+                        hijriYear = ramadhan.hijriYear,
+                        penceramah = petugas?.penceramah ?: "-",
+                        imamTarawih = petugas?.imamTarawih ?: "-",
+                        imamWitir = petugas?.imamWitir ?: "-"
+                    )
+                    1 -> TarawihKeuanganSlideView(
+                        night = ramadhan.currentNight,
+                        hijriYear = ramadhan.hijriYear,
+                        penerimaanPria = keuangan?.penerimaanPria ?: 0L,
+                        penerimaanWanita = keuangan?.penerimaanWanita ?: 0L,
+                        jumlahInfaqMalamIni = keuangan?.totalPenerimaan ?: 0L,
+                        saldoAkhir = keuangan?.saldoAkhir ?: 0L
+                    )
                     else -> {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "DAFTAR PENYUMBANG TA'JIL BUKA PUASA (HARI KE-${ramadhan.currentNight})",
-                                color = palette.accentSecondary,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                                    .padding(vertical = 20.dp)
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(palette.bgPrimary.copy(alpha = 0.65f))
-                                    .border(1.5.dp, palette.border, RoundedCornerShape(20.dp))
-                                    .padding(28.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (takjilDonors.isEmpty()) {
-                                        "Jazakumullahu Khairan Katsiran kepada seluruh Muhsinin & Jamaah Masjid Al-Gaffar"
-                                    } else {
-                                        takjilDonors.joinToString("   •   ")
-                                    },
-                                    color = palette.textPrimary,
-                                    fontSize = 28.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center,
-                                    lineHeight = 40.sp
-                                )
-                            }
-                        }
+                        val takjilPageIdx = (idx - 2).coerceIn(0, takjilPages.lastIndex)
+                        TarawihTakjilSlideView(
+                            night = ramadhan.currentNight,
+                            hijriYear = ramadhan.hijriYear,
+                            donors = takjilPages[takjilPageIdx],
+                            startNumber = takjilPageIdx * 10 + 1,
+                            pageNumber = takjilPageIdx + 1,
+                            totalTakjilPages = takjilPages.size
+                        )
                     }
                 }
+            }
+        }
+
+        // Bottom Row: Left = Card Menuju Sholat Tarawih, Right = Quoted Reminder Text
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(28.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(palette.bgCard)
+                    .border(2.dp, palette.accent.copy(alpha = 0.65f), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 28.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(palette.accent.copy(alpha = 0.18f))
+                        .padding(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AccessTime,
+                        contentDescription = null,
+                        tint = palette.accent,
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = "MENUJU SHOLAT TARAWIH",
+                        color = palette.accent,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 2.sp
+                    )
+                    Text(
+                        text = formattedRem,
+                        color = palette.accentSecondary,
+                        fontSize = 46.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.ExtraBold,
+                        style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
+                    )
+                }
+            }
+
+            Text(
+                text = "“Mohon tenang dan bersiap melaksanakan ibadah Sholat Tarawih & Witir berjamaah.”",
+                color = palette.textSecondary,
+                fontSize = 40.sp,
+                lineHeight = 48.sp,
+                fontStyle = FontStyle.Italic,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TarawihPetugasSlideView(
+    night: Int,
+    hijriYear: String,
+    penceramah: String,
+    imamTarawih: String,
+    imamWitir: String
+) {
+    val palette = LocalJwsTheme.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Groups,
+                contentDescription = null,
+                tint = palette.accent,
+                modifier = Modifier.size(44.dp)
+            )
+            Column {
+                Text(
+                    text = "PETUGAS SHOLAT TARAWIH & WITIR",
+                    color = palette.textPrimary,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = "Ibadah Malam Ramadhan Ke-$night ($hijriYear H)",
+                    color = palette.accent,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            OfficerRoleRowCard(
+                roleTitle = "PENCERAMAH KULTUM",
+                officerName = penceramah,
+                accentColor = palette.accent,
+                modifier = Modifier.weight(1f)
+            )
+            OfficerRoleRowCard(
+                roleTitle = "IMAM SHOLAT TARAWIH",
+                officerName = imamTarawih,
+                accentColor = palette.accentSecondary,
+                modifier = Modifier.weight(1f)
+            )
+            OfficerRoleRowCard(
+                roleTitle = "IMAM SHOLAT WITIR",
+                officerName = imamWitir,
+                accentColor = palette.accent,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TarawihKeuanganSlideView(
+    night: Int,
+    hijriYear: String,
+    penerimaanPria: Long,
+    penerimaanWanita: Long,
+    jumlahInfaqMalamIni: Long,
+    saldoAkhir: Long
+) {
+    val palette = LocalJwsTheme.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.AccountBalanceWallet,
+                contentDescription = null,
+                tint = palette.accentSecondary,
+                modifier = Modifier.size(44.dp)
+            )
+            Column {
+                Text(
+                    text = "LAPORAN INFAQ MALAM RAMADHAN KE-$night",
+                    color = palette.textPrimary,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = "Periode Laporan: Malam Ke-$night Ramadhan $hijriYear H",
+                    color = palette.textSecondary,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                FinanceMetricBox(
+                    label = "INFAQ JAMAAH PRIA",
+                    amount = penerimaanPria,
+                    valueColor = Color(0xFF34D399),
+                    isExpanded = true,
+                    modifier = Modifier.weight(1f)
+                )
+                FinanceMetricBox(
+                    label = "INFAQ JAMAAH WANITA",
+                    amount = penerimaanWanita,
+                    valueColor = Color(0xFF34D399),
+                    isExpanded = true,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                FinanceMetricBox(
+                    label = "JUMLAH INFAQ MALAM INI",
+                    amount = jumlahInfaqMalamIni,
+                    valueColor = palette.accent,
+                    isExpanded = true,
+                    modifier = Modifier.weight(1f)
+                )
+                FinanceMetricBox(
+                    label = "SALDO AKHIR KAS RAMADHAN",
+                    amount = saldoAkhir,
+                    valueColor = palette.accentSecondary,
+                    isHighlighted = true,
+                    isExpanded = true,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
 }
 
 @Composable
-private fun RamadhanInfoCard(
-    title: String,
-    value: String,
+private fun TarawihTakjilSlideView(
+    night: Int,
+    hijriYear: String,
+    donors: List<String>,
+    startNumber: Int = 1,
+    pageNumber: Int = 1,
+    totalTakjilPages: Int = 1
+) {
+    val palette = LocalJwsTheme.current
+    val subtitleText = if (totalTakjilPages > 1) {
+        "Hari Ke-$night Ramadhan $hijriYear H  •  Halaman $pageNumber / $totalTakjilPages"
+    } else {
+        "Hari Ke-$night Ramadhan $hijriYear H"
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.NightsStay,
+                contentDescription = null,
+                tint = palette.accentSecondary,
+                modifier = Modifier.size(44.dp)
+            )
+            Column {
+                Text(
+                    text = "DAFTAR PENYUMBANG TA'JIL BUKA PUASA",
+                    color = palette.textPrimary,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = subtitleText,
+                    color = palette.accent,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        val displayDonors = if (donors.isEmpty()) {
+            (0 until 10).map { "Nama ${startNumber + it}" }
+        } else {
+            donors
+        }
+        val leftCol = displayDonors.take(5)
+        val rightCol = displayDonors.drop(5).take(5)
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            TakjilDonorColumn(
+                items = leftCol,
+                startNumber = startNumber,
+                modifier = Modifier.weight(1f)
+            )
+            TakjilDonorColumn(
+                items = rightCol,
+                startNumber = startNumber + 5,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TakjilDonorColumn(
+    items: List<String>,
+    startNumber: Int,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
+
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .clip(RoundedCornerShape(20.dp))
-            .background(palette.bgPrimary.copy(alpha = 0.68f))
-            .border(1.5.dp, palette.border, RoundedCornerShape(20.dp))
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = modifier.fillMaxHeight(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = title,
-            color = palette.accent,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.ExtraBold
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = value,
-            color = palette.textPrimary,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.ExtraBold,
-            textAlign = TextAlign.Center
-        )
+        for (i in 0 until 5) {
+            val donor = items.getOrNull(i)
+            if (donor != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(palette.bgPrimary.copy(alpha = 0.65f))
+                        .border(1.5.dp, palette.border, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(64.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(palette.accent.copy(alpha = 0.18f))
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "${startNumber + i}.",
+                            color = palette.accent,
+                            fontSize = 24.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                    Text(
+                        text = donor.ifBlank { "Nama ${startNumber + i}" },
+                        color = palette.textPrimary,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+            }
+        }
     }
 }
 
 /**
  * 3. IDUL FITRI, IDUL ADHA & INFO QURBAN FULLSCREEN (`IdulFitriContent.tsx`, `IdulAdhaContent.tsx`)
+ * Mengacu pada UI/UX `WaktuJumatFullscreen` & `TarawihFullscreen`:
+ * - Top Header: `HeaderBar` + `HeaderClockCard`
+ * - Main Rotating Slide Area:
+ *   - Idul Fitri: Page 0 = Petugas (`OfficerRoleRowCard`), Page 1 = Keuangan Kas (`FinanceMetricBox` 2x2)
+ *   - Idul Adha: Page 0 = Petugas (`OfficerRoleRowCard`), Page 1..N = Kelompok Qurban
+ *   - Info Qurban: Page 0..N-1 = Kelompok Qurban
+ * - Bottom Row: Countdown / Event Badge Card + Quoted Reminder Text
  */
 @Composable
 fun HolidayAndQurbanFullscreen(
     snapshot: JwsRuntimeSnapshot,
     isIdulFitri: Boolean,
     isInfoQurbanOnly: Boolean,
+    assetsRootDir: File? = null,
+    isLogoMenuOpen: Boolean = false,
+    onLogoClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
     val settings = snapshot.settings
+    val remSec = snapshot.tickResult.countdownSeconds.coerceAtLeast(0L)
+    val formattedRem = String.format(Locale.US, "%02d:%02d", remSec / 60L, remSec % 60L)
+
     val qurbanGroups: List<QurbanGroup> = settings.idulAdha.qurbanGroups.ifEmpty {
         listOf(
             QurbanGroup(
                 id = "q-1",
                 animalType = "Sapi",
-                groupName = "Kelompok Sapi 1",
+                groupName = "Kelompok Qurban 1",
                 members = listOf(
                     "1. H. Abdullah beserta keluarga",
                     "2. H. Sulaiman beserta keluarga",
@@ -502,11 +786,23 @@ fun HolidayAndQurbanFullscreen(
         )
     }
 
-    var groupIdx by remember { mutableIntStateOf(0) }
-    LaunchedEffect(qurbanGroups.size) {
+    val totalPages = when {
+        isInfoQurbanOnly -> qurbanGroups.size.coerceAtLeast(1)
+        isIdulFitri -> 2
+        else -> 1 + qurbanGroups.size.coerceAtLeast(1)
+    }
+    val slideDurationSec = when {
+        isInfoQurbanOnly -> settings.infoQurban.slideDuration
+        isIdulFitri -> settings.idulFitri.slideDuration
+        else -> settings.idulAdha.slideDuration
+    }.coerceIn(5, 60)
+
+    var page by remember { mutableIntStateOf(0) }
+    LaunchedEffect(slideDurationSec, totalPages) {
+        if (page >= totalPages) page = 0
         while (true) {
-            delay(8_000L)
-            groupIdx = (groupIdx + 1) % qurbanGroups.size.coerceAtLeast(1)
+            delay(slideDurationSec * 1000L)
+            page = (page + 1) % totalPages
         }
     }
 
@@ -515,83 +811,37 @@ fun HolidayAndQurbanFullscreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(36.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Top Header: Standby HeaderBar + Standby-sized HeaderClockCard (480x180dp)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(palette.bgCard)
-                .border(1.5.dp, palette.border, RoundedCornerShape(20.dp))
-                .padding(horizontal = 28.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .height(180.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Icon(
-                    imageVector = if (isInfoQurbanOnly) Icons.Default.Groups else Icons.Default.Celebration,
-                    contentDescription = null,
-                    tint = palette.accentSecondary,
-                    modifier = Modifier.size(38.dp)
-                )
-                Column {
-                    Text(
-                        text = when {
-                            isInfoQurbanOnly -> "DAFTAR PESERTA & KELOMPOK QURBAN — ${settings.brand.name}"
-                            isIdulFitri -> "INFORMASI SHOLAT HARI RAYA IDUL FITRI — ${settings.brand.name}"
-                            else -> "INFORMASI SHOLAT IDUL ADHA & IBADAH QURBAN — ${settings.brand.name}"
-                        },
-                        color = palette.textPrimary,
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = "Taqabbalallahu Minna Wa Minkum • Shiyamana Wa Shiyamakum",
-                        color = palette.accent,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            ArtisticClock(
+            HeaderBar(
                 now = snapshot.now,
-                style = settings.brand.clockStyle,
-                variant = ClockVariant.HEADER
+                brand = settings.brand,
+                hijriDate = snapshot.hijriDate,
+                assetsRootDir = assetsRootDir,
+                isReversed = false,
+                isLogoMenuOpen = isLogoMenuOpen,
+                onLogoClick = onLogoClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(180.dp)
+            )
+
+            HeaderClockCard(
+                now = snapshot.now,
+                clockStyle = settings.brand.clockStyle
             )
         }
 
-        if (!isInfoQurbanOnly) {
-            // Petugas Hari Raya Row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp),
-                horizontalArrangement = Arrangement.spacedBy(18.dp)
-            ) {
-                RamadhanInfoCard(
-                    title = "KHOTIB SHOLAT IED",
-                    value = petugas.khotib.ifBlank { "Ust. H. Ahmad Fauzi, Lc." },
-                    modifier = Modifier.weight(1f)
-                )
-                RamadhanInfoCard(
-                    title = "IMAM SHOLAT IED",
-                    value = petugas.imam.ifBlank { "Ust. Muhammad Ridwan" },
-                    modifier = Modifier.weight(1f)
-                )
-                RamadhanInfoCard(
-                    title = "BILAL / MUADZIN",
-                    value = petugas.bilal.ifBlank { "Sdr. Abdullah" },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        // Bottom: Kas Idul Fitri OR Qurban Group Members
+        // Main Rotating Slide Area
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -599,81 +849,391 @@ fun HolidayAndQurbanFullscreen(
                 .clip(RoundedCornerShape(24.dp))
                 .background(palette.bgCard)
                 .border(1.5.dp, palette.border, RoundedCornerShape(24.dp))
-                .padding(32.dp)
         ) {
-            if (isIdulFitri && !isInfoQurbanOnly) {
-                val rupiah = remember {
-                    NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply { maximumFractionDigits = 0 }
+            AnimatedContent(
+                targetState = page,
+                transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(400)) },
+                label = "HolidayQurbanSlide"
+            ) { idx ->
+                when {
+                    isInfoQurbanOnly -> {
+                        val gIdx = idx.coerceIn(0, qurbanGroups.lastIndex)
+                        QurbanGroupSlideView(
+                            group = qurbanGroups[gIdx],
+                            groupNumber = gIdx + 1,
+                            totalGroups = qurbanGroups.size
+                        )
+                    }
+                    isIdulFitri && idx == 0 -> {
+                        EidPetugasSlideView(
+                            title = "PETUGAS SHOLAT HARI RAYA IDUL FITRI",
+                            subtitle = "1 Syawal ${settings.idulFitri.hijriYear} H • ${settings.brand.name}",
+                            khotib = petugas.khotib.ifBlank { "Ust. H. Ahmad Fauzi, Lc." },
+                            imam = petugas.imam.ifBlank { "Ust. Muhammad Ridwan" },
+                            bilal = petugas.bilal.ifBlank { "Sdr. Abdullah" }
+                        )
+                    }
+                    isIdulFitri -> {
+                        IdulFitriKeuanganSlideView(
+                            hijriYear = settings.idulFitri.hijriYear,
+                            brandName = settings.brand.name,
+                            keuangan = settings.idulFitri.keuangan
+                        )
+                    }
+                    idx == 0 -> {
+                        EidPetugasSlideView(
+                            title = "PETUGAS SHOLAT HARI RAYA IDUL ADHA",
+                            subtitle = "10 Dzulhijjah ${settings.idulAdha.hijriYear} H • ${settings.brand.name}",
+                            khotib = petugas.khotib.ifBlank { "Ust. H. Ahmad Fauzi, Lc." },
+                            imam = petugas.imam.ifBlank { "Ust. Muhammad Ridwan" },
+                            bilal = petugas.bilal.ifBlank { "Sdr. Abdullah" }
+                        )
+                    }
+                    else -> {
+                        val gIdx = (idx - 1).coerceIn(0, qurbanGroups.lastIndex)
+                        QurbanGroupSlideView(
+                            group = qurbanGroups[gIdx],
+                            groupNumber = gIdx + 1,
+                            totalGroups = qurbanGroups.size
+                        )
+                    }
                 }
-                val keu = settings.idulFitri.keuangan
+            }
+        }
+
+        // Bottom Row: Left = Event / Countdown Card, Right = Quoted Reminder Text
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(28.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(palette.bgCard)
+                    .border(2.dp, palette.accent.copy(alpha = 0.65f), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 28.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(palette.accent.copy(alpha = 0.18f))
+                        .padding(12.dp)
+                ) {
+                    Icon(
+                        imageVector = if (remSec > 0) Icons.Default.AccessTime else Icons.Default.Celebration,
+                        contentDescription = null,
+                        tint = palette.accent,
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = when {
+                            isInfoQurbanOnly -> "INFORMASI IBADAH"
+                            remSec > 0 -> "MENUJU SHOLAT IED"
+                            else -> "HARI RAYA"
+                        },
+                        color = palette.accent,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 2.sp
+                    )
+                    Text(
+                        text = when {
+                            remSec > 0 -> formattedRem
+                            isInfoQurbanOnly -> "QURBAN"
+                            isIdulFitri -> "IDUL FITRI"
+                            else -> "IDUL ADHA"
+                        },
+                        color = palette.accentSecondary,
+                        fontSize = 46.sp,
+                        fontFamily = if (remSec > 0) FontFamily.Monospace else FontFamily.SansSerif,
+                        fontWeight = FontWeight.ExtraBold,
+                        style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
+                    )
+                }
+            }
+
+            Text(
+                text = when {
+                    isInfoQurbanOnly -> "“Semoga Allah menerima amal ibadah Qurban kita semua dan melimpahkan keberkahan.”"
+                    isIdulFitri -> "“Taqabbalallahu Minna Wa Minkum • Mohon tenang dan bersiap melaksanakan Sholat Idul Fitri.”"
+                    else -> "“Allahu Akbar, Allahu Akbar • Mari bersiap melaksanakan Sholat Idul Adha & Ibadah Qurban.”"
+                },
+                color = palette.textSecondary,
+                fontSize = 40.sp,
+                lineHeight = 48.sp,
+                fontStyle = FontStyle.Italic,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun EidPetugasSlideView(
+    title: String,
+    subtitle: String,
+    khotib: String,
+    imam: String,
+    bilal: String
+) {
+    val palette = LocalJwsTheme.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Groups,
+                contentDescription = null,
+                tint = palette.accent,
+                modifier = Modifier.size(44.dp)
+            )
+            Column {
+                Text(
+                    text = title,
+                    color = palette.textPrimary,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = subtitle,
+                    color = palette.accent,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            OfficerRoleRowCard(
+                roleTitle = "KHOTIB SHOLAT IED",
+                officerName = khotib,
+                accentColor = palette.accent,
+                modifier = Modifier.weight(1f)
+            )
+            OfficerRoleRowCard(
+                roleTitle = "IMAM SHOLAT IED",
+                officerName = imam,
+                accentColor = palette.accentSecondary,
+                modifier = Modifier.weight(1f)
+            )
+            OfficerRoleRowCard(
+                roleTitle = "BILAL / MUADZIN",
+                officerName = bilal,
+                accentColor = palette.accent,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun IdulFitriKeuanganSlideView(
+    hijriYear: String,
+    brandName: String,
+    keuangan: id.algaffar.jwstv.domain.model.EidKeuangan
+) {
+    val palette = LocalJwsTheme.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.AccountBalanceWallet,
+                contentDescription = null,
+                tint = palette.accentSecondary,
+                modifier = Modifier.size(44.dp)
+            )
+            Column {
+                Text(
+                    text = "LAPORAN KEUANGAN KAS IDUL FITRI",
+                    color = palette.textPrimary,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = "1 Syawal $hijriYear H • $brandName",
+                    color = palette.textSecondary,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                FinanceMetricBox(
+                    label = "SALDO AWAL KAS",
+                    amount = keuangan.saldoAwal,
+                    valueColor = palette.textPrimary,
+                    isExpanded = true,
+                    modifier = Modifier.weight(1f)
+                )
+                FinanceMetricBox(
+                    label = "PENERIMAAN INFAQ IED (+)",
+                    amount = keuangan.pemasukan,
+                    valueColor = Color(0xFF34D399),
+                    isExpanded = true,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                FinanceMetricBox(
+                    label = "TOTAL PENGELUARAN (-)",
+                    amount = keuangan.pengeluaran,
+                    valueColor = Color(0xFFF87171),
+                    isExpanded = true,
+                    modifier = Modifier.weight(1f)
+                )
+                FinanceMetricBox(
+                    label = "SALDO AKHIR KAS",
+                    amount = keuangan.saldoAkhir,
+                    valueColor = palette.accentSecondary,
+                    isHighlighted = true,
+                    isExpanded = true,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QurbanGroupSlideView(
+    group: QurbanGroup,
+    groupNumber: Int,
+    totalGroups: Int
+) {
+    val palette = LocalJwsTheme.current
+    val members = group.members.take(7)
+    val (nameFontSize, badgeFontSize, badgeWidth) = when {
+        members.size <= 3 -> Triple(54.sp, 32.sp, 84.dp)
+        members.size <= 5 -> Triple(46.sp, 28.sp, 76.dp)
+        else -> Triple(40.sp, 26.sp, 72.dp)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 36.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Celebration,
+                contentDescription = null,
+                tint = palette.accentSecondary,
+                modifier = Modifier.size(48.dp)
+            )
+            Column {
+                Text(
+                    text = "${group.groupName.uppercase()} (HEWAN: ${group.animalType.uppercase()})",
+                    color = palette.textPrimary,
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = "Daftar Peserta Ibadah Qurban • Kelompok $groupNumber dari $totalGroups",
+                    color = palette.accent,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            members.forEachIndexed { idx, rawMember ->
+                // Strip leading "1. " if already numbered in settings so badge doesn't duplicate number
+                val cleanName = rawMember.trim().replace(Regex("^\\d+\\.\\s*"), "")
                 Row(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(palette.bgPrimary.copy(alpha = 0.65f))
+                        .border(1.5.dp, palette.border, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    RamadhanInfoCard(
-                        title = "SALDO AWAL",
-                        value = rupiah.format(keu.saldoAwal),
-                        modifier = Modifier.weight(1f)
-                    )
-                    RamadhanInfoCard(
-                        title = "PENERIMAAN INFAQ IED",
-                        value = rupiah.format(keu.pemasukan),
-                        modifier = Modifier.weight(1f)
-                    )
-                    RamadhanInfoCard(
-                        title = "SALDO AKHIR KAS",
-                        value = rupiah.format(keu.saldoAkhir),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            } else {
-                val activeGroup = qurbanGroups[groupIdx % qurbanGroups.size]
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Box(
+                        modifier = Modifier
+                            .width(badgeWidth)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(palette.accent.copy(alpha = 0.18f))
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "${activeGroup.groupName.uppercase()} (HEWAN: ${activeGroup.animalType.uppercase()})",
-                            color = palette.accentSecondary,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                        Text(
-                            text = "Kelompok ${(groupIdx % qurbanGroups.size) + 1} dari ${qurbanGroups.size}",
-                            color = palette.textSecondary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
+                            text = "${idx + 1}.",
+                            color = palette.accent,
+                            fontSize = badgeFontSize,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.ExtraBold,
+                            style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
                         )
                     }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        activeGroup.members.forEach { member ->
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(palette.bgPrimary.copy(alpha = 0.65f))
-                                    .padding(horizontal = 20.dp, vertical = 10.dp)
-                            ) {
-                                Text(
-                                    text = member,
-                                    color = palette.textPrimary,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
+                    Text(
+                        text = cleanName,
+                        color = palette.textPrimary,
+                        fontSize = nameFontSize,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }
@@ -835,6 +1395,9 @@ fun StandbySlideshowFullscreen(
 @Composable
 fun ScreenSaverFullscreen(
     snapshot: JwsRuntimeSnapshot,
+    assetsRootDir: File? = null,
+    isLogoMenuOpen: Boolean = false,
+    onLogoClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isPerformanceMode = LocalPerformanceMode.current
@@ -889,19 +1452,29 @@ fun ScreenSaverFullscreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
+            .background(Color.Black)
     ) {
+        FullscreenBrandHeader(
+            brand = snapshot.settings.brand,
+            assetsRootDir = assetsRootDir,
+            isLogoMenuOpen = isLogoMenuOpen,
+            onLogoClick = onLogoClick,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 52.dp, top = 28.dp)
+        )
+
         Column(
-            modifier = Modifier.offset {
-                IntOffset(offsetX.roundToInt(), offsetY.roundToInt())
-            },
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset {
+                    IntOffset(offsetX.roundToInt(), offsetY.roundToInt())
+                },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            ArtisticClock(
+            HeaderClockCard(
                 now = snapshot.now,
-                style = snapshot.settings.brand.clockStyle,
-                variant = ClockVariant.MAIN
+                clockStyle = snapshot.settings.brand.clockStyle
             )
         }
     }
@@ -913,82 +1486,29 @@ fun ScreenSaverFullscreen(
 @Composable
 fun MasjidQrFullscreen(
     snapshot: JwsRuntimeSnapshot,
+    assetsRootDir: File? = null,
+    isLogoMenuOpen: Boolean = false,
+    onLogoClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val palette = LocalJwsTheme.current
     val qrCfg = snapshot.settings.masjidQr
-    val qrBitmap = remember(qrCfg.link) {
-        generateQrBitmap(qrCfg.link.ifBlank { "https://masjidalgaffar.id/infaq" }, 520)
-    }
+    val finance = snapshot.settings.onlineFinance
 
-    Column(
+    QrSplitOverlayFullscreen(
+        snapshot = snapshot,
+        badgeLabel = "INFAQ & QRIS MASJID",
+        badgeIcon = Icons.Default.QrCode2,
+        title = qrCfg.label.ifBlank { "Infaq & Sedekah Digital Masjid Al-Gaffar" },
+        guidance = "Pindai QR Code di samping menggunakan aplikasi Mobile Banking atau E-Wallet (QRIS) Anda untuk menyalurkan infaq & sedekah terbaik.",
+        qrPayload = qrCfg.link.ifBlank { "https://masjidalgaffar.id/infaq" },
+        customQrImage = qrCfg.customQrImage,
+        bankName = qrCfg.bankName.ifBlank { finance.bankName },
+        nomorRekening = qrCfg.nomorRekening.ifBlank { finance.nomorRekening },
+        atasNama = qrCfg.atasNama.ifBlank { finance.atasNama },
+        accentColor = Color(0xFF10B981),
+        assetsRootDir = assetsRootDir,
+        isLogoMenuOpen = isLogoMenuOpen,
+        onLogoClick = onLogoClick,
         modifier = modifier
-            .fillMaxSize()
-            .padding(48.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = snapshot.settings.brand.name,
-                color = palette.textPrimary,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
-            ArtisticClock(
-                now = snapshot.now,
-                style = snapshot.settings.brand.clockStyle,
-                variant = ClockVariant.HEADER
-            )
-        }
-
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(420.dp)
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(Color.White)
-                    .border(4.dp, palette.accentSecondary, RoundedCornerShape(32.dp))
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                if (qrBitmap != null) {
-                    Image(
-                        bitmap = qrBitmap.asImageBitmap(),
-                        contentDescription = qrCfg.label,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.QrCode2,
-                        contentDescription = null,
-                        tint = Color.Black,
-                        modifier = Modifier.size(280.dp)
-                    )
-                }
-            }
-
-            Text(
-                text = qrCfg.label.ifBlank { "Infaq & Sedekah Digital Masjid Al-Gaffar" },
-                color = palette.textPrimary,
-                fontSize = 36.sp,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = "Pindai QR Code di atas menggunakan aplikasi Mobile Banking atau E-Wallet (QRIS) Anda.",
-                color = palette.textSecondary,
-                fontSize = 20.sp
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-    }
+    )
 }

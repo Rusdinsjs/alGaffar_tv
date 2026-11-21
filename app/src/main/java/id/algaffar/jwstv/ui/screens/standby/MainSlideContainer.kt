@@ -1016,15 +1016,16 @@ fun LocalSlideVideoPlayer(
 @Composable
 fun JumatPetugasSlideView(
     fridayDate: String,
-    record: JumatPetugasRecord
+    record: JumatPetugasRecord,
+    isRowLayout: Boolean = false
 ) {
     val palette = LocalJwsTheme.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(36.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 36.dp, vertical = if (isRowLayout) 28.dp else 36.dp),
+        verticalArrangement = if (isRowLayout) Arrangement.spacedBy(20.dp) else Arrangement.SpaceBetween
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1033,59 +1034,140 @@ fun JumatPetugasSlideView(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (isRowLayout) 16.dp else 12.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Groups,
                     contentDescription = null,
                     tint = palette.accent,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(if (isRowLayout) 44.dp else 34.dp)
                 )
                 Column {
                     Text(
                         text = "PETUGAS IBADAH SHOLAT JUM'AT",
                         color = palette.textPrimary,
-                        fontSize = 26.sp,
+                        fontSize = if (isRowLayout) 32.sp else 26.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
                     Text(
                         text = "Jadwal Efektif Hari Jum'at: $fridayDate",
                         color = palette.accent,
-                        fontSize = 16.sp,
+                        fontSize = if (isRowLayout) 20.sp else 16.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
             }
         }
 
-        Row(
+        if (isRowLayout) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                OfficerRoleRowCard(
+                    roleTitle = "KHOTIB JUM'AT",
+                    officerName = record.khotib,
+                    accentColor = palette.accent,
+                    modifier = Modifier.weight(1f)
+                )
+                OfficerRoleRowCard(
+                    roleTitle = "IMAM SHOLAT",
+                    officerName = record.imam,
+                    accentColor = palette.accentSecondary,
+                    modifier = Modifier.weight(1f)
+                )
+                OfficerRoleRowCard(
+                    roleTitle = "MUADZIN / BILAL",
+                    officerName = record.muadzin,
+                    accentColor = palette.accent,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(vertical = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                OfficerRoleCard(
+                    roleTitle = "KHOTIB JUM'AT",
+                    officerName = record.khotib,
+                    accentColor = palette.accent,
+                    modifier = Modifier.weight(1f)
+                )
+                OfficerRoleCard(
+                    roleTitle = "IMAM SHOLAT",
+                    officerName = record.imam,
+                    accentColor = palette.accentSecondary,
+                    modifier = Modifier.weight(1f)
+                )
+                OfficerRoleCard(
+                    roleTitle = "MUADZIN / BILAL",
+                    officerName = record.muadzin,
+                    accentColor = palette.accent,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+fun OfficerRoleRowCard(
+    roleTitle: String,
+    officerName: String,
+    accentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalJwsTheme.current
+    val displayName = officerName.ifBlank { "-" }
+    val isLongName = displayName.length > 30
+    Row(
+        modifier = modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(20.dp))
+            .background(palette.bgPrimary.copy(alpha = 0.65f))
+            .border(1.5.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
+            .padding(horizontal = 32.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(28.dp)
+    ) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(vertical = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(20.dp)
+                .width(420.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(accentColor.copy(alpha = 0.18f))
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            contentAlignment = Alignment.Center
         ) {
-            OfficerRoleCard(
-                roleTitle = "KHOTIB JUM'AT",
-                officerName = record.khotib,
-                accentColor = palette.accent,
-                modifier = Modifier.weight(1f)
-            )
-            OfficerRoleCard(
-                roleTitle = "IMAM SHOLAT",
-                officerName = record.imam,
-                accentColor = palette.accentSecondary,
-                modifier = Modifier.weight(1f)
-            )
-            OfficerRoleCard(
-                roleTitle = "MUADZIN / BILAL",
-                officerName = record.muadzin,
-                accentColor = palette.accent,
-                modifier = Modifier.weight(1f)
+            Text(
+                text = roleTitle,
+                color = accentColor,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
-
-        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = displayName,
+            color = palette.textPrimary,
+            fontSize = if (isLongName) 60.sp else 84.sp,
+            lineHeight = if (isLongName) 66.sp else 90.sp,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Start,
+            maxLines = if (isLongName) 2 else 1,
+            overflow = TextOverflow.Ellipsis,
+            style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
@@ -1136,37 +1218,38 @@ private fun OfficerRoleCard(
 @Composable
 fun JumatKeuanganSlideView(
     fridayDate: String,
-    record: JumatKeuanganRecord
+    record: JumatKeuanganRecord,
+    isExpanded: Boolean = false
 ) {
     val palette = LocalJwsTheme.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(36.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 36.dp, vertical = if (isExpanded) 28.dp else 36.dp),
+        verticalArrangement = if (isExpanded) Arrangement.spacedBy(20.dp) else Arrangement.SpaceBetween
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 12.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.AccountBalanceWallet,
                 contentDescription = null,
                 tint = palette.accentSecondary,
-                modifier = Modifier.size(34.dp)
+                modifier = Modifier.size(if (isExpanded) 44.dp else 34.dp)
             )
             Column {
                 Text(
                     text = "LAPORAN KEUANGAN KAS MASJID (JUM'AT)",
                     color = palette.textPrimary,
-                    fontSize = 26.sp,
+                    fontSize = if (isExpanded) 32.sp else 26.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
                     text = "Periode Laporan: $fridayDate",
                     color = palette.textSecondary,
-                    fontSize = 16.sp,
+                    fontSize = if (isExpanded) 20.sp else 16.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -1176,25 +1259,27 @@ fun JumatKeuanganSlideView(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(vertical = if (isExpanded) 4.dp else 20.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 16.dp)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 16.dp)
             ) {
                 FinanceMetricBox(
                     label = "SALDO KAS LALU",
                     amount = record.saldoKasLalu,
                     valueColor = palette.textPrimary,
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
                 FinanceMetricBox(
                     label = "TOTAL PEMASUKAN (+)",
                     amount = record.pemasukan,
                     valueColor = Color(0xFF34D399),
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -1203,12 +1288,13 @@ fun JumatKeuanganSlideView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 16.dp)
             ) {
                 FinanceMetricBox(
                     label = "TOTAL PENGELUARAN (-)",
                     amount = record.pengeluaran,
                     valueColor = Color(0xFFF87171),
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
                 FinanceMetricBox(
@@ -1216,21 +1302,25 @@ fun JumatKeuanganSlideView(
                     amount = record.saldoAkhir,
                     valueColor = palette.accentSecondary,
                     isHighlighted = true,
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        if (!isExpanded) {
+            Spacer(modifier = Modifier.height(20.dp))
+        }
     }
 }
 
 @Composable
-private fun FinanceMetricBox(
+fun FinanceMetricBox(
     label: String,
     amount: Long,
     valueColor: Color,
     isHighlighted: Boolean = false,
+    isExpanded: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
@@ -1238,6 +1328,12 @@ private fun FinanceMetricBox(
         NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply {
             maximumFractionDigits = 0
         }
+    }
+    val formattedAmount = rupiahFormat.format(amount)
+    val expandedAmountSize = when {
+        formattedAmount.length <= 12 -> 112.sp
+        formattedAmount.length <= 14 -> 96.sp
+        else -> 80.sp
     }
 
     Column(
@@ -1253,22 +1349,29 @@ private fun FinanceMetricBox(
                 color = if (isHighlighted) palette.accentSecondary else palette.border,
                 shape = RoundedCornerShape(18.dp)
             )
-            .padding(22.dp),
+            .padding(
+                horizontal = if (isExpanded) 28.dp else 22.dp,
+                vertical = if (isExpanded) 16.dp else 22.dp
+            ),
         verticalArrangement = Arrangement.Center
     ) {
         Text(
             text = label,
             color = palette.textSecondary,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold
+            fontSize = if (isExpanded) 24.sp else 15.sp,
+            fontWeight = if (isExpanded) FontWeight.ExtraBold else FontWeight.Bold,
+            letterSpacing = if (isExpanded) 1.5.sp else 0.sp
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(if (isExpanded) 10.dp else 8.dp))
         Text(
-            text = rupiahFormat.format(amount),
+            text = formattedAmount,
             color = valueColor,
-            fontSize = 32.sp,
+            fontSize = if (isExpanded) expandedAmountSize else 32.sp,
             fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.ExtraBold
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
         )
     }
 }
