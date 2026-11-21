@@ -30,13 +30,28 @@ class JwsStateMachineTest {
 
     @Test
     fun `5-time prayer sequence transitions cleanly from Tartil to Tarhim to Adzan to Iqomah to Sholat to Standby`() {
-        val settings = AppStateSettings()
+        val base = AppStateSettings()
+        val settings = base.copy(
+            prayers = base.prayers.copy(
+                dhuhr = base.prayers.dhuhr.copy(
+                    isTartil = true,
+                    isTarhim = true,
+                    isAdzan = true,
+                    tartilDuration = 10,
+                    tarhimDuration = 5,
+                    adzanDuration = 4,
+                    iqomahDuration = 10,
+                    sholatDuration = 15
+                )
+            ),
+            media = base.media.copy(doaAdzanEnabled = false)
+        )
         // Pick a Tuesday (non-Friday): 2026-03-10
         val sampleDay = ZonedDateTime.of(2026, 3, 10, 9, 0, 0, 0, makassarZone)
         val schedule = prayerCalculator.calculateSchedule(sampleDay, settings.prayerSettings)
         val dhuhrTime = schedule.timeFor(PrayerId.DHUHR)
 
-        // Default Dhuhr config: tartil=10m, tarhim=5m, adzan=4m, iqomah=10m, sholat=15m
+        // Dhuhr config: tartil=10m, tarhim=5m, adzan=4m, iqomah=10m, sholat=15m
         // 1) 8 minutes before Dhuhr -> TARTIL
         val tickTartil = stateMachine.evaluateTick(dhuhrTime.minusMinutes(8), settings, schedule)
         assertEquals(AppState.TARTIL, tickTartil.state)
@@ -95,7 +110,13 @@ class JwsStateMachineTest {
 
     @Test
     fun `Tarhim and Adzan durations automatically sync with actual MP3 file length when provided`() {
-        val settings = AppStateSettings()
+        val base = AppStateSettings()
+        val settings = base.copy(
+            prayers = base.prayers.copy(
+                asr = base.prayers.asr.copy(isTartil = true, isTarhim = true, isAdzan = true)
+            ),
+            media = base.media.copy(doaAdzanEnabled = false)
+        )
         val sampleDay = ZonedDateTime.of(2026, 3, 10, 9, 0, 0, 0, makassarZone)
         val schedule = prayerCalculator.calculateSchedule(sampleDay, settings.prayerSettings)
         val asrTime = schedule.timeFor(PrayerId.ASR)
@@ -127,30 +148,32 @@ class JwsStateMachineTest {
     }
 
     @Test
-    fun `Friday Dhuhr transitions through WAKTU_JUMAT, KHUTBAH, and PELAKSANAAN_JUMAT`() {
+    fun `Friday Dhuhr transitions directly to WAKTU_JUMAT, KHUTBAH, and PELAKSANAAN_JUMAT without ADZAN`() {
         val settings = AppStateSettings()
         // 2026-03-13 is a Friday
         val friday = ZonedDateTime.of(2026, 3, 13, 9, 0, 0, 0, makassarZone)
         val schedule = prayerCalculator.calculateSchedule(friday, settings.prayerSettings)
         val jumatTime = schedule.timeFor(PrayerId.DHUHR)
 
-        // Default: adzan=4m, waktuJumat=12m (ends at +16m), khutbah=30m (ends at +46m), sholatJumat=20m (ends at +66m)
-        val tickWaktuJumat = stateMachine.evaluateTick(jumatTime.plusMinutes(5), settings, schedule)
-        assertEquals(AppState.WAKTU_JUMAT, tickWaktuJumat.state)
+        // Default jws-android-algaffar: waktuJumat=12m (ends at +12m), khutbah=30m (ends at +42m), sholatJumat=20m (ends at +62m)
+        val tickWaktuJumatAtZero = stateMachine.evaluateTick(jumatTime.plusSeconds(10), settings, schedule)
+        assertEquals(AppState.WAKTU_JUMAT, tickWaktuJumatAtZero.state)
 
-        val tickKhutbah = stateMachine.evaluateTick(jumatTime.plusMinutes(20), settings, schedule)
+        val tickKhutbah = stateMachine.evaluateTick(jumatTime.plusMinutes(15), settings, schedule)
         assertEquals(AppState.KHUTBAH, tickKhutbah.state)
 
-        val tickPelaksanaanJumat = stateMachine.evaluateTick(jumatTime.plusMinutes(50), settings, schedule)
+        val tickPelaksanaanJumat = stateMachine.evaluateTick(jumatTime.plusMinutes(45), settings, schedule)
         assertEquals(AppState.PELAKSANAAN_JUMAT, tickPelaksanaanJumat.state)
 
-        val tickDone = stateMachine.evaluateTick(jumatTime.plusMinutes(67), settings, schedule)
+        val tickDone = stateMachine.evaluateTick(jumatTime.plusMinutes(63), settings, schedule)
         assertEquals(AppState.STANDBY, tickDone.state)
     }
 
     @Test
     fun `Ramadhan mode appends TARAWIH and SHOLAT_TARAWIH right after Isha prayer finishes`() {
-        val settings = AppStateSettings(
+        val base = AppStateSettings()
+        val settings = base.copy(
+            media = base.media.copy(doaAdzanEnabled = false),
             ramadhan = RamadhanSettings(
                 isRamadhan = true,
                 tarawihDuration = 15,
@@ -161,12 +184,12 @@ class JwsStateMachineTest {
         val schedule = prayerCalculator.calculateSchedule(day, settings.prayerSettings)
         val ishaTime = schedule.timeFor(PrayerId.ISHA)
 
-        // Isha: adzan=4m + iqomah=10m + sholat=15m = 29m.
-        // At +30m -> TARAWIH (kultum/info for 15m, ends at +44m)
-        val tickTarawih = stateMachine.evaluateTick(ishaTime.plusMinutes(30), settings, schedule)
+        // Default Isha (jws-android-algaffar): adzan=5m + iqomah=10m + sholat=15m = 30m.
+        // At +31m -> TARAWIH (kultum/info for 15m, ends at +45m)
+        val tickTarawih = stateMachine.evaluateTick(ishaTime.plusMinutes(31), settings, schedule)
         assertEquals(AppState.TARAWIH, tickTarawih.state)
 
-        // At +50m -> SHOLAT_TARAWIH (45m, ends at +89m)
+        // At +50m -> SHOLAT_TARAWIH (45m, ends at +90m)
         val tickSholatTarawih = stateMachine.evaluateTick(ishaTime.plusMinutes(50), settings, schedule)
         assertEquals(AppState.SHOLAT_TARAWIH, tickSholatTarawih.state)
     }
@@ -252,13 +275,13 @@ class JwsStateMachineTest {
         val schedule = prayerCalculator.calculateSchedule(day, settings.prayerSettings)
         val ishaTime = schedule.timeFor(PrayerId.ISHA)
 
-        // Immediately after 4m Adzan -> DOA_ADZAN for 45 seconds
-        val tickDoa = stateMachine.evaluateTick(ishaTime.plusMinutes(4).plusSeconds(10), settings, schedule)
+        // Immediately after 5m Adzan -> DOA_ADZAN for 45 seconds
+        val tickDoa = stateMachine.evaluateTick(ishaTime.plusMinutes(5).plusSeconds(10), settings, schedule)
         assertEquals(AppState.DOA_ADZAN, tickDoa.state)
         assertEquals(35L, tickDoa.countdownSeconds)
 
-        // After 4m Adzan + 45s Doa + 10m Iqomah + 15m Sholat + 10m Tarawih = 39m 45s -> CERAMAH_TARAWIH
-        val tickCeramah = stateMachine.evaluateTick(ishaTime.plusMinutes(42), settings, schedule)
+        // After 5m Adzan + 45s Doa + 10m Iqomah + 15m Sholat + 10m Tarawih = 40m 45s -> CERAMAH_TARAWIH
+        val tickCeramah = stateMachine.evaluateTick(ishaTime.plusMinutes(43), settings, schedule)
         assertEquals(AppState.CERAMAH_TARAWIH, tickCeramah.state)
 
         // Direct Live On-Demand activates LIVE state when enabled
@@ -284,5 +307,31 @@ class JwsStateMachineTest {
         assertEquals(LogLevel.WARN, AppLogger.logsFlow.value.last().level)
         AppLogger.clear()
         assertTrue(AppLogger.logsFlow.value.isEmpty())
+    }
+
+    @Test
+    fun `Tartil duration does not add to Tarhim duration when tartilDuration is less than or equal to tarhimDuration`() {
+        val base = AppStateSettings()
+        val settings = base.copy(
+            prayers = base.prayers.copy(
+                asr = base.prayers.asr.copy(
+                    isTartil = true,
+                    isTarhim = true,
+                    tartilDuration = 5,
+                    tarhimDuration = 5
+                )
+            )
+        )
+        val day = ZonedDateTime.of(2026, 3, 10, 12, 0, 0, 0, makassarZone)
+        val schedule = prayerCalculator.calculateSchedule(day, settings.prayerSettings)
+        val asrTime = schedule.timeFor(PrayerId.ASR)
+
+        // At -7 minutes before Asr -> must still be STANDBY (NOT 5 + 5 = 10 minutes!)
+        val tick7mBefore = stateMachine.evaluateTick(asrTime.minusMinutes(7), settings, schedule)
+        assertEquals(AppState.STANDBY, tick7mBefore.state)
+
+        // At -4 minutes before Asr -> TARHIM
+        val tick4mBefore = stateMachine.evaluateTick(asrTime.minusMinutes(4), settings, schedule)
+        assertEquals(AppState.TARHIM, tick4mBefore.state)
     }
 }

@@ -56,6 +56,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
@@ -64,6 +65,7 @@ import id.algaffar.jwstv.data.cctv.OnlineFinanceManager
 import id.algaffar.jwstv.domain.model.CctvCameraConfig
 import id.algaffar.jwstv.ui.JwsRuntimeSnapshot
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
+import id.algaffar.jwstv.ui.theme.LocalPerformanceMode
 import kotlinx.coroutines.delay
 import java.text.NumberFormat
 import java.time.format.DateTimeFormatter
@@ -254,8 +256,20 @@ private fun CctvCameraCell(
             }
 
             isRtspOrHls -> {
-                val exoPlayer = remember(url) {
-                    ExoPlayer.Builder(context).build().apply {
+                val isPerformanceMode = LocalPerformanceMode.current
+                val exoPlayer = remember(url, isPerformanceMode) {
+                    val builder = ExoPlayer.Builder(context)
+                    if (isPerformanceMode) {
+                        val trackSelector = DefaultTrackSelector(context).apply {
+                            setParameters(
+                                buildUponParameters()
+                                    .setMaxVideoSize(1280, 720)
+                                    .setForceLowestBitrate(false)
+                            )
+                        }
+                        builder.setTrackSelector(trackSelector)
+                    }
+                    builder.build().apply {
                         setMediaItem(MediaItem.fromUri(url))
                         volume = 0f
                         repeatMode = Player.REPEAT_MODE_ALL

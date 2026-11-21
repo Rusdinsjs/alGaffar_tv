@@ -35,15 +35,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.PlatformTextStyle
@@ -63,16 +67,17 @@ import java.io.File
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
- * Top Header Card (`1440 x 120 dp`, matching the width of `MainSlideContainer`)
+ * Top Header Card (`1440 x 180 dp`, matching the width of `MainSlideContainer`)
  * displaying Mosque Brand (clickable Logo -> Quick Menu, Name & Address) and
  * 2-line enlarged Masehi & Hijri Dates.
  *
  * - When [isReversed] is `false` (`HORIZONTAL` / `VERTICAL_RIGHT`):
- *   `[ Identitas (Logo, Nama/Alamat) ]  [ Tanggal (Masehi atas, Hijriyah bawah) ]`
+ *   `[ Identitas (Logo, Nama/Alamat) ]  [ Tanggal rata kanan (Masehi atas, Hijriyah bawah) ]`
  * - When [isReversed] is `true` (`VERTICAL_LEFT`):
- *   `[ Tanggal (Masehi atas, Hijriyah bawah) ]  [ Identitas (Nama/Alamat, Logo) ]`
+ *   `[ Tanggal rata kiri (Masehi atas, Hijriyah bawah) ]  [ Identitas (Nama/Alamat, Logo) ]`
  */
 @Composable
 fun HeaderBar(
@@ -90,58 +95,100 @@ fun HeaderBar(
         DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy", Locale("id", "ID"))
     }
 
-    Row(
+    Box(
         modifier = modifier
-            .size(width = 1440.dp, height = 120.dp)
+            .size(width = 1440.dp, height = 180.dp)
             .padding(4.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(palette.bgCard)
-            .border(1.5.dp, palette.border, RoundedCornerShape(18.dp))
-            .padding(horizontal = 24.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(20.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        if (!isReversed) {
-            // HORIZONTAL & VERTICAL_RIGHT: 1. Identitas (Logo, Nama/Alamat)  ->  2. Tanggal
-            MosqueIdentityBlock(
-                brand = brand,
-                assetsRootDir = assetsRootDir,
-                isReversed = false,
-                isMenuOpen = isLogoMenuOpen,
-                onLogoClick = onLogoClick,
-                modifier = Modifier.weight(1.1f)
-            )
-            HeaderDateBlock(
-                now = now,
-                masehiFormatter = masehiFormatter,
-                brand = brand,
-                hijriDate = hijriDate,
-                modifier = Modifier.weight(0.9f)
-            )
-        } else {
-            // VERTICAL_LEFT: 1. Tanggal  ->  2. Identitas (Nama/Alamat, Logo)
-            HeaderDateBlock(
-                now = now,
-                masehiFormatter = masehiFormatter,
-                brand = brand,
-                hijriDate = hijriDate,
-                modifier = Modifier.weight(0.9f)
-            )
-            MosqueIdentityBlock(
-                brand = brand,
-                assetsRootDir = assetsRootDir,
-                isReversed = true,
-                isMenuOpen = isLogoMenuOpen,
-                onLogoClick = onLogoClick,
-                modifier = Modifier.weight(1.1f)
-            )
+        // Feathered/blurred-edge background so the header blends smoothly into the screen background without a border
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                .drawBehind {
+                    drawRect(color = palette.bgCard)
+                    // Horizontal feather (left & right edges fade to transparent)
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            0.00f to Color.Transparent,
+                            0.025f to Color.Black.copy(alpha = 0.25f),
+                            0.06f to Color.Black.copy(alpha = 0.70f),
+                            0.11f to Color.Black,
+                            0.89f to Color.Black,
+                            0.94f to Color.Black.copy(alpha = 0.70f),
+                            0.975f to Color.Black.copy(alpha = 0.25f),
+                            1.00f to Color.Transparent
+                        ),
+                        blendMode = BlendMode.DstIn
+                    )
+                    // Vertical feather (top & bottom edges fade to transparent)
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            0.00f to Color.Transparent,
+                            0.08f to Color.Black.copy(alpha = 0.25f),
+                            0.18f to Color.Black.copy(alpha = 0.70f),
+                            0.28f to Color.Black,
+                            0.72f to Color.Black,
+                            0.82f to Color.Black.copy(alpha = 0.70f),
+                            0.92f to Color.Black.copy(alpha = 0.25f),
+                            1.00f to Color.Transparent
+                        ),
+                        blendMode = BlendMode.DstIn
+                    )
+                }
+        )
+
+        Row(
+            modifier = Modifier
+                .matchParentSize()
+                .padding(horizontal = 24.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (!isReversed) {
+                // HORIZONTAL & VERTICAL_RIGHT: 1. Identitas (Logo, Nama/Alamat)  ->  2. Tanggal (Rata Kanan)
+                MosqueIdentityBlock(
+                    brand = brand,
+                    assetsRootDir = assetsRootDir,
+                    isReversed = false,
+                    isMenuOpen = isLogoMenuOpen,
+                    onLogoClick = onLogoClick,
+                    modifier = Modifier.weight(1.04f)
+                )
+                HeaderDateBlock(
+                    now = now,
+                    masehiFormatter = masehiFormatter,
+                    brand = brand,
+                    hijriDate = hijriDate,
+                    alignStart = false,
+                    modifier = Modifier.weight(0.96f)
+                )
+            } else {
+                // VERTICAL_LEFT: 1. Tanggal (Rata Kiri)  ->  2. Identitas (Nama/Alamat, Logo)
+                HeaderDateBlock(
+                    now = now,
+                    masehiFormatter = masehiFormatter,
+                    brand = brand,
+                    hijriDate = hijriDate,
+                    alignStart = true,
+                    modifier = Modifier.weight(0.96f)
+                )
+                MosqueIdentityBlock(
+                    brand = brand,
+                    assetsRootDir = assetsRootDir,
+                    isReversed = true,
+                    isMenuOpen = isLogoMenuOpen,
+                    onLogoClick = onLogoClick,
+                    modifier = Modifier.weight(1.04f)
+                )
+            }
         }
     }
 }
 
 /**
- * Dedicated Clock Card (`480 x 120 dp`) placed beside `HeaderBar`:
- * The clock component itself fills the entire `480 x 120 dp` card area (minus standard 4.dp grid gap)
+ * Dedicated Clock Card (`480 x 180 dp`) placed beside `HeaderBar`:
+ * The clock component itself fills the entire `480 x 180 dp` card area (minus standard 4.dp grid gap)
  * with compact inner padding and enlarged proportional font size (`ClockVariant.HEADER_CARD`).
  */
 @Composable
@@ -155,7 +202,7 @@ fun HeaderClockCard(
         style = clockStyle,
         variant = ClockVariant.HEADER_CARD,
         modifier = modifier
-            .size(width = 480.dp, height = 120.dp)
+            .size(width = 480.dp, height = 180.dp)
             .padding(4.dp)
     )
 }
@@ -206,7 +253,7 @@ fun LogoQuickMenuCard(
                 letterSpacing = 1.2.sp
             )
             Text(
-                text = "D-Pad / Sentuh",
+                text = "D-Pad ▲ / Sentuh",
                 color = palette.textSecondary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold
@@ -357,6 +404,9 @@ private fun MosqueIdentityBlock(
             )
         }
 
+        val titleFontSp = (brand.titleFontSize * 1.35f).roundToInt().coerceIn(30, 64)
+        val addressFontSp = (brand.addressFontSize * 1.35f).roundToInt().coerceIn(18, 34)
+
         Column(
             modifier = Modifier.weight(1f, fill = false),
             verticalArrangement = Arrangement.Center,
@@ -365,21 +415,29 @@ private fun MosqueIdentityBlock(
             Text(
                 text = brand.name.ifBlank { "MASJID AL-GAFFAR" },
                 color = palette.textPrimary,
-                fontSize = brand.titleFontSize.coerceIn(22, 42).sp,
+                fontSize = titleFontSp.sp,
+                lineHeight = (titleFontSp + 4).sp,
                 fontWeight = FontWeight.ExtraBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                textAlign = if (isReversed) TextAlign.End else TextAlign.Start
+                textAlign = if (isReversed) TextAlign.End else TextAlign.Start,
+                style = TextStyle(
+                    platformStyle = PlatformTextStyle(includeFontPadding = false)
+                )
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = addressLine,
                 color = palette.textSecondary,
-                fontSize = brand.addressFontSize.coerceIn(13, 22).sp,
+                fontSize = addressFontSp.sp,
+                lineHeight = (addressFontSp + 6).sp,
                 fontWeight = FontWeight.Medium,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                textAlign = if (isReversed) TextAlign.End else TextAlign.Start
+                textAlign = if (isReversed) TextAlign.End else TextAlign.Start,
+                style = TextStyle(
+                    platformStyle = PlatformTextStyle(includeFontPadding = false)
+                )
             )
         }
 
@@ -400,81 +458,65 @@ private fun HeaderDateBlock(
     masehiFormatter: DateTimeFormatter,
     brand: BrandSettings,
     hijriDate: HijriDateInfo,
+    alignStart: Boolean,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
+    val horizontalAlign = if (alignStart) Alignment.Start else Alignment.End
+    val textAlign = if (alignStart) TextAlign.Start else TextAlign.End
 
     Column(
         modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)
+        horizontalAlignment = horizontalAlign,
+        verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)
     ) {
-        // Baris 1 (Atas): Tanggal Masehi (2x ukuran semula: 18.sp -> 36.sp)
+        // Baris 1 (Atas): Tanggal Masehi (disesuaikan untuk tinggi header 180dp)
         if (brand.showMasehiDate) {
             Text(
                 text = now.format(masehiFormatter),
                 color = palette.textPrimary,
-                fontSize = 36.sp,
-                lineHeight = 38.sp,
+                fontSize = 40.sp,
+                lineHeight = 42.sp,
                 fontWeight = FontWeight.ExtraBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
+                textAlign = textAlign,
                 style = TextStyle(
                     platformStyle = PlatformTextStyle(includeFontPadding = false)
-                )
+                ),
+                modifier = Modifier.fillMaxWidth()
             )
         }
 
-        // Baris 2 (Bawah): Tanggal Hijriyah (2x ukuran semula: 15.sp -> 30.sp)
+        // Baris 2 (Bawah): Tanggal Hijriyah (tanpa badge Ba'da Maghrib)
         if (brand.showHijriDate) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(palette.accent.copy(alpha = 0.18f))
+                    .border(1.5.dp, palette.accent.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(palette.accent.copy(alpha = 0.18f))
-                        .border(1.5.dp, palette.accent.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 14.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = hijriDate.formatted,
-                        color = palette.accent,
-                        fontSize = 30.sp,
-                        lineHeight = 32.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(
-                            platformStyle = PlatformTextStyle(includeFontPadding = false)
-                        )
+                Text(
+                    text = hijriDate.formatted,
+                    color = palette.accent,
+                    fontSize = 38.sp,
+                    lineHeight = 40.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = textAlign,
+                    style = TextStyle(
+                        platformStyle = PlatformTextStyle(includeFontPadding = false)
                     )
-                }
-
-                if (hijriDate.isAfterMaghribRollover) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(palette.accentSecondary.copy(alpha = 0.22f))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "Ba'da Maghrib",
-                            color = palette.accentSecondary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun MosqueLogoBadge(
+internal fun MosqueLogoBadge(
     logoPath: String,
     assetsRootDir: File?,
     isMenuOpen: Boolean,
@@ -505,7 +547,7 @@ private fun MosqueLogoBadge(
 
     Box(
         modifier = Modifier
-            .size(78.dp)
+            .size(112.dp)
             .clip(CircleShape)
             .background(
                 Brush.linearGradient(
@@ -524,13 +566,13 @@ private fun MosqueLogoBadge(
                 contentDescription = "Logo Masjid (Klik untuk Menu)",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(72.dp)
+                    .size(104.dp)
                     .clip(CircleShape)
             )
         } else {
             val domeColor = palette.accent
             val goldColor = palette.accentSecondary
-            Canvas(modifier = Modifier.size(52.dp)) {
+            Canvas(modifier = Modifier.size(74.dp)) {
                 val w = size.width
                 val h = size.height
 

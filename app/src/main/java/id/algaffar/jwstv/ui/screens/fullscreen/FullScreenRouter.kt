@@ -1,6 +1,8 @@
 package id.algaffar.jwstv.ui.screens.fullscreen
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,6 +19,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.NightsStay
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -35,6 +43,7 @@ import id.algaffar.jwstv.ui.JwsRuntimeSnapshot
 import id.algaffar.jwstv.ui.screens.standby.JumatKeuanganSlideView
 import id.algaffar.jwstv.ui.screens.standby.StandbyScreen
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
+import id.algaffar.jwstv.ui.theme.LocalPerformanceMode
 import java.io.File
 
 /**
@@ -45,11 +54,9 @@ import java.io.File
 fun FullScreenRouter(
     snapshot: JwsRuntimeSnapshot,
     assetsRootDir: File?,
-    onCycleTheme: () -> Unit,
-    onCycleLayout: () -> Unit,
-    onCycleClockStyle: () -> Unit,
+    isLogoMenuOpen: Boolean,
+    onToggleLogoMenu: () -> Unit,
     onOpenDebugModal: () -> Unit,
-    onOpenSettingsModal: () -> Unit,
     onExitManualSimulation: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -64,11 +71,18 @@ fun FullScreenRouter(
     }
     val jumatPetugas = effJumatPetugasDate?.let { snapshot.settings.jumat.petugas.records[it] }
 
+    val isPerformanceMode = LocalPerformanceMode.current
     Box(modifier = modifier.fillMaxSize()) {
         AnimatedContent(
             targetState = activeState,
             modifier = Modifier.fillMaxSize(),
-            transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(400)) },
+            transitionSpec = {
+                if (isPerformanceMode) {
+                    EnterTransition.None togetherWith ExitTransition.None
+                } else {
+                    fadeIn(tween(500)) togetherWith fadeOut(tween(400))
+                }
+            },
             label = "Master27StateTransition"
         ) { state ->
             when (state) {
@@ -79,25 +93,28 @@ fun FullScreenRouter(
                     StandbyScreen(
                         snapshot = snapshot,
                         assetsRootDir = assetsRootDir,
-                        onCycleTheme = onCycleTheme,
-                        onCycleLayout = onCycleLayout,
-                        onCycleClockStyle = onCycleClockStyle,
-                        onOpenDebugModal = onOpenDebugModal,
-                        onOpenSettingsModal = onOpenSettingsModal
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onToggleLogoMenu = onToggleLogoMenu
                     )
                 }
 
                 AppState.TARTIL -> {
                     TartilTarhimFullscreen(
                         snapshot = snapshot,
-                        isTarhim = false
+                        isTarhim = false,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
                     )
                 }
 
                 AppState.TARHIM -> {
                     TartilTarhimFullscreen(
                         snapshot = snapshot,
-                        isTarhim = true
+                        isTarhim = true,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
                     )
                 }
 
@@ -117,12 +134,26 @@ fun FullScreenRouter(
                 }
 
                 AppState.PELAKSANAAN_SHOLAT -> {
-                    CctvStateOverlayFullscreen(
+                    SimpleStateOverlayFullscreen(
                         snapshot = snapshot,
-                        stageTitle = "PELAKSANAAN SHOLAT ${prayerLabel.uppercase()}",
-                        stageSubtitle = stageCfg.sholatMessage.ifBlank { "Harap tenang, sholat berjamaah sedang berlangsung." },
-                        officerRoleLabel = "IMAM SHOLAT",
-                        officerName = stageCfg.imam
+                        stageTitle = "Pelaksanaan Sholat\n$prayerLabel",
+                        countdownLabel = "Pelaksanaan Sholat $prayerLabel",
+                        stageContextBadge = "SHOLAT FARDU",
+                        stageMessage = stageCfg.sholatMessage.ifBlank { "Rapatkan Shaf dan Matikan Gadget" },
+                        officers = listOf(
+                            OverlayOfficerInfo(
+                                role = "Imam",
+                                name = stageCfg.imam.trim().ifBlank { "Ust. Fulan Imam" },
+                                icon = Icons.Default.Person
+                            )
+                        ),
+                        stageIcon = Icons.Default.Schedule,
+                        accentColor = Color(0xFF10B981),
+                        showTopRightClock = true,
+                        backgroundImagePath = snapshot.settings.media.sholat5WaktuImage,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
                     )
                 }
 
@@ -131,26 +162,48 @@ fun FullScreenRouter(
                 }
 
                 AppState.KHUTBAH -> {
-                    CctvStateOverlayFullscreen(
+                    SimpleStateOverlayFullscreen(
                         snapshot = snapshot,
-                        stageTitle = "PELAKSANAAN KHUTBAH JUM'AT",
-                        stageSubtitle = snapshot.settings.jumat.khutbahMessage.ifBlank {
-                            "“Jika engkau berkata kepada sahabatmu pada hari Jum'at: ‘Diamlah!’ sewaktu imam berkhotbah, maka sungguh engkau telah sia-sia.” (HR. Bukhari & Muslim)"
+                        stageTitle = "Khutbah Jum'at",
+                        stageMessage = snapshot.settings.jumat.khutbahMessage.ifBlank {
+                            "Harap Tenang dan Menyimak Khutbah"
                         },
-                        officerRoleLabel = "KHOTIB JUM'AT",
-                        officerName = jumatPetugas?.khotib.orEmpty()
+                        officers = listOf(
+                            OverlayOfficerInfo(
+                                role = "Khotib",
+                                name = jumatPetugas?.khotib?.trim().orEmpty().ifBlank { "Ust. Fulan Khotib" },
+                                icon = Icons.AutoMirrored.Filled.MenuBook
+                            )
+                        ),
+                        stageIcon = Icons.AutoMirrored.Filled.MenuBook,
+                        accentColor = Color(0xFFF59E0B),
+                        backgroundImagePath = snapshot.settings.media.khutbahJumatImage,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
                     )
                 }
 
                 AppState.PELAKSANAAN_JUMAT -> {
-                    CctvStateOverlayFullscreen(
+                    SimpleStateOverlayFullscreen(
                         snapshot = snapshot,
-                        stageTitle = "PELAKSANAAN SHOLAT JUM'AT",
-                        stageSubtitle = snapshot.settings.jumat.sholatMessage.ifBlank {
-                            "Luruskan dan rapatkan shaf untuk kesempurnaan sholat berjamaah."
+                        stageTitle = "Sholat Jum'at",
+                        stageMessage = snapshot.settings.jumat.sholatMessage.ifBlank {
+                            "Rapatkan Shaf dan Matikan Gadget"
                         },
-                        officerRoleLabel = "IMAM SHOLAT JUM'AT",
-                        officerName = jumatPetugas?.imam.orEmpty()
+                        officers = listOf(
+                            OverlayOfficerInfo(
+                                role = "Imam",
+                                name = jumatPetugas?.imam?.trim().orEmpty().ifBlank { "Ust. Fulan Imam" },
+                                icon = Icons.Default.Person
+                            )
+                        ),
+                        stageIcon = Icons.Default.Person,
+                        accentColor = Color(0xFF10B981),
+                        backgroundImagePath = snapshot.settings.media.sholatJumatImage,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
                     )
                 }
 
@@ -161,28 +214,57 @@ fun FullScreenRouter(
                 AppState.CERAMAH_TARAWIH -> {
                     val nightIdx = (snapshot.settings.ramadhan.currentNight - 1).coerceIn(0, 29)
                     val ramadhanPetugas = snapshot.settings.ramadhan.petugas.getOrNull(nightIdx)
-                    CctvStateOverlayFullscreen(
+                    SimpleStateOverlayFullscreen(
                         snapshot = snapshot,
-                        stageTitle = "CERAMAH / KULTUM TARAWIH RAMADHAN",
-                        stageSubtitle = snapshot.settings.ramadhan.ceramahMessage.ifBlank {
-                            "Harap tenang dan menyimak ceramah Ramadhan malam ke-${snapshot.settings.ramadhan.currentNight}."
+                        stageTitle = "Ceramah Tarawih",
+                        stageContextBadge = "MALAM RAMADHAN KE-${snapshot.settings.ramadhan.currentNight}",
+                        stageMessage = snapshot.settings.ramadhan.ceramahMessage.ifBlank {
+                            "Harap Tenang dan Menyimak Ceramah"
                         },
-                        officerRoleLabel = "PENCERAMAH KULTUM",
-                        officerName = ramadhanPetugas?.penceramah ?: "-"
+                        officers = listOf(
+                            OverlayOfficerInfo(
+                                role = "Penceramah",
+                                name = ramadhanPetugas?.penceramah?.trim().orEmpty().ifBlank { "Ust. Fulan" },
+                                icon = Icons.AutoMirrored.Filled.MenuBook
+                            )
+                        ),
+                        stageIcon = Icons.AutoMirrored.Filled.MenuBook,
+                        accentColor = Color(0xFFF59E0B),
+                        backgroundImagePath = snapshot.settings.media.ceramahTarawihImage,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
                     )
                 }
 
                 AppState.SHOLAT_TARAWIH -> {
                     val nightIdx = (snapshot.settings.ramadhan.currentNight - 1).coerceIn(0, 29)
                     val ramadhanPetugas = snapshot.settings.ramadhan.petugas.getOrNull(nightIdx)
-                    CctvStateOverlayFullscreen(
+                    val imamTarawih = ramadhanPetugas?.imamTarawih?.trim().orEmpty().ifBlank { "Ust. Fulan Imam" }
+                    val imamWitir = ramadhanPetugas?.imamWitir?.trim().orEmpty()
+                    val tarawihOfficers = buildList {
+                        add(OverlayOfficerInfo("Imam Tarawih", imamTarawih, Icons.Default.Person))
+                        if (imamWitir.isNotBlank() && imamWitir != imamTarawih) {
+                            add(OverlayOfficerInfo("Imam Witir", imamWitir, Icons.Default.Person))
+                        }
+                    }
+                    SimpleStateOverlayFullscreen(
                         snapshot = snapshot,
-                        stageTitle = "PELAKSANAAN SHOLAT TARAWIH & WITIR",
-                        stageSubtitle = snapshot.settings.ramadhan.sholatMessage.ifBlank {
-                            "Malam Ramadhan Ke-${snapshot.settings.ramadhan.currentNight} • ${snapshot.settings.brand.name}"
+                        stageTitle = "SHOLAT\nTARAWIH & WITIR",
+                        countdownLabel = "Sholat Tarawih & Witir",
+                        stageContextBadge = "MALAM RAMADHAN KE-${snapshot.settings.ramadhan.currentNight}",
+                        stageMessage = snapshot.settings.ramadhan.sholatMessage.ifBlank {
+                            "Khusyuk dalam Melaksanakan Sholat"
                         },
-                        officerRoleLabel = "IMAM TARAWIH & WITIR",
-                        officerName = "${ramadhanPetugas?.imamTarawih ?: "-"} / ${ramadhanPetugas?.imamWitir ?: "-"}"
+                        officers = tarawihOfficers,
+                        stageIcon = Icons.Default.NightsStay,
+                        accentColor = Color(0xFF818CF8),
+                        backgroundImagePath = snapshot.settings.media.sholatTarawihWitirImage.ifBlank {
+                            snapshot.settings.media.ceramahTarawihImage
+                        },
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
                     )
                 }
 
@@ -195,22 +277,48 @@ fun FullScreenRouter(
                 }
 
                 AppState.SHOLAT_IDUL_FITRI -> {
-                    CctvStateOverlayFullscreen(
+                    SimpleStateOverlayFullscreen(
                         snapshot = snapshot,
-                        stageTitle = "PELAKSANAAN SHOLAT IDUL FITRI",
-                        stageSubtitle = "Allahu Akbar, Allahu Akbar, Laa Ilaaha Illallahu Wallahu Akbar",
-                        officerRoleLabel = "IMAM SHOLAT IED",
-                        officerName = snapshot.settings.idulFitri.petugas.imam
+                        stageTitle = "Sholat Idul Fitri",
+                        stageMessage = snapshot.settings.idulFitri.sholatMessage.ifBlank {
+                            "Gema Idul Fitri - Raih Kemenangan"
+                        },
+                        officers = listOf(
+                            OverlayOfficerInfo(
+                                role = "Imam",
+                                name = snapshot.settings.idulFitri.petugas.imam.trim().ifBlank { "Ust. Fulan Imam" },
+                                icon = Icons.Default.Person
+                            )
+                        ),
+                        stageIcon = Icons.Default.AutoAwesome,
+                        accentColor = Color(0xFF10B981),
+                        backgroundImagePath = snapshot.settings.media.sholatIdulFitriImage,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
                     )
                 }
 
                 AppState.KHUTBAH_IDUL_FITRI -> {
-                    CctvStateOverlayFullscreen(
+                    SimpleStateOverlayFullscreen(
                         snapshot = snapshot,
-                        stageTitle = "KHUTBAH HARI RAYA IDUL FITRI",
-                        stageSubtitle = "Mohon menyimak khutbah Idul Fitri dengan khusyuk.",
-                        officerRoleLabel = "KHOTIB IDUL FITRI",
-                        officerName = snapshot.settings.idulFitri.petugas.khotib
+                        stageTitle = "Khutbah Idul Fitri",
+                        stageMessage = snapshot.settings.idulFitri.khutbahMessage.ifBlank {
+                            "Menyimak Khutbah Hari Raya"
+                        },
+                        officers = listOf(
+                            OverlayOfficerInfo(
+                                role = "Khotib",
+                                name = snapshot.settings.idulFitri.petugas.khotib.trim().ifBlank { "Ust. Fulan Khotib" },
+                                icon = Icons.AutoMirrored.Filled.MenuBook
+                            )
+                        ),
+                        stageIcon = Icons.AutoMirrored.Filled.MenuBook,
+                        accentColor = Color(0xFFF59E0B),
+                        backgroundImagePath = snapshot.settings.media.khutbahIdulFitriImage,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
                     )
                 }
 
@@ -223,22 +331,48 @@ fun FullScreenRouter(
                 }
 
                 AppState.SHOLAT_IDUL_ADHA -> {
-                    CctvStateOverlayFullscreen(
+                    SimpleStateOverlayFullscreen(
                         snapshot = snapshot,
-                        stageTitle = "PELAKSANAAN SHOLAT IDUL ADHA",
-                        stageSubtitle = "Allahu Akbar, Allahu Akbar, Laa Ilaaha Illallahu Wallahu Akbar",
-                        officerRoleLabel = "IMAM SHOLAT IED",
-                        officerName = snapshot.settings.idulAdha.petugas.imam
+                        stageTitle = "Sholat Idul Adha",
+                        stageMessage = snapshot.settings.idulAdha.sholatMessage.ifBlank {
+                            "Semangat Qurban dan Ketaatan"
+                        },
+                        officers = listOf(
+                            OverlayOfficerInfo(
+                                role = "Imam",
+                                name = snapshot.settings.idulAdha.petugas.imam.trim().ifBlank { "Ust. Fulan Imam" },
+                                icon = Icons.Default.Person
+                            )
+                        ),
+                        stageIcon = Icons.Default.AutoAwesome,
+                        accentColor = Color(0xFF10B981),
+                        backgroundImagePath = snapshot.settings.media.sholatIdulAdhaImage,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
                     )
                 }
 
                 AppState.KHUTBAH_IDUL_ADHA -> {
-                    CctvStateOverlayFullscreen(
+                    SimpleStateOverlayFullscreen(
                         snapshot = snapshot,
-                        stageTitle = "KHUTBAH HARI RAYA IDUL ADHA",
-                        stageSubtitle = "Mohon menyimak khutbah Idul Adha dengan khusyuk.",
-                        officerRoleLabel = "KHOTIB IDUL ADHA",
-                        officerName = snapshot.settings.idulAdha.petugas.khotib
+                        stageTitle = "Khutbah Idul Adha",
+                        stageMessage = snapshot.settings.idulAdha.khutbahMessage.ifBlank {
+                            "Menyimak Khutbah Hari Raya"
+                        },
+                        officers = listOf(
+                            OverlayOfficerInfo(
+                                role = "Khotib",
+                                name = snapshot.settings.idulAdha.petugas.khotib.trim().ifBlank { "Ust. Fulan Khotib" },
+                                icon = Icons.AutoMirrored.Filled.MenuBook
+                            )
+                        ),
+                        stageIcon = Icons.AutoMirrored.Filled.MenuBook,
+                        accentColor = Color(0xFFF59E0B),
+                        backgroundImagePath = snapshot.settings.media.khutbahIdulAdhaImage,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
                     )
                 }
 
@@ -287,8 +421,8 @@ fun FullScreenRouter(
             }
         }
 
-        // Top-Center Floating Control Pill whenever in Fullscreen or Manual Simulation
-        if (activeState.isFullScreen || snapshot.tickResult.isManualOverride) {
+        // Top-Center Floating Control Pill only when Manual Simulation is active (hidden in normal Fullscreen)
+        if (snapshot.tickResult.isManualOverride) {
             val palette = LocalJwsTheme.current
             Row(
                 modifier = Modifier

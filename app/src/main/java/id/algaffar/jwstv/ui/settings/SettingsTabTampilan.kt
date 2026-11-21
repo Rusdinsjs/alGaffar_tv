@@ -483,222 +483,7 @@ fun OverlayTextSettingsTab(
     }
 }
 
-@Composable
-fun SlideSettingsTab(
-    settings: AppStateSettings,
-    actions: SettingsActions
-) {
-    val palette = LocalJwsTheme.current
-
-    fun addSlide(type: String, defaultTitle: String, defaultContent: String = "") {
-        val newSlide = SlideItem(
-            id = "slide_${System.currentTimeMillis()}",
-            title = defaultTitle,
-            content = defaultContent,
-            type = type,
-            duration = 12,
-            enabled = true,
-            showInMain = true,
-            showInSlideshow = true
-        )
-        actions.onUpdateSettings { prev -> prev.copy(slides = prev.slides + newSlide) }
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        HybridSectionCard(
-            title = "Manajemen Slideshow Informasi (${settings.slides.size} Slide Kustom)",
-            subtitle = "Tambahkan slide gambar/poster, teks pengumuman, atau Jam Analog Besar ke layar utama & fullscreen"
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HybridButton(
-                    label = "+ Slide Teks",
-                    icon = Icons.Default.Add,
-                    isPrimary = true,
-                    onClick = { addSlide("text", "Pengumuman Masjid", "Isi pesan atau informasi kegiatan masjid di sini.") }
-                )
-                HybridButton(
-                    label = "+ Slide Gambar (Memori / USB)",
-                    icon = Icons.Default.Upload,
-                    isPrimary = true,
-                    onClick = {
-                        actions.onPickImageAsset("slides") { path ->
-                            val newSlide = SlideItem(
-                                id = "slide_${System.currentTimeMillis()}",
-                                title = "Poster Informasi",
-                                type = "image",
-                                imageUrl = path,
-                                duration = 12,
-                                enabled = true,
-                                showInMain = true,
-                                showInSlideshow = true
-                            )
-                            actions.onUpdateSettings { prev -> prev.copy(slides = prev.slides + newSlide) }
-                        }
-                    }
-                )
-                HybridButton(
-                    label = "+ Slide Jam Analog Besar",
-                    icon = Icons.Default.Add,
-                    onClick = { addSlide("analog_clock", "Jam Analog Besar", "") }
-                )
-            }
-
-            if (settings.slides.isEmpty()) {
-                HybridInfoBanner(
-                    text = "Belum ada slide kustom tambahan. Saat ini layar utama menampilkan Slide Sambutan, Petugas Jum'at, dan Kas Jum'at secara otomatis.",
-                    accentColor = Color(0xFF38BDF8)
-                )
-            } else {
-                settings.slides.forEachIndexed { idx, slide ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(palette.bgPrimary.copy(alpha = 0.82f))
-                            .border(1.dp, palette.border, RoundedCornerShape(16.dp))
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "#${idx + 1} [${slide.type.uppercase()}] ${slide.title.ifBlank { "Tanpa Judul" }}",
-                                color = palette.accent,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (idx > 0) {
-                                    HybridButton(
-                                        label = "Naik",
-                                        icon = Icons.Default.ArrowUpward,
-                                        onClick = {
-                                            actions.onUpdateSettings { prev ->
-                                                val list = prev.slides.toMutableList()
-                                                val item = list.removeAt(idx)
-                                                list.add(idx - 1, item)
-                                                prev.copy(slides = list)
-                                            }
-                                        }
-                                    )
-                                }
-                                if (idx < settings.slides.lastIndex) {
-                                    HybridButton(
-                                        label = "Turun",
-                                        icon = Icons.Default.ArrowDownward,
-                                        onClick = {
-                                            actions.onUpdateSettings { prev ->
-                                                val list = prev.slides.toMutableList()
-                                                val item = list.removeAt(idx)
-                                                list.add(idx + 1, item)
-                                                prev.copy(slides = list)
-                                            }
-                                        }
-                                    )
-                                }
-                                HybridButton(
-                                    label = if (slide.enabled) "AKTIF" else "NONAKTIF",
-                                    isPrimary = slide.enabled,
-                                    onClick = {
-                                        actions.onUpdateSettings { prev ->
-                                            val list = prev.slides.toMutableList()
-                                            list[idx] = slide.copy(enabled = !slide.enabled)
-                                            prev.copy(slides = list)
-                                        }
-                                    }
-                                )
-                                HybridButton(
-                                    label = "Hapus",
-                                    icon = Icons.Default.Delete,
-                                    isDanger = true,
-                                    onClick = {
-                                        actions.onUpdateSettings { prev ->
-                                            prev.copy(slides = prev.slides.filterIndexed { i, _ -> i != idx })
-                                        }
-                                    }
-                                )
-                            }
-                        }
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            HybridTextInput(
-                                label = "Judul Slide",
-                                value = slide.title,
-                                onValueChange = { v ->
-                                    actions.onUpdateSettings { prev ->
-                                        val list = prev.slides.toMutableList()
-                                        list[idx] = slide.copy(title = v)
-                                        prev.copy(slides = list)
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                            HybridNumberStepper(
-                                label = "Durasi",
-                                value = slide.duration,
-                                min = 4,
-                                max = 120,
-                                unit = "dtk",
-                                onValueChange = { v ->
-                                    actions.onUpdateSettings { prev ->
-                                        val list = prev.slides.toMutableList()
-                                        list[idx] = slide.copy(duration = v)
-                                        prev.copy(slides = list)
-                                    }
-                                },
-                                modifier = Modifier.weight(0.9f)
-                            )
-                        }
-
-                        if (slide.type == "text" || slide.type == "image") {
-                            HybridTextInput(
-                                label = "Konten / Keterangan Slide",
-                                value = slide.content,
-                                onValueChange = { v ->
-                                    actions.onUpdateSettings { prev ->
-                                        val list = prev.slides.toMutableList()
-                                        list[idx] = slide.copy(content = v)
-                                        prev.copy(slides = list)
-                                    }
-                                }
-                            )
-                        }
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            HybridToggleRow(
-                                label = "Area Utama",
-                                checked = slide.showInMain,
-                                onCheckedChange = { v ->
-                                    actions.onUpdateSettings { prev ->
-                                        val list = prev.slides.toMutableList()
-                                        list[idx] = slide.copy(showInMain = v)
-                                        prev.copy(slides = list)
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                            HybridToggleRow(
-                                label = "Fullscreen Standby",
-                                checked = slide.showInSlideshow,
-                                onCheckedChange = { v ->
-                                    actions.onUpdateSettings { prev ->
-                                        val list = prev.slides.toMutableList()
-                                        list[idx] = slide.copy(showInSlideshow = v)
-                                        prev.copy(slides = list)
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+// SlideSettingsTab has been moved to SettingsTabSlides.kt for clean accordion UI & full 19-type parity.
 
 @Composable
 fun InfoAndPhbiSettingsTab(
@@ -886,68 +671,139 @@ fun InfoAndPhbiSettingsTab(
                 }
 
                 infoCfg.islamicEvents.forEachIndexed { idx, ev ->
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
                             .background(palette.bgPrimary.copy(alpha = 0.8f))
                             .border(1.dp, palette.border, RoundedCornerShape(14.dp))
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        HybridTextInput(
-                            label = "Nama PHBI / Agenda",
-                            value = ev.name,
-                            onValueChange = { v ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Bottom,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            HybridTextInput(
+                                label = "Nama PHBI / Agenda",
+                                value = ev.name,
+                                placeholder = "Contoh: Maulid Nabi SAW",
+                                onValueChange = { v ->
+                                    actions.onUpdateSettings { prev ->
+                                        val list = prev.infoSettings.islamicEvents.toMutableList()
+                                        list[idx] = ev.copy(name = v)
+                                        prev.copy(infoSettings = prev.infoSettings.copy(islamicEvents = list))
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            HybridButton(
+                                label = if (ev.enabled) "AKTIF" else "NONAKTIF",
+                                isPrimary = ev.enabled,
+                                onClick = {
+                                    actions.onUpdateSettings { prev ->
+                                        val list = prev.infoSettings.islamicEvents.toMutableList()
+                                        list[idx] = ev.copy(enabled = !ev.enabled)
+                                        prev.copy(infoSettings = prev.infoSettings.copy(islamicEvents = list))
+                                    }
+                                }
+                            )
+                            HybridButton(
+                                label = "Hapus",
+                                icon = Icons.Default.Delete,
+                                isDanger = true,
+                                onClick = {
+                                    actions.onUpdateSettings { prev ->
+                                        prev.copy(infoSettings = prev.infoSettings.copy(islamicEvents = prev.infoSettings.islamicEvents.filterIndexed { i, _ -> i != idx }))
+                                    }
+                                }
+                            )
+                        }
+
+                        HybridSegmentedRow(
+                            options = listOf(
+                                "hijri" to "Kalender Hijriyah",
+                                "gregorian" to "Tanggal Masehi",
+                                "custom" to "Teks Bebas / Manual"
+                            ),
+                            selectedId = ev.type,
+                            onSelect = { newType ->
                                 actions.onUpdateSettings { prev ->
                                     val list = prev.infoSettings.islamicEvents.toMutableList()
-                                    list[idx] = ev.copy(name = v)
+                                    list[idx] = ev.copy(
+                                        type = newType,
+                                        customSubtitle = ev.customSubtitle.ifBlank { "Agenda Masjid" }
+                                    )
                                     prev.copy(infoSettings = prev.infoSettings.copy(islamicEvents = list))
-                                }
-                            },
-                            modifier = Modifier.weight(1.2f)
-                        )
-                        HybridNumberStepper(
-                            label = "Tgl Hijriah",
-                            value = ev.hijriDay,
-                            min = 1,
-                            max = 30,
-                            unit = "",
-                            onValueChange = { v ->
-                                actions.onUpdateSettings { prev ->
-                                    val list = prev.infoSettings.islamicEvents.toMutableList()
-                                    list[idx] = ev.copy(hijriDay = v)
-                                    prev.copy(infoSettings = prev.infoSettings.copy(islamicEvents = list))
-                                }
-                            },
-                            modifier = Modifier.weight(0.9f)
-                        )
-                        HybridNumberStepper(
-                            label = "Bln Hijriah",
-                            value = ev.hijriMonth,
-                            min = 1,
-                            max = 12,
-                            unit = "",
-                            onValueChange = { v ->
-                                actions.onUpdateSettings { prev ->
-                                    val list = prev.infoSettings.islamicEvents.toMutableList()
-                                    list[idx] = ev.copy(hijriMonth = v)
-                                    prev.copy(infoSettings = prev.infoSettings.copy(islamicEvents = list))
-                                }
-                            },
-                            modifier = Modifier.weight(0.9f)
-                        )
-                        HybridButton(
-                            label = "Hapus",
-                            icon = Icons.Default.Delete,
-                            isDanger = true,
-                            onClick = {
-                                actions.onUpdateSettings { prev ->
-                                    prev.copy(infoSettings = prev.infoSettings.copy(islamicEvents = prev.infoSettings.islamicEvents.filterIndexed { i, _ -> i != idx }))
                                 }
                             }
                         )
+
+                        when (ev.type) {
+                            "gregorian" -> {
+                                HybridTextInput(
+                                    label = "Tanggal Masehi (YYYY-MM-DD)",
+                                    value = ev.gregorianDate,
+                                    placeholder = "2026-08-17",
+                                    onValueChange = { v ->
+                                        actions.onUpdateSettings { prev ->
+                                            val list = prev.infoSettings.islamicEvents.toMutableList()
+                                            list[idx] = ev.copy(gregorianDate = v)
+                                            prev.copy(infoSettings = prev.infoSettings.copy(islamicEvents = list))
+                                        }
+                                    }
+                                )
+                            }
+                            "custom" -> {
+                                HybridTextInput(
+                                    label = "Keterangan Waktu / Badge",
+                                    value = ev.customSubtitle,
+                                    placeholder = "Contoh: Ahad Pekan Depan",
+                                    onValueChange = { v ->
+                                        actions.onUpdateSettings { prev ->
+                                            val list = prev.infoSettings.islamicEvents.toMutableList()
+                                            list[idx] = ev.copy(customSubtitle = v)
+                                            prev.copy(infoSettings = prev.infoSettings.copy(islamicEvents = list))
+                                        }
+                                    }
+                                )
+                            }
+                            else -> {
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    HybridNumberStepper(
+                                        label = "Tgl Hijriah",
+                                        value = ev.hijriDay,
+                                        min = 1,
+                                        max = 30,
+                                        unit = "",
+                                        onValueChange = { v ->
+                                            actions.onUpdateSettings { prev ->
+                                                val list = prev.infoSettings.islamicEvents.toMutableList()
+                                                list[idx] = ev.copy(hijriDay = v)
+                                                prev.copy(infoSettings = prev.infoSettings.copy(islamicEvents = list))
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    HybridNumberStepper(
+                                        label = "Bln Hijriah (1-12)",
+                                        value = ev.hijriMonth,
+                                        min = 1,
+                                        max = 12,
+                                        unit = "",
+                                        onValueChange = { v ->
+                                            actions.onUpdateSettings { prev ->
+                                                val list = prev.infoSettings.islamicEvents.toMutableList()
+                                                list[idx] = ev.copy(hijriMonth = v)
+                                                prev.copy(infoSettings = prev.infoSettings.copy(islamicEvents = list))
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -955,117 +811,7 @@ fun InfoAndPhbiSettingsTab(
     }
 }
 
-@Composable
-fun MediaGallerySettingsTab(
-    settings: AppStateSettings,
-    actions: SettingsActions
-) {
-    val media = settings.media
-    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        HybridSectionCard(
-            title = "Layar Do'a Setelah Adzan (`doa_adzan`)",
-            subtitle = "Tampilkan doa setelah adzan (teks Arab & arti HR. Bukhari atau poster gambar kustom) sebelum hitung mundur Iqomah"
-        ) {
-            HybridToggleRow(
-                label = "Aktifkan Layar Do'a Setelah Adzan",
-                description = "Otomatis tampil sesaat setelah Adzan selesai sebelum masuk Menunggu Iqomah",
-                checked = media.doaAdzanEnabled,
-                onCheckedChange = { v ->
-                    actions.onUpdateSettings { it.copy(media = it.media.copy(doaAdzanEnabled = v)) }
-                }
-            )
-            HybridNumberStepper(
-                label = "Durasi Tampil Do'a Setelah Adzan",
-                value = media.doaAdzanDuration,
-                min = 15,
-                max = 120,
-                step = 5,
-                unit = "detik",
-                enabled = media.doaAdzanEnabled,
-                onValueChange = { v ->
-                    actions.onUpdateSettings { it.copy(media = it.media.copy(doaAdzanDuration = v)) }
-                }
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HybridButton(
-                    label = if (media.doaAdzanImage.isBlank()) "Upload Gambar Do'a Adzan (Opsional)" else "Ganti Gambar Do'a Adzan",
-                    icon = Icons.Default.Upload,
-                    isPrimary = true,
-                    onClick = {
-                        actions.onPickImageAsset("media") { path ->
-                            actions.onUpdateSettings { it.copy(media = it.media.copy(doaAdzanImage = path)) }
-                        }
-                    }
-                )
-                if (media.doaAdzanImage.isNotBlank()) {
-                    HybridButton(
-                        label = "Gunakan Teks Bawaan",
-                        icon = Icons.Default.Delete,
-                        isDanger = true,
-                        onClick = {
-                            actions.onUpdateSettings { it.copy(media = it.media.copy(doaAdzanImage = "")) }
-                        }
-                    )
-                }
-            }
-        }
-
-        HybridSectionCard(
-            title = "Interval Slide & Latar Media Ibadah",
-            subtitle = "Pengaturan media pendukung Tartil, Tarhim, Khutbah, dan Pelaksanaan Sholat"
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HybridNumberStepper(
-                    label = "Interval Slide Tartil",
-                    value = media.tartilSlideInterval,
-                    min = 3,
-                    max = 120,
-                    unit = "detik",
-                    onValueChange = { v -> actions.onUpdateSettings { it.copy(media = it.media.copy(tartilSlideInterval = v)) } },
-                    modifier = Modifier.weight(1f)
-                )
-                HybridNumberStepper(
-                    label = "Interval Slide Tarhim",
-                    value = media.tarhimSlideInterval,
-                    min = 3,
-                    max = 120,
-                    unit = "detik",
-                    onValueChange = { v -> actions.onUpdateSettings { it.copy(media = it.media.copy(tarhimSlideInterval = v)) } },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HybridButton(
-                    label = "Pilih Latar Khutbah Jum'at",
-                    icon = Icons.Default.Upload,
-                    onClick = {
-                        actions.onPickImageAsset("media") { path ->
-                            actions.onUpdateSettings { it.copy(media = it.media.copy(khutbahJumatImage = path)) }
-                        }
-                    }
-                )
-                HybridButton(
-                    label = "Pilih Latar Ceramah Tarawih",
-                    icon = Icons.Default.Upload,
-                    onClick = {
-                        actions.onPickImageAsset("media") { path ->
-                            actions.onUpdateSettings { it.copy(media = it.media.copy(ceramahTarawihImage = path)) }
-                        }
-                    }
-                )
-                HybridButton(
-                    label = "Pilih Latar Sholat 5 Waktu",
-                    icon = Icons.Default.Upload,
-                    onClick = {
-                        actions.onPickImageAsset("media") { path ->
-                            actions.onUpdateSettings { it.copy(media = it.media.copy(sholat5WaktuImage = path)) }
-                        }
-                    }
-                )
-            }
-        }
-    }
-}
+// MediaGallerySettingsTab has been moved to SettingsTabMedia.kt with full background slots & thumbnail previews.
 
 @Composable
 fun StandbyModeSettingsTab(

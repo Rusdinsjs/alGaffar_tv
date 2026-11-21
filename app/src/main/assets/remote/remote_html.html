@@ -5,25 +5,25 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Smart JWS Remote</title>
-    <!-- PWA Support -->
+    <title>Smart JWS Remote — Masjid Al-Gaffar</title>
     <link rel="manifest" href="/manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#0a0a0c">
     <link rel="apple-touch-icon" href="/alGaffar.png">
 
     <style>
         :root {
-            --bg: #0a0a0c;
-            --card: #16161a;
-            --card-hover: #1c1c22;
+            --bg: #0a0c10;
+            --card: #141820;
+            --card-2: #1c222d;
+            --border: rgba(255, 255, 255, 0.08);
             --text-primary: #f8fafc;
             --text-secondary: #94a3b8;
-            --accent: #3b82f6;
-            --accent-glow: rgba(59, 130, 246, 0.4);
-            --success: #10b981;
+            --accent: #10b981;
+            --accent-2: #3b82f6;
+            --accent-glow: rgba(16, 185, 129, 0.35);
             --danger: #ef4444;
             --warning: #f59e0b;
         }
@@ -38,266 +38,345 @@
             color: var(--text-primary);
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             margin: 0;
-            padding-bottom: calc(100px + env(safe-area-inset-bottom));
-            padding-left: env(safe-area-inset-left);
-            padding-right: env(safe-area-inset-right);
-            -webkit-tap-highlight-color: transparent;
+            padding-bottom: calc(96px + env(safe-area-inset-bottom));
             overflow-x: hidden;
-            user-select: none;
         }
 
         header {
             position: sticky;
             top: 0;
             z-index: 100;
-            background: rgba(10, 10, 12, 0.8);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            padding: calc(20px + env(safe-area-inset-top)) 16px 20px 16px;
+            background: rgba(10, 12, 16, 0.88);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            padding: calc(14px + env(safe-area-inset-top)) 16px 14px 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid var(--border);
         }
 
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+        .brand { display: flex; align-items: center; gap: 12px; }
 
         .logo {
             width: 40px;
             height: 40px;
-            background: linear-gradient(135deg, var(--accent), #10b981);
+            background: linear-gradient(135deg, #10b981, #059669);
             border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 12px var(--accent-glow);
+            box-shadow: 0 4px 14px var(--accent-glow);
+            font-size: 20px;
         }
 
-        .logo-icon {
-            width: 20px;
-            height: 20px;
-            fill: white;
-        }
-
-        .brand-text h1 {
-            font-size: 16px;
-            margin: 0;
-            font-weight: 800;
-            letter-spacing: -0.5px;
-        }
+        .brand-text h1 { font-size: 15px; margin: 0; font-weight: 800; letter-spacing: -0.2px; }
 
         .status {
             font-size: 10px;
-            color: var(--success);
+            color: var(--accent);
             display: flex;
             align-items: center;
-            gap: 4px;
-            font-weight: 600;
+            gap: 5px;
+            font-weight: 700;
             text-transform: uppercase;
+            margin-top: 2px;
         }
+
+        .status.offline { color: var(--danger); }
 
         .status::before {
             content: "";
-            width: 6px;
-            height: 6px;
-            background: var(--success);
+            width: 7px;
+            height: 7px;
+            background: currentColor;
             border-radius: 50%;
             display: inline-block;
-            box-shadow: 0 0 8px var(--success);
-            animation: pulse 2s infinite;
+            box-shadow: 0 0 8px currentColor;
         }
 
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.4; }
-            100% { opacity: 1; }
+        .header-right { display: flex; align-items: center; gap: 8px; }
+
+        .state-pill {
+            font-size: 10px;
+            font-weight: 800;
+            padding: 5px 10px;
+            border-radius: 99px;
+            background: rgba(16, 185, 129, 0.16);
+            color: #6ee7b7;
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            text-transform: uppercase;
         }
 
-        .container {
-            padding: 16px;
-            max-width: 500px;
-            margin: 0 auto;
+        .logout-btn {
+            background: var(--card-2);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 6px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
         }
 
-        .tab-content {
-            display: none;
-            animation: slideIn 0.3s ease-out;
-        }
+        .container { padding: 14px; max-width: 560px; margin: 0 auto; }
 
-        .tab-content.active {
-            display: block;
-        }
+        .tab-content { display: none; animation: fadeUp 0.22s ease-out; }
+        .tab-content.active { display: block; }
 
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(10px); }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(8px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
         .card {
             background: var(--card);
-            border-radius: 24px;
-            padding: 20px;
-            margin-bottom: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.03);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            border-radius: 20px;
+            padding: 18px;
+            margin-bottom: 14px;
+            border: 1px solid var(--border);
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
         }
 
         .card-title {
             font-size: 11px;
             font-weight: 800;
-            color: var(--text-secondary);
+            color: var(--accent);
             text-transform: uppercase;
-            letter-spacing: 1.5px;
-            margin-bottom: 20px;
-            display: block;
+            letter-spacing: 1.4px;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
 
         .d-pad-container {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 12px;
-            padding: 10px 0;
+            gap: 10px;
+            padding: 6px 0;
         }
 
-        .d-pad-row {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
+        .d-pad-row { display: flex; gap: 12px; align-items: center; }
 
         button.remote-btn {
-            background: #25252b;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: var(--card-2);
+            border: 1px solid var(--border);
             color: white;
-            border-radius: 18px;
-            width: 64px;
-            height: 64px;
+            border-radius: 16px;
+            width: 62px;
+            height: 62px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s;
+            transition: transform 0.12s, background 0.15s;
             cursor: pointer;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
 
-        button.remote-btn:active {
-            transform: scale(0.9);
-            background: #32323a;
-        }
+        button.remote-btn:active { transform: scale(0.92); background: #2c3545; }
 
         button.remote-btn.ok {
-            width: 80px;
-            height: 80px;
-            background: var(--accent);
-            border-color: rgba(255, 255, 255, 0.2);
+            width: 78px;
+            height: 78px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            border-color: rgba(255, 255, 255, 0.25);
             font-weight: 900;
-            font-size: 18px;
-            font-style: italic;
+            font-size: 17px;
             box-shadow: 0 0 20px var(--accent-glow);
-        }
-
-        button.remote-btn.ok:active {
-            background: #2563eb;
         }
 
         .nav-actions {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 12px;
+            gap: 10px;
             width: 100%;
-            margin-top: 20px;
+            margin-top: 14px;
         }
 
         button.action-btn {
-            background: #25252b;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 14px;
-            border-radius: 16px;
-            color: white;
+            background: var(--card-2);
+            border: 1px solid var(--border);
+            padding: 12px 10px;
+            border-radius: 14px;
+            color: var(--text-primary);
             font-size: 12px;
             font-weight: 700;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.15s;
         }
 
-        button.action-btn.danger { color: var(--danger); }
-        button.action-btn.accent { color: var(--accent); }
-
-        button.action-btn.active {
-            background: var(--accent);
-            color: #ffffff;
-            border-color: rgba(255, 255, 255, 0.3);
-            box-shadow: 0 0 15px var(--accent-glow);
-        }
-
-        button.action-btn.active span {
-            color: #ffffff !important;
-        }
-
+        button.action-btn:active { transform: scale(0.96); }
+        button.action-btn.danger { color: #fca5a5; border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.12); }
+        button.action-btn.accent { color: #6ee7b7; border-color: rgba(16, 185, 129, 0.35); background: rgba(16, 185, 129, 0.12); }
+        button.action-btn.active { background: var(--accent-2); color: #fff; border-color: rgba(255, 255, 255, 0.3); }
         button.action-btn.on {
-            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            background: linear-gradient(135deg, #059669, #10b981);
+            color: #fff;
             border-color: #34d399;
-            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
         }
 
-        .form-group { margin-bottom: 16px; }
+        .form-group { margin-bottom: 12px; }
 
         label {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-secondary);
-            margin-left: 4px;
-            margin-bottom: 6px;
+            margin-left: 2px;
+            margin-bottom: 5px;
             display: block;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
         }
 
         input[type="text"],
+        input[type="number"],
+        input[type="password"],
+        select,
         textarea {
             width: 100%;
-            background: #0a0a0c;
-            border: 1px solid #25252b;
-            border-radius: 16px;
-            padding: 14px;
+            background: #0b0e14;
+            border: 1px solid #262e3d;
+            border-radius: 12px;
+            padding: 12px 13px;
             color: white;
             font-size: 14px;
+            font-family: inherit;
             outline: none;
-            transition: border-color 0.3s;
+            transition: border-color 0.2s;
         }
 
-        input:focus,
-        textarea:focus {
-            border-color: var(--accent);
+        input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+
+        input[type="file"] {
+            width: 100%;
+            background: #0b0e14;
+            border: 1px dashed #334155;
+            border-radius: 12px;
+            padding: 11px;
+            color: var(--text-secondary);
+            font-size: 13px;
         }
 
         button.submit-btn {
             width: 100%;
-            background: var(--accent);
+            background: linear-gradient(135deg, #059669, #10b981);
             color: white;
             border: none;
-            padding: 16px;
-            border-radius: 16px;
-            font-weight: 700;
-            margin-top: 10px;
-            box-shadow: 0 4px 12px var(--accent-glow);
+            padding: 13px;
+            border-radius: 14px;
+            font-weight: 800;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 6px;
+            box-shadow: 0 4px 14px var(--accent-glow);
         }
+
+        button.submit-btn.secondary {
+            background: var(--card-2);
+            border: 1px solid var(--border);
+            box-shadow: none;
+        }
+
+        button.submit-btn.danger {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            box-shadow: none;
+        }
+
+        .list-box {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .list-item {
+            background: #0d1118;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .list-item-text { flex: 1; min-width: 0; }
+        .list-item-title { font-size: 13px; font-weight: 700; color: var(--text-primary); word-break: break-word; }
+        .list-item-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; word-break: break-word; }
+
+        .mini-btn {
+            border: 1px solid var(--border);
+            background: var(--card-2);
+            color: #fff;
+            border-radius: 8px;
+            padding: 6px 9px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .mini-btn.on { background: rgba(16, 185, 129, 0.22); color: #6ee7b7; border-color: rgba(16, 185, 129, 0.45); }
+        .mini-btn.del { background: rgba(239, 68, 68, 0.18); color: #fca5a5; border-color: rgba(239, 68, 68, 0.4); }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .icon { width: 20px; height: 20px; fill: currentColor; }
+
+        .prayer-row-meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 8px;
+            margin-top: 10px;
+            align-items: end;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            height: 6px;
+            background: #252c3a;
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 22px;
+            width: 22px;
+            border-radius: 50%;
+            background: var(--accent);
+            -webkit-appearance: none;
+            margin-top: -8px;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .monitor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+        .monitor-item { background: rgba(0, 0, 0, 0.28); padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); }
+        .monitor-label { font-size: 10px; color: var(--text-secondary); margin-bottom: 6px; display: flex; justify-content: space-between; font-weight: 700; }
+        .monitor-bar-bg { height: 5px; background: #252c3a; border-radius: 3px; overflow: hidden; }
+        .monitor-bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.6s ease; }
+        .uptime-text { font-size: 11px; color: var(--text-secondary); display: block; text-align: center; margin-top: 6px; }
 
         .bottom-nav {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            background: rgba(10, 10, 12, 0.9);
+            background: rgba(12, 15, 22, 0.94);
             backdrop-filter: blur(20px);
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            border-top: 1px solid var(--border);
             display: flex;
             justify-content: space-around;
-            padding: 12px 16px calc(24px + env(safe-area-inset-bottom)) 16px;
+            padding: 10px 8px calc(16px + env(safe-area-inset-bottom)) 8px;
             z-index: 1000;
         }
 
@@ -307,171 +386,135 @@
             align-items: center;
             gap: 4px;
             color: var(--text-secondary);
-            text-decoration: none;
             cursor: pointer;
-            transition: all 0.2s;
             background: none;
             border: none;
-            padding: 0;
+            padding: 4px 10px;
         }
-
         .nav-item.active { color: var(--accent); }
-        .nav-item svg { width: 24px; height: 24px; }
-        .nav-item span {
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
+        .nav-item svg { width: 22px; height: 22px; fill: currentColor; }
+        .nav-item span { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; }
 
         .toast {
             position: fixed;
-            bottom: 100px;
+            bottom: 92px;
             left: 50%;
             transform: translateX(-50%) translateY(20px);
-            background: var(--success);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 50px;
+            background: var(--accent);
+            color: #fff;
+            padding: 11px 20px;
+            border-radius: 99px;
             font-size: 13px;
-            font-weight: 700;
-            z-index: 2000;
+            font-weight: 800;
+            z-index: 2500;
             opacity: 0;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: all 0.25s ease;
             pointer-events: none;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+            max-width: 90vw;
+            text-align: center;
         }
-
         .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
         .toast.error { background: var(--danger); }
 
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-        .icon { width: 20px; height: 20px; fill: currentColor; }
-
-        input[type=range] {
-            -webkit-appearance: none;
-            appearance: none;
+        .auth-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(6, 8, 12, 0.94);
+            backdrop-filter: blur(12px);
+            z-index: 3000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .auth-overlay.show { display: flex; }
+        .auth-card {
             width: 100%;
-            background: transparent;
-        }
-
-        input[type=range]:focus { outline: none; }
-
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 6px;
-            cursor: pointer;
-            background: #25252b;
-            border-radius: 3px;
-        }
-
-        input[type=range]::-webkit-slider-thumb {
-            height: 20px;
-            width: 20px;
-            border-radius: 50%;
-            background: var(--accent);
-            cursor: pointer;
-            -webkit-appearance: none;
-            appearance: none;
-            margin-top: -7px;
-            box-shadow: 0 0 10px var(--accent-glow);
-        }
-
-        .monitor-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            margin-bottom: 8px;
-        }
-
-        .monitor-item {
-            background: rgba(0, 0, 0, 0.2);
-            padding: 12px;
-            border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .monitor-label {
-            font-size: 9px;
-            color: var(--text-secondary);
-            margin-bottom: 6px;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .monitor-bar-bg {
-            height: 4px;
-            background: #25252b;
-            border-radius: 2px;
-            overflow: hidden;
-        }
-
-        .monitor-bar-fill {
-            height: 100%;
-            background: var(--accent);
-            width: 0%;
-            transition: width 1s ease-in-out, background 0.3s;
-        }
-
-        .uptime-text {
-            font-size: 10px;
-            color: var(--text-secondary);
-            margin-top: 12px;
-            display: block;
+            max-width: 380px;
+            background: var(--card);
+            border: 1px solid rgba(16, 185, 129, 0.45);
+            border-radius: 24px;
+            padding: 26px 22px;
+            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6);
             text-align: center;
+        }
+        .auth-card h2 { margin: 8px 0 6px; font-size: 19px; }
+        .auth-card p { margin: 0 0 18px; font-size: 13px; color: var(--text-secondary); }
+        .chip-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 99px;
+            font-size: 11px;
+            font-weight: 700;
+            background: rgba(16, 185, 129, 0.16);
+            color: #6ee7b7;
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            margin: 2px;
         }
     </style>
 </head>
 
 <body>
+    <!-- In-Page Login Modal (works on all mobile PWAs without blocked prompt()) -->
+    <div id="authOverlay" class="auth-overlay">
+        <div class="auth-card">
+            <div style="font-size: 40px;">🔐</div>
+            <h2>Masuk JWS Remote Control</h2>
+            <p>Masukkan PIN Pengurus DKM (default: <b>732911</b>) atau Token pairing dari layar TV.</p>
+            <div class="form-group" style="text-align:left;">
+                <label>PIN / Token Akses</label>
+                <input type="password" id="authTokenInput" placeholder="Contoh: 732911" autocomplete="off"
+                    onkeydown="if(event.key==='Enter') submitLogin()">
+            </div>
+            <button class="submit-btn" onclick="submitLogin()">HUBUNGKAN KE TV</button>
+        </div>
+    </div>
+
     <header>
         <div class="brand">
-            <div class="logo">
-                <svg class="logo-icon" viewBox="0 0 24 24">
-                    <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" />
-                </svg>
-            </div>
+            <div class="logo">🕌</div>
             <div class="brand-text">
                 <h1>JWS SMART REMOTE</h1>
-                <div class="status">SINKRON AKTIF</div>
+                <div id="connStatus" class="status">MENGHUBUNGKAN...</div>
             </div>
+        </div>
+        <div class="header-right">
+            <span id="statePill" class="state-pill">STANDBY</span>
+            <button class="logout-btn" onclick="logoutAuth()">Keluar</button>
         </div>
     </header>
 
     <div class="container">
-        <!-- Tab: Beranda -->
+        <!-- TAB 1: BERANDA -->
         <div id="tab-home" class="tab-content active">
-            <!-- System Monitor -->
-            <div class="card" style="padding: 16px; background: linear-gradient(145deg, #16161a 0%, #0f172a 100%);">
-                <span class="card-title" style="margin-bottom:12px;">JWS TV Health Monitor</span>
+            <div class="card">
+                <span class="card-title"><span>Monitor TV JWS</span><span id="headerMosqueName" style="color:var(--text-secondary);font-size:10px;"></span></span>
                 <div class="monitor-grid">
                     <div class="monitor-item">
-                        <div class="monitor-label">
-                            <span>CPU LOAD</span>
-                            <span id="cpu-val">0%</span>
-                        </div>
-                        <div class="monitor-bar-bg">
-                            <div id="cpu-bar" class="monitor-bar-fill"></div>
-                        </div>
+                        <div class="monitor-label"><span>CPU</span><span id="cpu-val">0%</span></div>
+                        <div class="monitor-bar-bg"><div id="cpu-bar" class="monitor-bar-fill"></div></div>
                     </div>
                     <div class="monitor-item">
-                        <div class="monitor-label">
-                            <span>RAM USAGE</span>
-                            <span id="ram-val">0%</span>
-                        </div>
-                        <div class="monitor-bar-bg">
-                            <div id="ram-bar" class="monitor-bar-fill"></div>
-                        </div>
+                        <div class="monitor-label"><span>RAM</span><span id="ram-val">0%</span></div>
+                        <div class="monitor-bar-bg"><div id="ram-bar" class="monitor-bar-fill"></div></div>
                     </div>
                 </div>
-                <span id="uptime-val" class="uptime-text">Uptime: loading...</span>
+                <div class="monitor-item" style="margin-top:10px;">
+                    <div class="monitor-label">
+                        <span>MEMORI TV (SISA: <b id="storage-free-val">...</b>)</span>
+                        <span id="storage-pct-val">0%</span>
+                    </div>
+                    <div class="monitor-bar-bg"><div id="storage-bar" class="monitor-bar-fill"></div></div>
+                    <div id="storage-meta-val" style="font-size:11px;color:var(--text-secondary);margin-top:5px;">Aset JWS: memuat...</div>
+                </div>
+                <span id="uptime-val" class="uptime-text">Uptime: memuat...</span>
             </div>
 
             <div class="card">
-                <span class="card-title">Navigasi Utama</span>
+                <span class="card-title">Navigasi Remote TV (D-Pad)</span>
                 <div class="d-pad-container">
-                    <button class="remote-btn" onclick="sendCommand('nav_up')">
+                    <button class="remote-btn" onclick="sendCommand('nav_up')" title="Atas / Menu Cepat">
                         <svg class="icon"><path d="M7 14l5-5 5 5z" /></svg>
                     </button>
                     <div class="d-pad-row">
@@ -488,220 +531,406 @@
                     </button>
 
                     <div class="nav-actions">
-                        <button class="action-btn danger" onclick="sendCommand('nav_back')">
-                            <svg class="icon">
-                                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-                            </svg> KEMBALI
-                        </button>
-                        <button class="action-btn accent" onclick="sendCommand('open_settings')">
-                            <svg class="icon">
-                                <path
-                                    d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z" />
-                            </svg> PENGATURAN
-                        </button>
+                        <button class="action-btn danger" onclick="sendCommand('nav_back')">⬅ KEMBALI</button>
+                        <button class="action-btn accent" onclick="sendCommand('open_settings')">⚙ BUKA SETTINGS TV</button>
                     </div>
                 </div>
             </div>
 
             <div class="card">
-                <span class="card-title">Aksi Cepat & Live</span>
+                <span class="card-title">Tampilan TV Cepat</span>
+                <div class="grid-3" style="margin-bottom:10px;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Layout</label>
+                        <select id="selLayout" onchange="sendCommand('set_layout', { position: this.value })">
+                            <option value="horizontal">Horizontal</option>
+                            <option value="vertical-left">Vertikal Kiri</option>
+                            <option value="vertical-right">Vertikal Kanan</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Gaya Jam</label>
+                        <select id="selClock" onchange="sendCommand('set_clock_style', { style: this.value })">
+                            <option value="classic">Classic</option>
+                            <option value="golden">Golden</option>
+                            <option value="glass">Glass</option>
+                            <option value="wood">Wood</option>
+                            <option value="neon">Neon</option>
+                            <option value="segmented">LED 7-Seg</option>
+                            <option value="emerald">Emerald</option>
+                            <option value="monochrome">Monochrome</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Tema</label>
+                        <select id="selTheme" onchange="sendCommand('set_theme', { themeId: this.value })">
+                            <option value="emerald">Emerald</option>
+                            <option value="default">Slate</option>
+                            <option value="midnight">Midnight</option>
+                            <option value="sunset">Sunset</option>
+                            <option value="ocean">Ocean</option>
+                            <option value="earth">Earth</option>
+                            <option value="luxury">Luxury</option>
+                            <option value="royal">Royal</option>
+                            <option value="forest">Forest</option>
+                            <option value="desert">Desert</option>
+                            <option value="dawn">Dawn</option>
+                            <option value="light_clean">Light</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <button class="action-btn" onclick="sendCommand('next_theme')">🎨 TEMA BERIKUTNYA</button>
+                    <button class="action-btn" onclick="sendCommand('next_layout')">📐 GANTI LAYOUT</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Aksi Cepat, Live & Simulasi</span>
                 <div class="grid-2">
                     <button class="action-btn" onclick="sendCommand('play_infaq')">🪙 QR INFAQ</button>
                     <button class="action-btn" onclick="sendCommand('play_online_finance')">📊 KEUANGAN ONLINE</button>
-                    <button id="live-Cm1v4bteXbI" class="action-btn" onclick="sendCommand('set_live_source', { videoId: 'Cm1v4bteXbI' })">🕋 MAKKAH</button>
-                    <button id="live-9A1S0xAPVIs" class="action-btn" onclick="sendCommand('set_live_source', { videoId: '9A1S0xAPVIs' })">🕌 MADINAH</button>
-                    <button class="action-btn" onclick="sendCommand('play_live')">🎥 LIVE AUTO</button>
-                    <button class="action-btn" onclick="sendCommand('screensaver')">🌙 LAYAR MATI</button>
-                    <button class="action-btn" onclick="sendCommand('next_theme')">🎨 TEMA BARU</button>
-                    <button class="action-btn" onclick="sendCommand('next_layout')">📐 GANTI LAYOUT</button>
+                    <button id="live-Cm1v4bteXbI" class="action-btn" onclick="sendCommand('set_live_source', { videoId: 'Cm1v4bteXbI' })">🕋 LIVE MAKKAH</button>
+                    <button id="live-9A1S0xAPVIs" class="action-btn" onclick="sendCommand('set_live_source', { videoId: '9A1S0xAPVIs' })">🕌 LIVE MADINAH</button>
+                    <button id="btn-cctv" class="action-btn" onclick="sendCommand('play_cctv')">👁️ CCTV</button>
+                    <button id="btn-audio" class="action-btn" onclick="sendCommand('play_custom_audio')">🎵 AUDIO KUSTOM</button>
+                    <button class="action-btn" onclick="sendCommand('play_slideshow')">🎞️ SLIDESHOW</button>
+                    <button class="action-btn" onclick="sendCommand('screensaver')">🌙 SCREENSAVER</button>
+                    <button class="action-btn" onclick="sendCommand('test_beep')">🔔 UJI BEEP 1000Hz</button>
+                    <button class="action-btn" onclick="sendCommand('test_adzan')">📢 UJI LAYAR ADZAN</button>
                 </div>
-
-                <div class="grid-2" style="margin-top: 12px;">
-                    <button id="btn-cctv" class="action-btn" onclick="sendCommand('play_cctv')"
-                        style="flex-direction: column; gap: 4px; padding: 12px 5px;">
-                        <span style="font-size: 18px;">👁️</span>
-                        <span style="font-size: 9px;">CCTV</span>
-                    </button>
-                    <button id="btn-audio" class="action-btn" onclick="sendCommand('play_custom_audio')"
-                        style="flex-direction: column; gap: 4px; padding: 12px 5px;">
-                        <span style="font-size: 18px;">🎵</span>
-                        <span style="font-size: 9px;">AUDIO</span>
-                    </button>
-                </div>
-
-                <div style="margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <button class="action-btn" style="width: 100%" onclick="sendCommand('next_clock_style')">🕐 GANTI GAYA JAM</button>
-                    <button class="action-btn" style="width: 100%" onclick="sendCommand('refresh')">🔄 RELOAD APP</button>
-                    <button class="action-btn danger" style="width: 100%; grid-column: span 2"
-                        onclick="sendCommand('stop')">⏹ KEMBALI KE STANDBY</button>
-                </div>
+                <button class="submit-btn danger" style="margin-top:12px;" onclick="sendCommand('stop')">⏹ KEMBALI KE STANDBY OTOMATIS</button>
             </div>
         </div>
 
-        <!-- Tab: Settings Text -->
+        <!-- TAB 2: MASJID & TEKS -->
         <div id="tab-brand" class="tab-content">
             <div class="card">
-                <span class="card-title">Identitas Masjid</span>
+                <span class="card-title">Identitas Masjid & Upload Logo</span>
                 <div class="form-group">
                     <label>Nama Masjid</label>
-                    <input type="text" id="mosqueName" placeholder="Nama Masjid...">
+                    <input type="text" id="mosqueName" placeholder="MASJID AL-GAFFAR">
                 </div>
                 <div class="form-group">
                     <label>Alamat Masjid</label>
-                    <input type="text" id="mosqueAddress" placeholder="Alamat...">
+                    <input type="text" id="mosqueAddress" placeholder="Alamat lengkap masjid...">
                 </div>
-                <button class="submit-btn" onclick="updateIdentity()">SIMPAN IDENTITAS</button>
+                <div class="form-group">
+                    <label>Telepon / Kontak DKM</label>
+                    <input type="text" id="mosquePhone" placeholder="0812-xxxx-xxxx">
+                </div>
+                <button class="submit-btn" onclick="updateIdentity()">SIMPAN IDENTITAS MASJID</button>
+
+                <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+                <div class="form-group">
+                    <label>Upload Logo Masjid dari HP / PC (PNG / JPG)</label>
+                    <input type="file" id="logoFileInput" accept="image/*">
+                    <div id="currentLogoPath" style="font-size:11px;color:var(--text-secondary);margin-top:6px;"></div>
+                </div>
+                <button class="submit-btn secondary" onclick="uploadLogoFile()">📤 UNGGAH & PASANG LOGO</button>
             </div>
 
             <div class="card">
-                <span class="card-title">Text Overlay (Running Text)</span>
+                <span class="card-title">Running Text / Pengumuman Bawah</span>
+                <div id="overlayListBox" class="list-box"></div>
                 <div class="form-group">
-                    <label>Pesan Baru</label>
-                    <textarea id="runningText" rows="3" placeholder="Tulis pengumuman berjalan..."></textarea>
+                    <label>Tambah Pesan Baru</label>
+                    <textarea id="runningText" rows="2" placeholder="Tulis pesan berjalan..."></textarea>
                 </div>
                 <div class="grid-2">
-                    <button class="submit-btn" onclick="addRunningText()">+ TAMBAH</button>
-                    <button class="submit-btn" style="background:var(--danger); box-shadow:none"
-                        onclick="clearRunningText()">KOSONGKAN</button>
+                    <button class="submit-btn" onclick="addRunningText()">+ TAMBAH PESAN</button>
+                    <button class="submit-btn danger" onclick="clearRunningText()">KOSONGKAN</button>
                 </div>
             </div>
 
             <div class="card">
-                <span class="card-title">Info Card (Pengumuman)</span>
-                <div class="form-group">
-                    <label>Judul</label>
-                    <input type="text" id="infoTitle" placeholder="Contoh: INFO JUMAT">
+                <span class="card-title">Kartu Info Masjid (Card 1)</span>
+                <div id="infoListBox" class="list-box"></div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Label Judul</label>
+                        <input type="text" id="infoTitle" placeholder="INFO KAJIAN">
+                    </div>
+                    <div class="form-group">
+                        <label>Badge Sub-judul</label>
+                        <input type="text" id="infoSubtitle" placeholder="Ba'da Maghrib">
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label>Sub-judul</label>
-                    <input type="text" id="infoSubtitle" placeholder="Contoh: Petugas Khutbah">
-                </div>
-                <div class="form-group">
-                    <label>Isi Pesan</label>
-                    <textarea id="infoContent" rows="3" placeholder="Masukkan detail pengumuman..."></textarea>
+                    <label>Isi Pengumuman Utama</label>
+                    <input type="text" id="infoContent" placeholder="Kajian Tafsir & Fiqih Rutin">
                 </div>
                 <div class="grid-2">
                     <button class="submit-btn" onclick="addInfoCard()">+ TAMBAH INFO</button>
-                    <button class="submit-btn" style="background:var(--danger); box-shadow:none"
-                        onclick="clearInfoCard()">KOSONGKAN</button>
+                    <button class="submit-btn danger" onclick="clearInfoCard()">KOSONGKAN</button>
                 </div>
+            </div>
+
+            <div class="card">
+                <span class="card-title">QR Infaq & Keuangan Online</span>
+                <div class="form-group">
+                    <label>Tautan / Payload QRIS Infaq</label>
+                    <input type="text" id="qrLink" placeholder="https://...">
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Label QR</label>
+                        <input type="text" id="qrLabel" placeholder="Infaq Digital Masjid">
+                    </div>
+                    <div class="form-group">
+                        <label>Nama Bank</label>
+                        <input type="text" id="qrBank" placeholder="BSI / Muamalat">
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>No. Rekening</label>
+                        <input type="text" id="qrRek" placeholder="1234567890">
+                    </div>
+                    <div class="form-group">
+                        <label>Atas Nama</label>
+                        <input type="text" id="qrAn" placeholder="DKM Masjid Al-Gaffar">
+                    </div>
+                </div>
+                <button class="submit-btn" onclick="saveMasjidQr()">SIMPAN QR INFAQ</button>
+
+                <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+                <div class="form-group">
+                    <label>URL Google Sheets Keuangan Online</label>
+                    <input type="text" id="financeUrl" placeholder="https://docs.google.com/spreadsheets/...">
+                </div>
+                <div class="form-group">
+                    <label>URL Laporan Publik (QR Keuangan)</label>
+                    <input type="text" id="financeReportUrl" placeholder="https://...">
+                </div>
+                <button class="submit-btn secondary" onclick="saveOnlineFinance()">SIMPAN KEUANGAN ONLINE</button>
             </div>
         </div>
 
-        <!-- Tab: Media -->
+        <!-- TAB 3: SHOLAT & ACARA -->
+        <div id="tab-sholat" class="tab-content">
+            <div class="card">
+                <span class="card-title">Lokasi, Koreksi & Kalender Hijriah</span>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Latitude</label>
+                        <input type="number" step="0.0001" id="cfgLat">
+                    </div>
+                    <div class="form-group">
+                        <label>Longitude</label>
+                        <input type="number" step="0.0001" id="cfgLng">
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Metode Hisab</label>
+                        <select id="cfgMethod">
+                            <option value="Singapore">Kemenag / Singapore</option>
+                            <option value="MuslimWorldLeague">Muslim World League</option>
+                            <option value="Egyptian">Egyptian</option>
+                            <option value="UmmAlQura">Umm Al-Qura</option>
+                            <option value="Karachi">Karachi</option>
+                            <option value="Dubai">Dubai</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Madzhab Ashar</label>
+                        <select id="cfgMadhab">
+                            <option value="Shafi">Syafi'i</option>
+                            <option value="Hanafi">Hanafi</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Ihtiyati (Menit)</label>
+                        <input type="number" min="0" max="10" id="cfgIhtiyati">
+                    </div>
+                    <div class="form-group">
+                        <label>Koreksi Hijriah (-3..+3)</label>
+                        <input type="number" min="-3" max="3" id="cfgHijriAdj">
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <button class="submit-btn" onclick="savePrayerConfig()">SIMPAN JADWAL</button>
+                    <button id="btn-fasting" class="action-btn" style="margin-top:6px;" onclick="sendCommand('toggle_sunnah_fasting')">🌙 PUASA SUNNAH</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Mode Acara & Petugas Jum'at</span>
+                <div class="grid-2" style="margin-bottom:14px;">
+                    <button id="toggle-jumat" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'jumat' })">🕌 MODE JUMAT</button>
+                    <button id="toggle-ramadhan" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'ramadhan' })">🌙 RAMADHAN</button>
+                    <button id="toggle-idul_fitri" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'idul_fitri' })">🕋 IDUL FITRI</button>
+                    <button id="toggle-idul_adha" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'idul_adha' })">🐑 IDUL ADHA</button>
+                    <button id="toggle-slideshow" class="action-btn" style="grid-column:span 2" onclick="sendCommand('toggle_mode', { mode: 'slideshow' })">🎞️ AUTO SLIDESHOW FULLSCREEN</button>
+                </div>
+                <div class="grid-3">
+                    <div class="form-group">
+                        <label>Khotib</label>
+                        <input type="text" id="jumatKhotib" placeholder="Ust. ...">
+                    </div>
+                    <div class="form-group">
+                        <label>Imam</label>
+                        <input type="text" id="jumatImam" placeholder="Ust. ...">
+                    </div>
+                    <div class="form-group">
+                        <label>Muadzin</label>
+                        <input type="text" id="jumatMuadzin" placeholder="Sdr. ...">
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <button class="submit-btn" onclick="saveJumatPetugas()">SIMPAN PETUGAS JUM'AT</button>
+                    <div style="display:flex;gap:6px;align-items:center;margin-top:6px;">
+                        <input type="number" min="1" max="30" id="ramadhanNight" placeholder="Malam 1-30">
+                        <button class="mini-btn on" style="height:44px;padding:0 12px;" onclick="saveRamadhanNight()">Mlm</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="prayerStagesContainer"></div>
+        </div>
+
+        <!-- TAB 4: MEDIA & UPLOAD -->
         <div id="tab-media" class="tab-content">
             <div class="card">
-                <span class="card-title">Kontrol Suara (Master)</span>
-                <div class="form-group">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
-                        <label>Volume Player</label>
-                        <span id="volumeVal" style="font-size:12px; color:var(--accent); font-weight:bold">80%</span>
-                    </div>
-                    <input type="range" id="masterVolume" min="0" max="100" value="80"
-                        oninput="updateVolume(this.value)">
+                <span class="card-title">
+                    <span>Pengaman Memori TV (Storage Guard)</span>
+                    <span id="mediaStorageBadge" style="font-size:11px;color:var(--accent);font-weight:800;">AMAN</span>
+                </span>
+                <div id="mediaStorageSummary" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+                    Memuat status penyimpanan internal TV...
                 </div>
+                <button class="submit-btn secondary" id="btnCleanOrphan" onclick="sendCommand('cleanup_orphan_media', {}, 'Membersihkan file media tidak terpakai...')">
+                    🧹 BERSIHKAN FILE TIDAK TERPAKAI
+                </button>
             </div>
 
             <div class="card">
-                <span class="card-title">Master Aktifasi Mode</span>
-                <div class="grid-2" style="gap: 10px;">
-                    <button id="toggle-jumat" class="action-btn"
-                        onclick="sendCommand('toggle_mode', { mode: 'jumat' })">🕌 JUMAT</button>
-                    <button id="toggle-ramadhan" class="action-btn"
-                        onclick="sendCommand('toggle_mode', { mode: 'ramadhan' })">🌙 RAMADHAN</button>
-                    <button id="toggle-idul_fitri" class="action-btn"
-                        onclick="sendCommand('toggle_mode', { mode: 'idul_fitri' })">🕋 IDUL FITRI</button>
-                    <button id="toggle-idul_adha" class="action-btn"
-                        onclick="sendCommand('toggle_mode', { mode: 'idul_adha' })">🐑 IDUL ADHA</button>
-                    <button id="toggle-slideshow" class="action-btn" style="grid-column: span 2"
-                        onclick="sendCommand('toggle_mode', { mode: 'slideshow' })">🎞️ SLIDESHOW</button>
+                <span class="card-title">Kontrol Volume Master TV</span>
+                <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+                    <span style="font-size:13px;color:var(--text-secondary);">Volume Audio Sholat & Murottal</span>
+                    <span id="volumeVal" style="font-size:14px;color:var(--accent);font-weight:800;">100%</span>
                 </div>
+                <input type="range" id="masterVolume" min="0" max="100" value="100" oninput="onVolumeSlide(this.value)">
             </div>
 
             <div class="card">
-                <span class="card-title">Mode Tampilan</span>
+                <span class="card-title">Upload Audio Tartil / Tarhim / Adzan</span>
                 <div class="grid-2">
-                    <button class="action-btn" onclick="sendCommand('play_slideshow')">🎞️ SLIDESHOW</button>
-                    <button class="action-btn" onclick="sendCommand('play_jumat')">🕌 MODE JUMAT</button>
-                    <button class="action-btn" onclick="sendCommand('play_ramadhan')">🌙 RAMADHAN</button>
-                    <button class="action-btn" onclick="sendCommand('play_idul_fitri')">🕋 IDUL FITRI</button>
-                    <button class="action-btn" style="grid-column: span 2" onclick="sendCommand('play_idul_adha')">🐑 IDUL ADHA</button>
+                    <div class="form-group">
+                        <label>Kategori Audio</label>
+                        <select id="audioCat">
+                            <option value="tartil">Tartil (Pra-Sholat)</option>
+                            <option value="tarhim">Tarhim (Menjelang Adzan)</option>
+                            <option value="adzan">Adzan</option>
+                            <option value="custom">Audio Kustom / Murottal</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="audioSlotWrap">
+                        <label>Slot Waktu Sholat</label>
+                        <select id="audioSlot">
+                            <option value="fajr">Subuh</option>
+                            <option value="dhuhr">Dzuhur</option>
+                            <option value="asr">Ashar</option>
+                            <option value="maghrib">Maghrib</option>
+                            <option value="isha">Isya</option>
+                            <option value="default">Default (Semua)</option>
+                        </select>
+                    </div>
                 </div>
-            </div>
-        </div>
+                <div class="form-group">
+                    <label>Pilih File Audio MP3 / WAV / M4A (Maks 50 MB)</label>
+                    <input type="file" id="audioFileInput" accept="audio/*,.mp3,.wav,.m4a,.ogg">
+                </div>
+                <button class="submit-btn" onclick="uploadAudioFile()">📤 UNGGAH AUDIO KE TV</button>
 
-        <div id="tab-sholat" class="tab-content">
-            <!-- Subuh -->
-            <div class="card">
-                <span class="card-title">SUBUH</span>
-                <div class="grid-3">
-                    <button id="fajr-isTartil" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'fajr', setting: 'isTartil' })">📖 TARTIL</button>
-                    <button id="fajr-isTarhim" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'fajr', setting: 'isTarhim' })">🕯️ TARHIM</button>
-                    <button id="fajr-isAdzan" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'fajr', setting: 'isAdzan' })">📢 ADZAN</button>
+                <div style="margin-top:14px;">
+                    <label>Audio Terpasang di TV</label>
+                    <div id="audioInventoryBox" class="list-box"></div>
                 </div>
             </div>
-            <!-- Dzuhur -->
+
             <div class="card">
-                <span class="card-title">DZUHUR</span>
-                <div class="grid-3">
-                    <button id="dhuhr-isTartil" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'dhuhr', setting: 'isTartil' })">📖 TARTIL</button>
-                    <button id="dhuhr-isTarhim" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'dhuhr', setting: 'isTarhim' })">🕯️ TARHIM</button>
-                    <button id="dhuhr-isAdzan" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'dhuhr', setting: 'isAdzan' })">📢 ADZAN</button>
+                <span class="card-title">
+                    <span>Manajemen Slide, Poster & Video</span>
+                    <button class="mini-btn" onclick="resetDefaultSlides()">Reset Default</button>
+                </span>
+                <div class="form-group">
+                    <label>Upload Poster Gambar Baru (PNG / JPG — Auto-Optimasi 1080p)</label>
+                    <input type="file" id="slideImageInput" accept="image/*">
+                </div>
+                <button class="submit-btn" onclick="uploadSlideImageFile()">📤 UNGGAH POSTER KE SLIDESHOW</button>
+
+                <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+                <div class="form-group">
+                    <label>Upload Video Slide Baru (MP4 / WEBM — Maks 250 MB)</label>
+                    <input type="file" id="slideVideoInput" accept="video/mp4,video/webm,video/x-matroska,.mp4,.webm,.mkv,.mov">
+                </div>
+                <button class="submit-btn secondary" onclick="uploadSlideVideoFile()">🎬 UNGGAH VIDEO KE SLIDESHOW</button>
+
+                <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Judul Slide Teks</label>
+                        <input type="text" id="newSlideTitle" placeholder="Pengumuman Masjid">
+                    </div>
+                    <div class="form-group">
+                        <label>Durasi (Detik)</label>
+                        <input type="number" min="4" max="120" id="newSlideDur" value="12">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Isi Slide Teks</label>
+                    <textarea id="newSlideContent" rows="2" placeholder="Tulis pesan slide..."></textarea>
+                </div>
+                <button class="submit-btn secondary" onclick="addTextSlide()">+ TAMBAH SLIDE TEKS</button>
+
+                <div style="margin-top:14px;">
+                    <label>Daftar Slide Aktif di TV</label>
+                    <div id="slidesListBox" class="list-box"></div>
                 </div>
             </div>
-            <!-- Ashar -->
+
             <div class="card">
-                <span class="card-title">ASHAR</span>
-                <div class="grid-3">
-                    <button id="asr-isTartil" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'asr', setting: 'isTartil' })">📖 TARTIL</button>
-                    <button id="asr-isTarhim" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'asr', setting: 'isTarhim' })">🕯️ TARHIM</button>
-                    <button id="asr-isAdzan" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'asr', setting: 'isAdzan' })">📢 ADZAN</button>
+                <span class="card-title">Upload Latar Media Ibadah (Auto-Optimasi 1080p)</span>
+                <div class="form-group">
+                    <label>Target Layar Ibadah</label>
+                    <select id="mediaBgSlot">
+                        <option value="doa_adzan">Layar Do'a Setelah Adzan</option>
+                        <option value="khutbah_jumat">Latar Khutbah Jum'at</option>
+                        <option value="ceramah_tarawih">Latar Ceramah Tarawih</option>
+                        <option value="sholat_5_waktu">Latar Sholat 5 Waktu</option>
+                        <option value="sholat_jumat">Latar Sholat Jum'at</option>
+                        <option value="sholat_tarawih_witir">Latar Sholat Tarawih & Witir</option>
+                    </select>
                 </div>
-            </div>
-            <!-- Maghrib -->
-            <div class="card">
-                <span class="card-title">MAGHRIB</span>
-                <div class="grid-3">
-                    <button id="maghrib-isTartil" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'maghrib', setting: 'isTartil' })">📖 TARTIL</button>
-                    <button id="maghrib-isTarhim" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'maghrib', setting: 'isTarhim' })">🕯️ TARHIM</button>
-                    <button id="maghrib-isAdzan" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'maghrib', setting: 'isAdzan' })">📢 ADZAN</button>
+                <div class="form-group">
+                    <label>Pilih Gambar Latar (PNG / JPG)</label>
+                    <input type="file" id="mediaBgInput" accept="image/*">
                 </div>
-            </div>
-            <!-- Isya -->
-            <div class="card">
-                <span class="card-title">ISYA</span>
-                <div class="grid-3">
-                    <button id="isha-isTartil" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'isha', setting: 'isTartil' })">📖 TARTIL</button>
-                    <button id="isha-isTarhim" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'isha', setting: 'isTarhim' })">🕯️ TARHIM</button>
-                    <button id="isha-isAdzan" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: 'isha', setting: 'isAdzan' })">📢 ADZAN</button>
-                </div>
+                <button class="submit-btn secondary" onclick="uploadMediaBgFile()">🖼️ UNGGAH LATAR IBADAH</button>
             </div>
         </div>
     </div>
 
-    <!-- Bottom Navigation -->
     <nav class="bottom-nav">
         <button class="nav-item active" onclick="switchTab('home', event)">
             <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
             <span>Beranda</span>
         </button>
         <button class="nav-item" onclick="switchTab('brand', event)">
-            <svg viewBox="0 0 24 24">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-            </svg>
-            <span>Settings Text</span>
-        </button>
-        <button class="nav-item" onclick="switchTab('media', event)">
-            <svg viewBox="0 0 24 24">
-                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-            </svg>
-            <span>Media</span>
+            <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
+            <span>Masjid</span>
         </button>
         <button class="nav-item" onclick="switchTab('sholat', event)">
-            <svg viewBox="0 0 24 24">
-                <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
-            </svg>
+            <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
             <span>Sholat</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('media', event)">
+            <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" /></svg>
+            <span>Media</span>
         </button>
     </nav>
 
@@ -709,56 +938,110 @@
 
     <script>
         const API = '/api/command';
+        const UPLOAD_API = '/api/upload';
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('token')) {
-            sessionStorage.setItem('jws_auth_token', urlParams.get('token').trim());
+            localStorage.setItem('jws_auth_token', urlParams.get('token').trim());
         }
-        let AUTH_TOKEN = sessionStorage.getItem('jws_auth_token');
+        let AUTH_TOKEN = localStorage.getItem('jws_auth_token') || '';
         let pendingUpdates = {};
+        let volDebounce = null;
+        let initializedFields = false;
+
+        const PRAYERS_META = [
+            { id: 'fajr', label: 'SUBUH' },
+            { id: 'dhuhr', label: 'DZUHUR / JUM\'AT' },
+            { id: 'asr', label: 'ASHAR' },
+            { id: 'maghrib', label: 'MAGHRIB' },
+            { id: 'isha', label: 'ISYA' }
+        ];
+
+        function buildPrayerStageCards() {
+            const box = document.getElementById('prayerStagesContainer');
+            if (!box) return;
+            box.innerHTML = PRAYERS_META.map(p => `
+                <div class="card">
+                    <span class="card-title">${p.label}</span>
+                    <div class="grid-3">
+                        <button id="${p.id}-isTartil" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: '${p.id}', setting: 'isTartil' })">📖 TARTIL</button>
+                        <button id="${p.id}-isTarhim" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: '${p.id}', setting: 'isTarhim' })">🕯️ TARHIM</button>
+                        <button id="${p.id}-isAdzan" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: '${p.id}', setting: 'isAdzan' })">📢 ADZAN</button>
+                    </div>
+                    <div class="prayer-row-meta">
+                        <div>
+                            <label>Iqomah (Mnt)</label>
+                            <input type="number" min="1" max="60" id="${p.id}-iqomah" value="10">
+                        </div>
+                        <div>
+                            <label>Sholat (Mnt)</label>
+                            <input type="number" min="5" max="60" id="${p.id}-sholat" value="15">
+                        </div>
+                        <button class="mini-btn on" style="height:42px;padding:0 12px;" onclick="savePrayerDur('${p.id}')">Simpan</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        buildPrayerStageCards();
+
+        document.getElementById('audioCat').addEventListener('change', (e) => {
+            document.getElementById('audioSlotWrap').style.display = e.target.value === 'custom' ? 'none' : 'block';
+        });
 
         function vibe() { if ('vibrate' in navigator) navigator.vibrate(10); }
 
-        function checkAuth() {
-            if (!AUTH_TOKEN) {
-                let input = prompt('🔐 Masukkan PIN (superadmin / admin) atau Token Akses JWS:');
-                AUTH_TOKEN = input ? input.trim() : '';
-                if (AUTH_TOKEN) sessionStorage.setItem('jws_auth_token', AUTH_TOKEN);
+        function showAuthModal(show) {
+            const ov = document.getElementById('authOverlay');
+            if (show) {
+                ov.classList.add('show');
+                setTimeout(() => document.getElementById('authTokenInput').focus(), 100);
+            } else {
+                ov.classList.remove('show');
             }
         }
-        checkAuth();
 
-        async function sendCommand(action, payload = {}) {
+        function submitLogin() {
+            const val = document.getElementById('authTokenInput').value.trim();
+            if (!val) { showToast('Masukkan PIN atau Token!', true); return; }
+            AUTH_TOKEN = val;
+            localStorage.setItem('jws_auth_token', val);
+            showAuthModal(false);
+            initializedFields = false;
+            pollStatus();
+        }
+
+        function logoutAuth() {
+            AUTH_TOKEN = '';
+            localStorage.removeItem('jws_auth_token');
+            document.getElementById('authTokenInput').value = '';
+            showAuthModal(true);
+        }
+
+        if (!AUTH_TOKEN) showAuthModal(true);
+
+        function setInputSafely(id, val) {
+            const el = document.getElementById(id);
+            if (!el || val === undefined || val === null) return;
+            if (document.activeElement === el) return;
+            const strVal = String(val);
+            if (el.value !== strVal) el.value = strVal;
+        }
+
+        function escapeHtml(s) {
+            return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        async function sendCommand(action, payload = {}, customToast = 'Perintah Terkirim!') {
             vibe();
-            if (!AUTH_TOKEN) {
-                showToast('❌ Token tidak diatur!', true);
-                return;
-            }
+            if (!AUTH_TOKEN) { showAuthModal(true); return false; }
 
             if (action === 'toggle_mode' && payload.mode) {
                 const id = `toggle-${payload.mode}`;
                 const btn = document.getElementById(id);
-                if (btn) {
-                    btn.classList.toggle('on');
-                    pendingUpdates[id] = Date.now();
-                }
+                if (btn) { btn.classList.toggle('on'); pendingUpdates[id] = Date.now(); }
             } else if (action === 'toggle_prayer_setting' && payload.prayer && payload.setting) {
                 const id = `${payload.prayer}-${payload.setting}`;
                 const btn = document.getElementById(id);
-                if (btn) {
-                    btn.classList.toggle('on');
-                    pendingUpdates[id] = Date.now();
-                }
-            } else if (action === 'set_live_source' && payload.videoId) {
-                document.querySelectorAll('[id^="live-"]').forEach(b => {
-                    b.classList.remove('active');
-                    pendingUpdates[b.id] = Date.now();
-                });
-                const id = `live-${payload.videoId}`;
-                const btn = document.getElementById(id);
-                if (btn) {
-                    btn.classList.add('active');
-                    pendingUpdates[id] = Date.now();
-                }
+                if (btn) { btn.classList.toggle('on'); pendingUpdates[id] = Date.now(); }
             }
 
             try {
@@ -772,176 +1055,443 @@
                 });
 
                 if (response.status === 401) {
-                    sessionStorage.removeItem('jws_auth_token');
+                    logoutAuth();
                     showToast('❌ PIN / Token Salah!', true);
-                    setTimeout(() => window.location.reload(), 1000);
+                    return false;
                 } else if (!response.ok) {
-                    showToast('❌ Gagal Kirim!', true);
+                    showToast('❌ Gagal mengirim perintah!', true);
+                    return false;
                 } else {
-                    showToast();
+                    if (customToast) showToast(customToast);
+                    setTimeout(pollStatus, 250);
+                    return true;
                 }
             } catch (e) {
-                showToast('❌ Error Jaringan!', true);
+                showToast('❌ Error jaringan ke TV!', true);
+                return false;
             }
+        }
+
+        async function uploadBinaryFile(category, slot, file) {
+            if (!AUTH_TOKEN) { showAuthModal(true); return; }
+            if (!file) { showToast('Pilih file terlebih dahulu!', true); return; }
+            const maxMb = (category === 'slide_video' || category === 'video') ? 250
+                : (category === 'tartil' || category === 'tarhim' || category === 'adzan' || category === 'custom') ? 50
+                : 25;
+            if (file.size > maxMb * 1024 * 1024) { showToast(`Ukuran file melebihi batas ${maxMb} MB!`, true); return; }
+
+            showToast('⏳ Mengunggah ' + file.name + '...');
+            try {
+                const qs = new URLSearchParams({ category, slot: slot || '', filename: file.name }).toString();
+                const res = await fetch(`${UPLOAD_API}?${qs}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${AUTH_TOKEN}`,
+                        'Content-Type': file.type || 'application/octet-stream'
+                    },
+                    body: file
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.status === 401) {
+                    logoutAuth();
+                    showToast('❌ Sesi berakhir, masukkan PIN lagi!', true);
+                } else if (!res.ok) {
+                    showToast('❌ ' + (data.error || 'Gagal mengunggah file'), true);
+                } else {
+                    showToast('✅ ' + (data.message || 'Berhasil diunggah!'));
+                    setTimeout(pollStatus, 350);
+                }
+            } catch (e) {
+                showToast('❌ Gagal upload: cek koneksi Wi-Fi!', true);
+            }
+        }
+
+        function uploadLogoFile() {
+            const inp = document.getElementById('logoFileInput');
+            if (!inp.files || !inp.files[0]) { showToast('Pilih gambar logo dulu!', true); return; }
+            uploadBinaryFile('logo', '', inp.files[0]).then(() => { inp.value = ''; });
+        }
+
+        function uploadSlideImageFile() {
+            const inp = document.getElementById('slideImageInput');
+            if (!inp.files || !inp.files[0]) { showToast('Pilih gambar poster dulu!', true); return; }
+            uploadBinaryFile('slide_image', '', inp.files[0]).then(() => { inp.value = ''; });
+        }
+
+        function uploadSlideVideoFile() {
+            const inp = document.getElementById('slideVideoInput');
+            if (!inp.files || !inp.files[0]) { showToast('Pilih file video MP4/WEBM dulu!', true); return; }
+            uploadBinaryFile('slide_video', '', inp.files[0]).then(() => { inp.value = ''; });
+        }
+
+        function uploadMediaBgFile() {
+            const inp = document.getElementById('mediaBgInput');
+            const slot = document.getElementById('mediaBgSlot').value;
+            if (!inp.files || !inp.files[0]) { showToast('Pilih gambar latar dulu!', true); return; }
+            uploadBinaryFile('media_bg', slot, inp.files[0]).then(() => { inp.value = ''; });
+        }
+
+        function uploadAudioFile() {
+            const inp = document.getElementById('audioFileInput');
+            const cat = document.getElementById('audioCat').value;
+            const slot = document.getElementById('audioSlot').value;
+            if (!inp.files || !inp.files[0]) { showToast('Pilih file audio MP3/WAV dulu!', true); return; }
+            uploadBinaryFile(cat, cat === 'custom' ? '' : slot, inp.files[0]).then(() => { inp.value = ''; });
         }
 
         function switchTab(tabId, evt) {
             vibe();
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-
             document.getElementById('tab-' + tabId).classList.add('active');
             if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
         }
 
         function updateIdentity() {
-            const name = document.getElementById('mosqueName').value;
-            const address = document.getElementById('mosqueAddress').value;
-            if (name || address) {
-                sendCommand('update_identity', { name, address });
-            } else {
-                showToast('Isi nama atau alamat', true);
-            }
+            const name = document.getElementById('mosqueName').value.trim();
+            const address = document.getElementById('mosqueAddress').value.trim();
+            const phone = document.getElementById('mosquePhone').value.trim();
+            if (!name && !address) { showToast('Isi nama atau alamat masjid!', true); return; }
+            sendCommand('update_identity', { name, address, phone }, '✅ Identitas Masjid disimpan!');
         }
 
         function addRunningText() {
-            const text = document.getElementById('runningText').value;
-            if (text) {
-                sendCommand('add_overlay_text', { text });
-                document.getElementById('runningText').value = '';
-            }
+            const el = document.getElementById('runningText');
+            const text = el.value.trim();
+            if (!text) { showToast('Tulis pesan terlebih dahulu!', true); return; }
+            sendCommand('add_overlay_text', { text }, '✅ Running text ditambahkan!');
+            el.value = '';
         }
 
         function clearRunningText() {
-            if (confirm('Hapus semua pesan berjalan?')) sendCommand('clear_overlay_text');
+            if (confirm('Hapus semua pesan running text?')) sendCommand('clear_overlay_text', {}, 'Running text dikosongkan');
         }
 
         function addInfoCard() {
-            const title = document.getElementById('infoTitle').value;
-            const subtitle = document.getElementById('infoSubtitle').value;
-            const content = document.getElementById('infoContent').value;
-
-            if (content) {
-                sendCommand('add_info', { title, subtitle, content });
-                document.getElementById('infoTitle').value = '';
-                document.getElementById('infoSubtitle').value = '';
-                document.getElementById('infoContent').value = '';
-            } else {
-                showToast('Isi pesan pengumuman wajib diisi', true);
-            }
+            const title = document.getElementById('infoTitle').value.trim();
+            const subtitle = document.getElementById('infoSubtitle').value.trim();
+            const content = document.getElementById('infoContent').value.trim();
+            if (!content) { showToast('Isi pengumuman wajib diisi!', true); return; }
+            sendCommand('add_info', { title: title || 'INFO MASJID', subtitle, content }, '✅ Kartu Info ditambahkan!');
+            document.getElementById('infoTitle').value = '';
+            document.getElementById('infoSubtitle').value = '';
+            document.getElementById('infoContent').value = '';
         }
 
         function clearInfoCard() {
-            if (confirm('Hapus semua kartu pengumuman (Info Card)?')) sendCommand('clear_info');
+            if (confirm('Hapus semua kartu pengumuman?')) sendCommand('clear_info', {}, 'Semua Info Card dihapus');
         }
 
-        function updateVolume(val) {
+        function saveMasjidQr() {
+            sendCommand('update_masjid_qr', {
+                link: document.getElementById('qrLink').value.trim(),
+                label: document.getElementById('qrLabel').value.trim(),
+                bankName: document.getElementById('qrBank').value.trim(),
+                nomorRekening: document.getElementById('qrRek').value.trim(),
+                atasNama: document.getElementById('qrAn').value.trim()
+            }, '✅ Pengaturan QR Infaq disimpan!');
+        }
+
+        function saveOnlineFinance() {
+            sendCommand('update_online_finance', {
+                enabled: true,
+                url: document.getElementById('financeUrl').value.trim(),
+                reportUrl: document.getElementById('financeReportUrl').value.trim()
+            }, '✅ Pengaturan Keuangan Online disimpan!');
+        }
+
+        function savePrayerConfig() {
+            sendCommand('update_prayer_config', {
+                latitude: parseFloat(document.getElementById('cfgLat').value),
+                longitude: parseFloat(document.getElementById('cfgLng').value),
+                calculationMethod: document.getElementById('cfgMethod').value,
+                madhab: document.getElementById('cfgMadhab').value,
+                ihtiyati: parseInt(document.getElementById('cfgIhtiyati').value, 10) || 0,
+                hijriAdjustment: parseInt(document.getElementById('cfgHijriAdj').value, 10) || 0
+            }, '✅ Konfigurasi Jadwal Sholat disimpan!');
+        }
+
+        function savePrayerDur(prayerId) {
+            const iqomahDuration = parseInt(document.getElementById(`${prayerId}-iqomah`).value, 10) || 10;
+            const sholatDuration = parseInt(document.getElementById(`${prayerId}-sholat`).value, 10) || 15;
+            sendCommand('update_prayer_iqomah', { prayer: prayerId, iqomahDuration, sholatDuration }, '✅ Durasi sholat diperbarui!');
+        }
+
+        function saveJumatPetugas() {
+            sendCommand('update_jumat_petugas', {
+                khotib: document.getElementById('jumatKhotib').value.trim(),
+                imam: document.getElementById('jumatImam').value.trim(),
+                muadzin: document.getElementById('jumatMuadzin').value.trim()
+            }, '✅ Petugas Jum\'at disimpan!');
+        }
+
+        function saveRamadhanNight() {
+            const night = parseInt(document.getElementById('ramadhanNight').value, 10);
+            if (!night || night < 1 || night > 30) { showToast('Malam harus 1–30', true); return; }
+            sendCommand('update_ramadhan_night', { currentNight: night }, `✅ Malam Ramadhan ke-${night} disimpan!`);
+        }
+
+        function addTextSlide() {
+            const title = document.getElementById('newSlideTitle').value.trim();
+            const content = document.getElementById('newSlideContent').value.trim();
+            const duration = parseInt(document.getElementById('newSlideDur').value, 10) || 12;
+            if (!content) { showToast('Isi slide teks wajib diisi!', true); return; }
+            sendCommand('add_text_slide', { title: title || 'Pengumuman Masjid', content, duration }, '✅ Slide teks ditambahkan!');
+            document.getElementById('newSlideTitle').value = '';
+            document.getElementById('newSlideContent').value = '';
+        }
+
+        function resetDefaultSlides() {
+            if (confirm('Reset daftar slide ke Slide Greeting & Jam Analog Default?')) {
+                sendCommand('reset_default_slides', {}, '✅ Slide direset ke default!');
+            }
+        }
+
+        function onVolumeSlide(val) {
             document.getElementById('volumeVal').innerText = val + '%';
-            sendCommand('update_volume', { volume: parseInt(val) / 100 });
+            pendingUpdates['masterVolume'] = Date.now();
+            clearTimeout(volDebounce);
+            volDebounce = setTimeout(() => {
+                sendCommand('update_volume', { volume: parseInt(val, 10) / 100 }, `🔊 Volume ${val}%`);
+            }, 180);
+        }
+
+        function renderDynamicLists(status) {
+            // Overlay Running Text list
+            const ovBox = document.getElementById('overlayListBox');
+            const ovList = status.overlayTextList || [];
+            ovBox.innerHTML = ovList.length === 0
+                ? '<div style="font-size:12px;color:var(--text-secondary);">Belum ada pesan running text.</div>'
+                : ovList.map((txt, idx) => `
+                    <div class="list-item">
+                        <div class="list-item-text"><div class="list-item-title">${escapeHtml(txt)}</div></div>
+                        <button class="mini-btn del" onclick="sendCommand('remove_overlay_text', { index: ${idx} }, 'Pesan dihapus')">Hapus</button>
+                    </div>
+                `).join('');
+
+            // Info Card list
+            const infoBox = document.getElementById('infoListBox');
+            const infos = status.mosqueInfoList || [];
+            infoBox.innerHTML = infos.length === 0
+                ? '<div style="font-size:12px;color:var(--text-secondary);">Belum ada kartu informasi.</div>'
+                : infos.map(item => `
+                    <div class="list-item">
+                        <div class="list-item-text">
+                            <div class="list-item-title">${escapeHtml(item.title)} — ${escapeHtml(item.content)}</div>
+                            ${item.subtitle ? `<div class="list-item-sub">${escapeHtml(item.subtitle)}</div>` : ''}
+                        </div>
+                        <button class="mini-btn ${item.enabled ? 'on' : ''}" onclick="sendCommand('toggle_info', { id: '${escapeHtml(item.id)}' })">${item.enabled ? 'AKTIF' : 'OFF'}</button>
+                        <button class="mini-btn del" onclick="sendCommand('remove_info', { id: '${escapeHtml(item.id)}' }, 'Info dihapus')">Hapus</button>
+                    </div>
+                `).join('');
+
+            // Slides list
+            const slideBox = document.getElementById('slidesListBox');
+            const slides = status.slides || [];
+            slideBox.innerHTML = slides.length === 0
+                ? '<div style="font-size:12px;color:var(--text-secondary);">Belum ada slide.</div>'
+                : slides.map(s => `
+                    <div class="list-item">
+                        <div class="list-item-text">
+                            <div class="list-item-title">[${escapeHtml(s.type).toUpperCase()}] ${escapeHtml(s.title || s.id)}</div>
+                            <div class="list-item-sub">Durasi: ${s.duration} dtk</div>
+                        </div>
+                        <button class="mini-btn ${s.enabled ? 'on' : ''}" onclick="sendCommand('toggle_slide', { id: '${escapeHtml(s.id)}' })">${s.enabled ? 'AKTIF' : 'OFF'}</button>
+                        <button class="mini-btn del" onclick="sendCommand('delete_slide', { id: '${escapeHtml(s.id)}' }, 'Slide dihapus')">Hapus</button>
+                    </div>
+                `).join('');
+
+            // Audio Inventory list
+            const audioBox = document.getElementById('audioInventoryBox');
+            const inv = status.audioSlots || {};
+            const rows = [];
+            ['tartil', 'tarhim', 'adzan', 'custom'].forEach(cat => {
+                (inv[cat] || []).forEach(slot => {
+                    rows.push(`
+                        <div class="list-item">
+                            <div class="list-item-text">
+                                <div class="list-item-title">${cat.toUpperCase()} • ${escapeHtml(slot)}</div>
+                            </div>
+                            <button class="mini-btn del" onclick="sendCommand('delete_audio', { category: '${cat}', slot: '${escapeHtml(slot)}' }, 'Audio dihapus')">Hapus</button>
+                        </div>
+                    `);
+                });
+            });
+            audioBox.innerHTML = rows.length === 0
+                ? '<div style="font-size:12px;color:var(--text-secondary);">Belum ada file audio terpasang di TV.</div>'
+                : rows.join('');
         }
 
         async function pollStatus() {
             if (!AUTH_TOKEN) return;
+            const statusEl = document.getElementById('connStatus');
             try {
                 const response = await fetch('/api/status', {
                     headers: { 'Authorization': `Bearer ${AUTH_TOKEN}` }
                 });
-                if (response.ok) {
-                    const status = await response.json();
+                if (response.status === 401) {
+                    logoutAuth();
+                    return;
+                }
+                if (!response.ok) throw new Error('HTTP ' + response.status);
 
-                    const btnCctv = document.getElementById('btn-cctv');
-                    const btnAudio = document.getElementById('btn-audio');
+                const status = await response.json();
+                statusEl.textContent = 'SINKRON AKTIF';
+                statusEl.classList.remove('offline');
 
-                    if (status.state === 'cctv') btnCctv.classList.add('active'); else btnCctv.classList.remove('active');
-                    if (status.customAudio) btnAudio.classList.add('active'); else btnAudio.classList.remove('active');
+                document.getElementById('statePill').textContent = (status.stateLabel || status.state || 'STANDBY').toUpperCase();
+                if (status.brand) {
+                    document.getElementById('headerMosqueName').textContent = status.brand.name || '';
+                    document.getElementById('currentLogoPath').textContent = status.brand.logo ? 'Logo aktif: ' + status.brand.logo : 'Logo: Ikon bawaan';
+                    setInputSafely('mosqueName', status.brand.name);
+                    setInputSafely('mosqueAddress', status.brand.address);
+                    setInputSafely('mosquePhone', status.brand.phone);
+                }
 
-                    const toggleIds = ['toggle-jumat', 'toggle-ramadhan', 'toggle-idul_fitri', 'toggle-idul_adha', 'toggle-slideshow'];
-                    const statusKeys = ['jumatEnabled', 'ramadhanEnabled', 'idulFitriEnabled', 'idulAdhaEnabled', 'slideshowEnabled'];
+                setInputSafely('selLayout', status.layout);
+                setInputSafely('selClock', status.clockStyle);
+                setInputSafely('selTheme', status.theme);
 
-                    toggleIds.forEach((id, idx) => {
-                        if (pendingUpdates[id] && (Date.now() - pendingUpdates[id] < 3000)) return;
-                        const btn = document.getElementById(id);
-                        if (btn) {
-                            if (status[statusKeys[idx]]) btn.classList.add('on');
-                            else btn.classList.remove('on');
-                        }
-                    });
+                if (status.volume !== undefined && (!pendingUpdates['masterVolume'] || Date.now() - pendingUpdates['masterVolume'] > 2500)) {
+                    document.getElementById('masterVolume').value = status.volume;
+                    document.getElementById('volumeVal').innerText = status.volume + '%';
+                }
 
-                    document.querySelectorAll('[id^="live-"]').forEach(b => {
-                        if (pendingUpdates[b.id] && (Date.now() - pendingUpdates[b.id] < 3000)) return;
-                        b.classList.remove('active');
-                        if (status.activeLiveVideoId && b.id === `live-${status.activeLiveVideoId}`) {
-                            b.classList.add('active');
-                        }
-                    });
+                if (status.prayerConfig) {
+                    setInputSafely('cfgLat', status.prayerConfig.latitude);
+                    setInputSafely('cfgLng', status.prayerConfig.longitude);
+                    setInputSafely('cfgMethod', status.prayerConfig.calculationMethod);
+                    setInputSafely('cfgMadhab', status.prayerConfig.madhab);
+                    setInputSafely('cfgIhtiyati', status.prayerConfig.ihtiyati);
+                    setInputSafely('cfgHijriAdj', status.prayerConfig.hijriAdjustment);
+                }
 
-                    if (status.prayerSettings) {
-                        const prayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-                        const settings = ['isTartil', 'isTarhim', 'isAdzan'];
+                if (status.jumat) {
+                    setInputSafely('jumatKhotib', status.jumat.khotib);
+                    setInputSafely('jumatImam', status.jumat.imam);
+                    setInputSafely('jumatMuadzin', status.jumat.muadzin);
+                }
 
-                        prayers.forEach(p => {
-                            if (!status.prayerSettings[p]) return;
-                            settings.forEach(s => {
-                                const id = `${p}-${s}`;
-                                if (pendingUpdates[id] && (Date.now() - pendingUpdates[id] < 3000)) return;
-                                const btn = document.getElementById(id);
-                                if (btn) {
-                                    if (status.prayerSettings[p][s]) btn.classList.add('on');
-                                    else btn.classList.remove('on');
-                                }
-                            });
+                if (status.ramadhan) {
+                    setInputSafely('ramadhanNight', status.ramadhan.currentNight);
+                }
+
+                if (status.masjidQr) {
+                    setInputSafely('qrLink', status.masjidQr.link);
+                    setInputSafely('qrLabel', status.masjidQr.label);
+                    setInputSafely('qrBank', status.masjidQr.bankName);
+                    setInputSafely('qrRek', status.masjidQr.nomorRekening);
+                    setInputSafely('qrAn', status.masjidQr.atasNama);
+                }
+
+                if (status.onlineFinance) {
+                    setInputSafely('financeUrl', status.onlineFinance.url);
+                    setInputSafely('financeReportUrl', status.onlineFinance.reportUrl);
+                }
+
+                if (status.infoSettings) {
+                    const bf = document.getElementById('btn-fasting');
+                    if (bf) bf.classList.toggle('on', !!status.infoSettings.enableSunnahFasting);
+                }
+
+                document.getElementById('btn-cctv').classList.toggle('active', status.state === 'cctv');
+                document.getElementById('btn-audio').classList.toggle('active', !!status.customAudio);
+
+                const toggleIds = ['toggle-jumat', 'toggle-ramadhan', 'toggle-idul_fitri', 'toggle-idul_adha', 'toggle-slideshow'];
+                const statusKeys = ['jumatEnabled', 'ramadhanEnabled', 'idulFitriEnabled', 'idulAdhaEnabled', 'slideshowEnabled'];
+                toggleIds.forEach((id, idx) => {
+                    if (pendingUpdates[id] && (Date.now() - pendingUpdates[id] < 2500)) return;
+                    const btn = document.getElementById(id);
+                    if (btn) btn.classList.toggle('on', !!status[statusKeys[idx]]);
+                });
+
+                document.querySelectorAll('[id^="live-"]').forEach(b => {
+                    b.classList.toggle('active', status.state === 'live' && b.id === `live-${status.activeLiveVideoId}`);
+                });
+
+                if (status.prayerSettings) {
+                    PRAYERS_META.forEach(p => {
+                        const cfg = status.prayerSettings[p.id];
+                        if (!cfg) return;
+                        ['isTartil', 'isTarhim', 'isAdzan'].forEach(key => {
+                            const id = `${p.id}-${key}`;
+                            if (pendingUpdates[id] && (Date.now() - pendingUpdates[id] < 2500)) return;
+                            const btn = document.getElementById(id);
+                            if (btn) btn.classList.toggle('on', !!cfg[key]);
                         });
-                    }
+                        setInputSafely(`${p.id}-iqomah`, cfg.iqomahDuration);
+                        setInputSafely(`${p.id}-sholat`, cfg.sholatDuration);
+                    });
+                }
 
-                    if (status.system) {
-                        updateSystemUI(status.system);
+                renderDynamicLists(status);
+
+                if (status.system) {
+                    document.getElementById('cpu-bar').style.width = status.system.cpu + '%';
+                    document.getElementById('cpu-val').innerText = status.system.cpu + '%';
+                    document.getElementById('ram-bar').style.width = status.system.ram + '%';
+                    document.getElementById('ram-val').innerText = status.system.ram + '%';
+                    document.getElementById('uptime-val').innerText = 'JWS TV Uptime: ' + status.system.uptime;
+
+                    if (status.system.storage) {
+                        const st = status.system.storage;
+                        const bar = document.getElementById('storage-bar');
+                        if (bar) {
+                            bar.style.width = (st.usedPercent || 0) + '%';
+                            bar.style.background = st.isLowStorage ? '#ef4444' : '';
+                        }
+                        const freeEl = document.getElementById('storage-free-val');
+                        if (freeEl) freeEl.innerText = st.usableFormatted || '-';
+                        const pctEl = document.getElementById('storage-pct-val');
+                        if (pctEl) pctEl.innerText = (st.usedPercent || 0) + '%';
+                        const metaEl = document.getElementById('storage-meta-val');
+                        if (metaEl) {
+                            metaEl.innerText = `Aset JWS: ${st.assetsFormatted || '0 B'} (${st.totalFiles || 0} file)` +
+                                (st.orphanCount > 0 ? ` • Sampah: ${st.orphanCount} file (${st.orphanFormatted})` : ' • Bersih');
+                        }
+                        const badgeEl = document.getElementById('mediaStorageBadge');
+                        if (badgeEl) {
+                            badgeEl.innerText = st.isLowStorage ? '⚠ MEMORI RENDAH' : `SISA ${st.usableFormatted || '-'}`;
+                            badgeEl.style.color = st.isLowStorage ? '#f87171' : 'var(--accent)';
+                        }
+                        const sumEl = document.getElementById('mediaStorageSummary');
+                        if (sumEl) {
+                            sumEl.innerText = `Total Aset JWS: ${st.assetsFormatted || '0 B'} (${st.totalFiles || 0} file) • ` +
+                                (st.orphanCount > 0
+                                    ? `File tidak terpakai: ${st.orphanCount} file (${st.orphanFormatted})`
+                                    : 'Tidak ada file tidak terpakai.');
+                        }
+                        const cleanBtn = document.getElementById('btnCleanOrphan');
+                        if (cleanBtn) {
+                            cleanBtn.innerText = st.orphanCount > 0
+                                ? `🧹 BERSIHKAN ${st.orphanCount} FILE TIDAK TERPAKAI (${st.orphanFormatted})`
+                                : '🧹 BERSIHKAN FILE TIDAK TERPAKAI';
+                        }
                     }
                 }
+                initializedFields = true;
             } catch (e) {
-                console.error('Status poll failed', e);
+                statusEl.textContent = 'TERPUTUS DARI TV';
+                statusEl.classList.add('offline');
             }
         }
 
-        function updateSystemUI(sys) {
-            const cpuBar = document.getElementById('cpu-bar');
-            const ramBar = document.getElementById('ram-bar');
-            const cpuVal = document.getElementById('cpu-val');
-            const ramVal = document.getElementById('ram-val');
-            const uptimeVal = document.getElementById('uptime-val');
-
-            if (cpuBar) {
-                cpuBar.style.width = sys.cpu + '%';
-                cpuBar.style.background = sys.cpu > 80 ? 'var(--danger)' : (sys.cpu > 50 ? 'var(--warning)' : 'var(--accent)');
-                cpuVal.innerText = sys.cpu + '%';
-            }
-
-            if (ramBar) {
-                ramBar.style.width = sys.ram + '%';
-                ramBar.style.background = sys.ram > 85 ? 'var(--danger)' : (sys.ram > 70 ? 'var(--warning)' : 'var(--success)');
-                ramVal.innerText = sys.ram + '%';
-            }
-
-            if (uptimeVal) {
-                uptimeVal.innerText = 'JWS TV Uptime: ' + sys.uptime;
-            }
-        }
-
-        setInterval(pollStatus, 1000);
+        setInterval(pollStatus, 2000);
         pollStatus();
 
+        let toastTimer = null;
         function showToast(message = 'Perintah Terkirim!', isError = false) {
             const t = document.getElementById('toast');
             t.textContent = message;
-            if (isError) t.classList.add('error'); else t.classList.remove('error');
+            t.classList.toggle('error', !!isError);
             t.classList.add('show');
-            setTimeout(() => t.classList.remove('show'), 2000);
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
         }
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(reg => console.log('SW Registered', reg))
-                    .catch(err => console.log('SW Failed', err));
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
             });
         }
     </script>

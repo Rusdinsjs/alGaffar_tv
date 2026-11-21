@@ -15,6 +15,8 @@ import id.algaffar.jwstv.data.excel.TakjilExcelManager
 import id.algaffar.jwstv.data.excel.TakjilImportPreviewRow
 import id.algaffar.jwstv.data.hardware.SwitchController
 import id.algaffar.jwstv.data.logging.AppLogger
+import id.algaffar.jwstv.data.media.MediaStorageManager
+import id.algaffar.jwstv.data.media.StorageHealthSnapshot
 import id.algaffar.jwstv.data.repository.SettingsRepository
 import id.algaffar.jwstv.data.server.KtorRemoteServer
 import id.algaffar.jwstv.data.server.RemoteCommandPayload
@@ -27,18 +29,24 @@ import id.algaffar.jwstv.domain.engine.IslamicEventItem
 import id.algaffar.jwstv.domain.engine.JwsStateMachine
 import id.algaffar.jwstv.domain.engine.PrayerTimeCalculator
 import id.algaffar.jwstv.domain.engine.StateMachineTickResult
+import android.view.KeyEvent
 import id.algaffar.jwstv.domain.model.AppState
 import id.algaffar.jwstv.domain.model.AppStateSettings
 import id.algaffar.jwstv.domain.model.CctvCameraConfig
 import id.algaffar.jwstv.domain.model.InfoCardItem
+import id.algaffar.jwstv.domain.model.JumatPetugasRecord
 import id.algaffar.jwstv.domain.model.LayoutPosition
 import id.algaffar.jwstv.domain.model.PrayerId
 import id.algaffar.jwstv.domain.model.PrayerStageConfig
+import id.algaffar.jwstv.domain.model.SlideItem
 import id.algaffar.jwstv.ui.theme.ThemeEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -75,6 +83,11 @@ class MainViewModel(
 
     private var cachedAudioDurations = AudioFileDurations()
 
+    private val _storageHealthFlow = MutableStateFlow(
+        MediaStorageManager.inspectStorage(assetsRootDir, settingsRepository.currentSettings)
+    )
+    val storageHealthFlow: StateFlow<StorageHealthSnapshot> = _storageHealthFlow.asStateFlow()
+
     val remoteServer: KtorRemoteServer = KtorRemoteServer(
         context = appContext,
         port = KtorRemoteServer.DEFAULT_PORT,
@@ -88,8 +101,16 @@ class MainViewModel(
                 isCustomAudioPlaying = currentSnap.settings.customAudio.isPlayingLive
             )
         },
+        audioInventoryProvider = { buildAudioInventoryMap() },
+        storageHealthProvider = { _storageHealthFlow.value },
         onCommandReceived = { payload ->
             handleRemoteCommand(payload)
+        },
+        onUploadReceived = { category, slot, fileName, bytes ->
+            handleRemoteUploadStream(category, slot, fileName, bytes.inputStream())
+        },
+        onUploadStreamReceived = { category, slot, fileName, inputStream ->
+            handleRemoteUploadStream(category, slot, fileName, inputStream)
         }
     )
 
@@ -110,6 +131,9 @@ class MainViewModel(
     private val _openSettingsRequestCount = MutableStateFlow(0)
     val openSettingsRequestCount: StateFlow<Int> = _openSettingsRequestCount.asStateFlow()
 
+    private val _remoteNavKeyEvents = MutableSharedFlow<Int>(extraBufferCapacity = 24)
+    val remoteNavKeyEvents: SharedFlow<Int> = _remoteNavKeyEvents.asSharedFlow()
+
     private val onlineFinanceManager = OnlineFinanceManager()
 
     private val _onlineFinanceTestResult = MutableStateFlow<FinancialSummaryData?>(null)
@@ -121,11 +145,215 @@ class MainViewModel(
     private val _previewingAudioKey = MutableStateFlow<String?>(null)
     val previewingAudioKey: StateFlow<String?> = _previewingAudioKey.asStateFlow()
 
+    fun postStatusMessage(msg: String) {
+        _statusBannerMessage.value = msg
+    }
+
+    fun refreshStorageHealth() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _storageHealthFlow.value = MediaStorageManager.inspectStorage(
+                assetsRootDir = assetsRootDir,
+                settings = settingsRepository.currentSettings
+            )
+        }
+    }
+
+    private fun buildAudioInventoryMap(): Map<String, List<String>> {
+        val slots = listOf("fajr", "dhuhr", "asr", "maghrib", "isha", "default")
+        val categories = listOf("tartil", "tarhim", "adzan")
+        val map = mutableMapOf<String, List<String>>()
+        for (cat in categories) {
+            map[cat] = slots.filter { slot -> audioEngine.findSlotAudioFile(cat, slot) != null }
+        }
+        map["custom"] = audioEngine.listCustomAudioFiles().map { it.name }
+        return map
+    }
+
+    private fun handleRemoteUploadStream(
+        category: String,
+        slot: String,
+        rawFileName: String,
+        inputStream: InputStream
+    ): Result<String> {
+        return runCatching {
+            val cleanName = MediaStorageManager.sanitizeFileName(rawFileName)
+
+            val resultMsg = when (category) {
+                "logo" -> {
+                    val saved = MediaStorageManager.optimizeAndSaveImage(
+                        assetsRootDir = assetsRootDir,
+                        subFolder = "logo",
+                        rawFileName = cleanName,
+                        inputStream = inputStream
+                    ).getOrThrow()
+                    updateSettings { prev -> prev.copy(brand = prev.brand.copy(logo = saved.relativePath)) }
+                    AppLogger.info(
+                        "REMOTE",
+                        "Logo diunggah (${MediaStorageManager.formatByteSize(saved.savedBytes)}): ${saved.relativePath}"
+                    )
+                    "Logo masjid berhasil diperbarui (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
+                }
+
+                "slide_image" -> {
+                    val saved = MediaStorageManager.optimizeAndSaveImage(
+                        assetsRootDir = assetsRootDir,
+                        subFolder = "slides",
+                        rawFileName = cleanName,
+                        inputStream = inputStream
+                    ).getOrThrow()
+                    val title = cleanName.substringBeforeLast('.').replace('_', ' ').ifBlank { "Poster Masjid" }
+                    val newSlide = SlideItem(
+                        id = "slide_${System.currentTimeMillis()}",
+                        title = title,
+                        type = "image",
+                        imageUrl = saved.relativePath,
+                        duration = 12,
+                        enabled = true,
+                        showInMain = true,
+                        showInSlideshow = true
+                    )
+                    updateSettings { prev -> prev.copy(slides = prev.slides + newSlide) }
+                    val savedInfo = if (saved.wasOptimized) {
+                        "dioptimasi ${MediaStorageManager.formatByteSize(saved.originalBytes)} → ${MediaStorageManager.formatByteSize(saved.savedBytes)}"
+                    } else {
+                        MediaStorageManager.formatByteSize(saved.savedBytes)
+                    }
+                    AppLogger.info("REMOTE", "Slide gambar diunggah ($savedInfo): ${saved.relativePath}")
+                    "Poster '$title' berhasil ditambahkan ($savedInfo)!"
+                }
+
+                "slide_video", "video" -> {
+                    val ext = cleanName.substringAfterLast('.', "mp4").lowercase()
+                        .takeIf { it in MediaStorageManager.VIDEO_EXTENSIONS } ?: "mp4"
+                    val base = cleanName.substringBeforeLast('.').ifBlank { "video" }
+                    val fileName = "${System.currentTimeMillis()}_${base}.$ext"
+                    val saved = MediaStorageManager.saveStreamWithGuard(
+                        assetsRootDir = assetsRootDir,
+                        targetRelativePath = "videos/$fileName",
+                        inputStream = inputStream,
+                        maxBytes = MediaStorageManager.MAX_VIDEO_UPLOAD_BYTES
+                    ).getOrThrow()
+                    val title = base.replace('_', ' ').ifBlank { "Video Masjid" }
+                    val newSlide = SlideItem(
+                        id = "slide_vid_${System.currentTimeMillis()}",
+                        title = title,
+                        type = "video",
+                        videoUrl = saved.relativePath,
+                        duration = 30,
+                        enabled = true,
+                        showInMain = true,
+                        showInSlideshow = true
+                    )
+                    updateSettings { prev -> prev.copy(slides = prev.slides + newSlide) }
+                    AppLogger.info(
+                        "REMOTE",
+                        "Slide video diunggah (${MediaStorageManager.formatByteSize(saved.savedBytes)}): ${saved.relativePath}"
+                    )
+                    "Video slide '$title' berhasil ditambahkan (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
+                }
+
+                "media_bg" -> {
+                    val saved = MediaStorageManager.optimizeAndSaveImage(
+                        assetsRootDir = assetsRootDir,
+                        subFolder = "media",
+                        rawFileName = cleanName,
+                        inputStream = inputStream
+                    ).getOrThrow()
+                    val label = when (slot) {
+                        "doa_adzan" -> {
+                            updateSettings { prev -> prev.copy(media = prev.media.copy(doaAdzanImage = saved.relativePath)) }
+                            "Do'a Setelah Adzan"
+                        }
+                        "khutbah_jumat" -> {
+                            updateSettings { prev -> prev.copy(media = prev.media.copy(khutbahJumatImage = saved.relativePath)) }
+                            "Latar Khutbah Jum'at"
+                        }
+                        "khutbah_idul_fitri" -> {
+                            updateSettings { prev -> prev.copy(media = prev.media.copy(khutbahIdulFitriImage = saved.relativePath)) }
+                            "Latar Khutbah Idul Fitri"
+                        }
+                        "khutbah_idul_adha" -> {
+                            updateSettings { prev -> prev.copy(media = prev.media.copy(khutbahIdulAdhaImage = saved.relativePath)) }
+                            "Latar Khutbah Idul Adha"
+                        }
+                        "ceramah_tarawih" -> {
+                            updateSettings { prev -> prev.copy(media = prev.media.copy(ceramahTarawihImage = saved.relativePath)) }
+                            "Latar Ceramah Tarawih"
+                        }
+                        "sholat_5_waktu" -> {
+                            updateSettings { prev -> prev.copy(media = prev.media.copy(sholat5WaktuImage = saved.relativePath)) }
+                            "Latar Sholat 5 Waktu"
+                        }
+                        "sholat_jumat" -> {
+                            updateSettings { prev -> prev.copy(media = prev.media.copy(sholatJumatImage = saved.relativePath)) }
+                            "Latar Sholat Jum'at"
+                        }
+                        "sholat_idul_fitri" -> {
+                            updateSettings { prev -> prev.copy(media = prev.media.copy(sholatIdulFitriImage = saved.relativePath)) }
+                            "Latar Sholat Idul Fitri"
+                        }
+                        "sholat_idul_adha" -> {
+                            updateSettings { prev -> prev.copy(media = prev.media.copy(sholatIdulAdhaImage = saved.relativePath)) }
+                            "Latar Sholat Idul Adha"
+                        }
+                        "sholat_tarawih_witir" -> {
+                            updateSettings { prev -> prev.copy(media = prev.media.copy(sholatTarawihWitirImage = saved.relativePath)) }
+                            "Latar Sholat Tarawih & Witir"
+                        }
+                        else -> throw IllegalArgumentException("Slot media latar tidak dikenal: $slot")
+                    }
+                    AppLogger.info("REMOTE", "Gambar latar $label diunggah: ${saved.relativePath}")
+                    "Gambar $label berhasil diperbarui (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
+                }
+
+                "tartil", "tarhim", "adzan" -> {
+                    val safeSlot = slot.takeIf { it in setOf("fajr", "dhuhr", "asr", "maghrib", "isha", "default") }
+                        ?: "default"
+                    val saved = MediaStorageManager.saveStreamWithGuard(
+                        assetsRootDir = assetsRootDir,
+                        targetRelativePath = "audio/$category/$safeSlot.mp3",
+                        inputStream = inputStream,
+                        maxBytes = MediaStorageManager.MAX_AUDIO_UPLOAD_BYTES
+                    ).getOrThrow()
+                    refreshAudioDurationsAsync()
+                    _audioInventoryTick.value += 1
+                    AppLogger.info(
+                        "REMOTE",
+                        "Audio $category/$safeSlot diunggah (${MediaStorageManager.formatByteSize(saved.savedBytes)})"
+                    )
+                    "Audio $category ($safeSlot) berhasil disimpan (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
+                }
+
+                "custom" -> {
+                    val finalName = if (cleanName.contains('.')) cleanName else "$cleanName.mp3"
+                    val saved = MediaStorageManager.saveStreamWithGuard(
+                        assetsRootDir = assetsRootDir,
+                        targetRelativePath = "audio/custom/$finalName",
+                        inputStream = inputStream,
+                        maxBytes = MediaStorageManager.MAX_AUDIO_UPLOAD_BYTES
+                    ).getOrThrow()
+                    _audioInventoryTick.value += 1
+                    AppLogger.info(
+                        "REMOTE",
+                        "Audio kustom diunggah (${MediaStorageManager.formatByteSize(saved.savedBytes)}): $finalName"
+                    )
+                    "Audio kustom '$finalName' berhasil ditambahkan (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
+                }
+
+                else -> throw IllegalArgumentException("Kategori upload tidak dikenal: $category")
+            }
+
+            refreshStorageHealth()
+            resultMsg
+        }
+    }
+
     private var lastLoggedState: AppState? = null
 
     init {
         AppLogger.info("SYSTEM", "JWS TV Masjid Al-Gaffar dimulai (31-State Engine aktif)")
         refreshAudioDurationsAsync()
+        refreshStorageHealth()
 
         // Start Embedded Ktor Remote Server on Port 1421
         viewModelScope.launch(Dispatchers.IO) {
@@ -172,7 +400,11 @@ class MainViewModel(
         val settings = settingsRepository.currentSettings
         val zoneId = prayerTimeCalculator.resolveZoneId(settings.prayerSettings.timezone)
         val zonedNow = now.withZoneSameInstant(zoneId)
-        val schedule = prayerTimeCalculator.calculateSchedule(zonedNow, settings.prayerSettings)
+        val schedule = prayerTimeCalculator.calculateSchedule(
+            now = zonedNow,
+            settings = settings.prayerSettings,
+            isJumatEnabled = settings.jumat.enabled
+        )
         val maghribTime = schedule.timeFor(PrayerId.MAGHRIB)
         val hijriAdjustment = settings.prayerSettings.hijriAdjustment
 
@@ -190,7 +422,8 @@ class MainViewModel(
             now = zonedNow,
             maghribTime = maghribTime,
             hijriAdjustment = hijriAdjustment,
-            maxDays = settings.infoSettings.lookaheadDays.coerceIn(7, 365)
+            maxDays = settings.infoSettings.lookaheadDays.coerceIn(7, 365),
+            customEvents = settings.infoSettings.islamicEvents
         )
         val tickResult = stateMachine.evaluateTick(
             now = zonedNow,
@@ -280,8 +513,17 @@ class MainViewModel(
     internal fun handleRemoteCommand(payload: RemoteCommandPayload) {
         viewModelScope.launch {
             when (payload.action.lowercase()) {
+                // Virtual Remote D-Pad Navigation dispatched directly to MainActivity
+                "nav_up" -> _remoteNavKeyEvents.tryEmit(KeyEvent.KEYCODE_DPAD_UP)
+                "nav_down" -> _remoteNavKeyEvents.tryEmit(KeyEvent.KEYCODE_DPAD_DOWN)
+                "nav_left" -> _remoteNavKeyEvents.tryEmit(KeyEvent.KEYCODE_DPAD_LEFT)
+                "nav_right" -> _remoteNavKeyEvents.tryEmit(KeyEvent.KEYCODE_DPAD_RIGHT)
+                "nav_enter" -> _remoteNavKeyEvents.tryEmit(KeyEvent.KEYCODE_DPAD_CENTER)
+                "nav_back" -> _remoteNavKeyEvents.tryEmit(KeyEvent.KEYCODE_BACK)
+
                 "screensaver" -> simulateState(AppState.SCREENSAVER, 3600L)
-                "stop", "refresh", "play_slideshow" -> clearSimulation()
+                "stop", "refresh" -> clearSimulation()
+                "play_slideshow" -> simulateState(AppState.STANDBY_SLIDESHOW, 600L)
                 "next_theme" -> cycleTheme()
                 "next_layout" -> cycleLayout()
                 "next_clock_style" -> cycleClockStyle()
@@ -295,6 +537,52 @@ class MainViewModel(
                 "play_infaq" -> simulateState(AppState.MASJID_QR, 300L)
                 "play_online_finance" -> simulateState(AppState.ONLINE_FINANCE, 300L)
                 "test_adzan" -> simulateState(AppState.ADZAN, 180L)
+                "test_beep" -> testPlayBeep1000Hz()
+
+                "set_theme" -> {
+                    val themeId = payload.stringArg("themeId").orEmpty()
+                    if (themeId.isNotBlank()) {
+                        updateSettings { prev ->
+                            prev.copy(
+                                themeSettings = prev.themeSettings.copy(
+                                    currentThemeId = themeId,
+                                    autoThemeEnabled = false
+                                )
+                            )
+                        }
+                    }
+                }
+
+                "set_layout" -> {
+                    val posStr = payload.stringArg("position").orEmpty()
+                    val pos = LayoutPosition.entries.firstOrNull { it.serialName == posStr }
+                    if (pos != null) {
+                        updateSettings { prev ->
+                            prev.copy(
+                                layoutSettings = prev.layoutSettings.copy(
+                                    position = pos,
+                                    autoRotateLayout = false
+                                )
+                            )
+                        }
+                    }
+                }
+
+                "set_clock_style" -> {
+                    val style = payload.stringArg("style").orEmpty().lowercase()
+                    if (style.isNotBlank()) {
+                        updateSettings { prev ->
+                            prev.copy(brand = prev.brand.copy(clockStyle = style))
+                        }
+                    }
+                }
+
+                "update_volume" -> {
+                    val vol = payload.doubleArg("volume")?.toFloat()?.coerceIn(0f, 1f)
+                    if (vol != null) {
+                        updateSettings { prev -> prev.copy(globalVolume = vol) }
+                    }
+                }
 
                 "play_custom_audio" -> {
                     updateSettings { prev ->
@@ -349,8 +637,20 @@ class MainViewModel(
                     val prayer = payload.stringArg("prayer").orEmpty().lowercase()
                     val settingKey = payload.stringArg("setting").orEmpty()
                     fun toggleStage(cfg: PrayerStageConfig): PrayerStageConfig = when (settingKey) {
-                        "isTartil" -> cfg.copy(tartilDuration = if (cfg.tartilDuration > 0) 0 else 10)
-                        "isTarhim" -> cfg.copy(tarhimDuration = if (cfg.tarhimDuration > 0) 0 else 5)
+                        "isTartil" -> {
+                            val nextEnabled = !(cfg.isTartil && cfg.tartilDuration > 0)
+                            cfg.copy(
+                                isTartil = nextEnabled,
+                                tartilDuration = if (nextEnabled) cfg.tartilDuration.coerceAtLeast(10) else cfg.tartilDuration
+                            )
+                        }
+                        "isTarhim" -> {
+                            val nextEnabled = !(cfg.isTarhim && cfg.tarhimDuration > 0)
+                            cfg.copy(
+                                isTarhim = nextEnabled,
+                                tarhimDuration = if (nextEnabled) cfg.tarhimDuration.coerceAtLeast(5) else cfg.tarhimDuration
+                            )
+                        }
                         "isAdzan" -> cfg.copy(isAdzan = !cfg.isAdzan)
                         else -> cfg
                     }
@@ -368,14 +668,62 @@ class MainViewModel(
                     }
                 }
 
+                "update_prayer_iqomah" -> {
+                    val prayer = payload.stringArg("prayer").orEmpty().lowercase()
+                    val iqomah = payload.intArg("iqomahDuration")?.coerceIn(1, 60)
+                    val sholat = payload.intArg("sholatDuration")?.coerceIn(5, 60)
+                    fun applyDurations(cfg: PrayerStageConfig): PrayerStageConfig = cfg.copy(
+                        iqomahDuration = iqomah ?: cfg.iqomahDuration,
+                        sholatDuration = sholat ?: cfg.sholatDuration
+                    )
+                    updateSettings { prev ->
+                        val p = prev.prayers
+                        val updatedPrayers = when (prayer) {
+                            "fajr" -> p.copy(fajr = applyDurations(p.fajr))
+                            "dhuhr" -> p.copy(dhuhr = applyDurations(p.dhuhr))
+                            "asr" -> p.copy(asr = applyDurations(p.asr))
+                            "maghrib" -> p.copy(maghrib = applyDurations(p.maghrib))
+                            "isha" -> p.copy(isha = applyDurations(p.isha))
+                            else -> p
+                        }
+                        prev.copy(prayers = updatedPrayers)
+                    }
+                }
+
+                "update_prayer_config" -> {
+                    val lat = payload.doubleArg("latitude")?.coerceIn(-90.0, 90.0)
+                    val lng = payload.doubleArg("longitude")?.coerceIn(-180.0, 180.0)
+                    val ihtiyati = payload.intArg("ihtiyati")?.coerceIn(0, 10)
+                    val hijriAdj = payload.intArg("hijriAdjustment")?.coerceIn(-3, 3)
+                    val method = payload.stringArg("calculationMethod")?.takeIf { it.isNotBlank() }
+                    val madhab = payload.stringArg("madhab")?.takeIf { it.isNotBlank() }
+                    val tz = payload.stringArg("timezone")?.takeIf { it.isNotBlank() }
+                    updateSettings { prev ->
+                        val ps = prev.prayerSettings
+                        prev.copy(
+                            prayerSettings = ps.copy(
+                                latitude = lat ?: ps.latitude,
+                                longitude = lng ?: ps.longitude,
+                                ihtiyati = ihtiyati ?: ps.ihtiyati,
+                                hijriAdjustment = hijriAdj ?: ps.hijriAdjustment,
+                                calculationMethod = method ?: ps.calculationMethod,
+                                madhab = madhab ?: ps.madhab,
+                                timezone = tz ?: ps.timezone
+                            )
+                        )
+                    }
+                }
+
                 "update_identity" -> {
                     val newName = payload.stringArg("name")
                     val newAddr = payload.stringArg("address")
+                    val newPhone = payload.stringArg("phone")
                     updateSettings { prev ->
                         prev.copy(
                             brand = prev.brand.copy(
                                 name = newName?.takeIf { it.isNotBlank() } ?: prev.brand.name,
-                                address = newAddr?.takeIf { it.isNotBlank() } ?: prev.brand.address
+                                address = newAddr?.takeIf { it.isNotBlank() } ?: prev.brand.address,
+                                phone = newPhone ?: prev.brand.phone
                             )
                         )
                     }
@@ -390,22 +738,31 @@ class MainViewModel(
                     }
                 }
 
+                "remove_overlay_text" -> {
+                    val idx = payload.intArg("index")
+                    if (idx != null) {
+                        updateSettings { prev ->
+                            prev.copy(overlayTextList = prev.overlayTextList.filterIndexed { i, _ -> i != idx })
+                        }
+                    }
+                }
+
                 "clear_overlay_text" -> {
                     updateSettings { prev -> prev.copy(overlayTextList = emptyList()) }
                 }
 
                 "add_info" -> {
-                    val title = payload.stringArg("title").orEmpty().ifBlank { "Info Masjid" }
+                    val title = payload.stringArg("title").orEmpty().ifBlank { "INFO MASJID" }
                     val subtitle = payload.stringArg("subtitle").orEmpty()
                     val content = payload.stringArg("content").orEmpty()
                     if (content.isNotBlank()) {
-                        val combinedContent = if (subtitle.isNotBlank()) "$subtitle — $content" else content
                         updateSettings { prev ->
                             prev.copy(
                                 mosqueInfoList = prev.mosqueInfoList + InfoCardItem(
                                     id = "remote-${UUID.randomUUID()}",
                                     title = title,
-                                    content = combinedContent,
+                                    content = content,
+                                    subtitle = subtitle,
                                     enabled = true
                                 )
                             )
@@ -413,8 +770,176 @@ class MainViewModel(
                     }
                 }
 
+                "toggle_info" -> {
+                    val id = payload.stringArg("id").orEmpty()
+                    if (id.isNotBlank()) {
+                        updateSettings { prev ->
+                            prev.copy(
+                                mosqueInfoList = prev.mosqueInfoList.map {
+                                    if (it.id == id) it.copy(enabled = !it.enabled) else it
+                                }
+                            )
+                        }
+                    }
+                }
+
+                "remove_info" -> {
+                    val id = payload.stringArg("id").orEmpty()
+                    if (id.isNotBlank()) {
+                        updateSettings { prev ->
+                            prev.copy(mosqueInfoList = prev.mosqueInfoList.filterNot { it.id == id })
+                        }
+                    }
+                }
+
                 "clear_info" -> {
                     updateSettings { prev -> prev.copy(mosqueInfoList = emptyList()) }
+                }
+
+                "toggle_sunnah_fasting" -> {
+                    updateSettings { prev ->
+                        prev.copy(
+                            infoSettings = prev.infoSettings.copy(
+                                enableSunnahFasting = !prev.infoSettings.enableSunnahFasting
+                            )
+                        )
+                    }
+                }
+
+                "update_jumat_petugas" -> {
+                    val khotib = payload.stringArg("khotib").orEmpty()
+                    val imam = payload.stringArg("imam").orEmpty()
+                    val muadzin = payload.stringArg("muadzin").orEmpty()
+                    updateSettings { prev ->
+                        val dateKey = prev.jumat.petugas.selectedDate.ifBlank {
+                            JwsStateMachine.snapToNearestFriday(_snapshotFlow.value.schedule.date).toString()
+                        }
+                        val existing = prev.jumat.petugas.records[dateKey] ?: JumatPetugasRecord()
+                        val updatedRec = existing.copy(
+                            khotib = khotib.ifBlank { existing.khotib },
+                            imam = imam.ifBlank { existing.imam },
+                            muadzin = muadzin.ifBlank { existing.muadzin }
+                        )
+                        val newMap = prev.jumat.petugas.records.toMutableMap().apply { put(dateKey, updatedRec) }
+                        prev.copy(
+                            jumat = prev.jumat.copy(
+                                petugas = prev.jumat.petugas.copy(selectedDate = dateKey, records = newMap)
+                            )
+                        )
+                    }
+                }
+
+                "update_ramadhan_night" -> {
+                    val night = payload.intArg("currentNight")?.coerceIn(1, 30)
+                    if (night != null) {
+                        updateSettings { prev ->
+                            prev.copy(ramadhan = prev.ramadhan.copy(currentNight = night))
+                        }
+                    }
+                }
+
+                "update_masjid_qr" -> {
+                    val enabled = payload.booleanArg("enabled")
+                    val showFloating = payload.booleanArg("showFloatingOnMain")
+                    val link = payload.rawStringArg("link")
+                    val label = payload.stringArg("label")
+                    val bankName = payload.stringArg("bankName")
+                    val nomorRekening = payload.stringArg("nomorRekening")
+                    val atasNama = payload.stringArg("atasNama")
+                    updateSettings { prev ->
+                        val q = prev.masjidQr
+                        prev.copy(
+                            masjidQr = q.copy(
+                                enabled = enabled ?: q.enabled,
+                                showFloatingOnMain = showFloating ?: q.showFloatingOnMain,
+                                link = link ?: q.link,
+                                label = label ?: q.label,
+                                bankName = bankName ?: q.bankName,
+                                nomorRekening = nomorRekening ?: q.nomorRekening,
+                                atasNama = atasNama ?: q.atasNama
+                            )
+                        )
+                    }
+                }
+
+                "update_online_finance" -> {
+                    val enabled = payload.booleanArg("enabled")
+                    val url = payload.rawStringArg("url")
+                    val reportUrl = payload.rawStringArg("reportUrl")
+                    updateSettings { prev ->
+                        val f = prev.onlineFinance
+                        prev.copy(
+                            onlineFinance = f.copy(
+                                enabled = enabled ?: f.enabled,
+                                sheetUrl = url ?: f.sheetUrl,
+                                reportUrl = reportUrl ?: f.reportUrl
+                            )
+                        )
+                    }
+                }
+
+                "toggle_slide" -> {
+                    val id = payload.stringArg("id").orEmpty()
+                    if (id.isNotBlank()) {
+                        updateSettings { prev ->
+                            prev.copy(
+                                slides = prev.slides.map { if (it.id == id) it.copy(enabled = !it.enabled) else it }
+                            )
+                        }
+                    }
+                }
+
+                "delete_slide" -> {
+                    val id = payload.stringArg("id").orEmpty()
+                    if (id.isNotBlank()) {
+                        updateSettings { prev ->
+                            prev.copy(slides = prev.slides.filterNot { it.id == id })
+                        }
+                        refreshStorageHealth()
+                    }
+                }
+
+                "reset_default_slides" -> {
+                    updateSettings { prev ->
+                        prev.copy(slides = SlideItem.defaultSystemSlides())
+                    }
+                    refreshStorageHealth()
+                }
+
+                "add_text_slide" -> {
+                    val title = payload.stringArg("title").orEmpty().ifBlank { "Pengumuman Masjid" }
+                    val content = payload.stringArg("content").orEmpty()
+                    val duration = payload.intArg("duration")?.coerceIn(4, 120) ?: 12
+                    if (content.isNotBlank()) {
+                        updateSettings { prev ->
+                            prev.copy(
+                                slides = prev.slides + SlideItem(
+                                    id = "slide_${System.currentTimeMillis()}",
+                                    title = title,
+                                    content = content,
+                                    type = "text",
+                                    duration = duration,
+                                    enabled = true,
+                                    showInMain = true,
+                                    showInSlideshow = true
+                                )
+                            )
+                        }
+                    }
+                }
+
+                "delete_audio" -> {
+                    val cat = payload.stringArg("category").orEmpty().lowercase()
+                    val slot = payload.stringArg("slot").orEmpty()
+                    if (cat == "custom" && slot.isNotBlank()) {
+                        deleteCustomAudioFile(slot)
+                    } else if (cat in setOf("tartil", "tarhim", "adzan") && slot.isNotBlank()) {
+                        deletePrayerAudioSlot(cat, slot.lowercase())
+                    }
+                }
+
+                "cleanup_orphan_media" -> {
+                    cleanOrphanMedia()
                 }
             }
         }
@@ -563,17 +1088,20 @@ class MainViewModel(
 
     fun importPrayerAudioSlot(category: String, slotName: String, inputStream: InputStream) {
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                val targetDir = File(assetsRootDir, "audio/$category").apply { mkdirs() }
-                val targetFile = File(targetDir, "$slotName.mp3")
-                inputStream.use { input ->
-                    targetFile.outputStream().use { out -> input.copyTo(out) }
-                }
-            }.onSuccess {
+            val res = inputStream.use { input ->
+                MediaStorageManager.saveStreamWithGuard(
+                    assetsRootDir = assetsRootDir,
+                    targetRelativePath = "audio/$category/$slotName.mp3",
+                    inputStream = input,
+                    maxBytes = MediaStorageManager.MAX_AUDIO_UPLOAD_BYTES
+                )
+            }
+            res.onSuccess { saved ->
                 refreshAudioDurationsAsync()
                 _audioInventoryTick.value += 1
-                AppLogger.info("AUDIO", "Audio $category/$slotName berhasil diunggah")
-                _statusBannerMessage.value = "Audio $category ($slotName) berhasil disimpan!"
+                refreshStorageHealth()
+                AppLogger.info("AUDIO", "Audio $category/$slotName berhasil disimpan (${MediaStorageManager.formatByteSize(saved.savedBytes)})")
+                _statusBannerMessage.value = "Audio $category ($slotName) berhasil disimpan (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
             }.onFailure { err ->
                 AppLogger.error("AUDIO", "Gagal impor audio $category/$slotName: ${err.message}")
                 _statusBannerMessage.value = "Gagal menyimpan audio: ${err.message}"
@@ -587,6 +1115,7 @@ class MainViewModel(
             if (f != null && f.delete()) {
                 refreshAudioDurationsAsync()
                 _audioInventoryTick.value += 1
+                refreshStorageHealth()
                 AppLogger.info("AUDIO", "Audio $category/$slotName dihapus")
                 _statusBannerMessage.value = "Audio $category ($slotName) dihapus."
             }
@@ -595,19 +1124,21 @@ class MainViewModel(
 
     fun importCustomAudioFile(rawName: String, inputStream: InputStream) {
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                val cleanName = rawName.replace(Regex("[^a-zA-Z0-9._-]"), "_").ifBlank { "audio_${System.currentTimeMillis()}.mp3" }
-                val finalName = if (cleanName.contains('.')) cleanName else "$cleanName.mp3"
-                val targetDir = File(assetsRootDir, "audio/custom").apply { mkdirs() }
-                val targetFile = File(targetDir, finalName)
-                inputStream.use { input ->
-                    targetFile.outputStream().use { out -> input.copyTo(out) }
-                }
-                finalName
-            }.onSuccess { name ->
+            val cleanName = MediaStorageManager.sanitizeFileName(rawName)
+            val finalName = if (cleanName.contains('.')) cleanName else "$cleanName.mp3"
+            val res = inputStream.use { input ->
+                MediaStorageManager.saveStreamWithGuard(
+                    assetsRootDir = assetsRootDir,
+                    targetRelativePath = "audio/custom/$finalName",
+                    inputStream = input,
+                    maxBytes = MediaStorageManager.MAX_AUDIO_UPLOAD_BYTES
+                )
+            }
+            res.onSuccess { saved ->
                 _audioInventoryTick.value += 1
-                AppLogger.info("AUDIO", "Audio kustom diimpor: $name")
-                _statusBannerMessage.value = "Audio kustom '$name' berhasil ditambahkan!"
+                refreshStorageHealth()
+                AppLogger.info("AUDIO", "Audio kustom diimpor: $finalName (${MediaStorageManager.formatByteSize(saved.savedBytes)})")
+                _statusBannerMessage.value = "Audio kustom '$finalName' berhasil ditambahkan (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
             }.onFailure { err ->
                 AppLogger.error("AUDIO", "Gagal impor audio kustom: ${err.message}")
                 _statusBannerMessage.value = "Gagal mengimpor audio kustom: ${err.message}"
@@ -620,6 +1151,7 @@ class MainViewModel(
             val f = File(assetsRootDir, "audio/custom/$fileName")
             if (f.exists() && f.delete()) {
                 _audioInventoryTick.value += 1
+                refreshStorageHealth()
                 AppLogger.info("AUDIO", "Audio kustom dihapus: $fileName")
                 _statusBannerMessage.value = "Audio kustom '$fileName' dihapus."
             }
@@ -628,20 +1160,26 @@ class MainViewModel(
 
     fun importImageAsset(subFolder: String, fileName: String, inputStream: InputStream, onSaved: (String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                val cleanName = "${System.currentTimeMillis()}_${fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")}"
-                val targetDir = File(assetsRootDir, "images/$subFolder").apply { mkdirs() }
-                val targetFile = File(targetDir, cleanName)
-                inputStream.use { input ->
-                    targetFile.outputStream().use { out -> input.copyTo(out) }
-                }
-                "jws-assets/images/$subFolder/$cleanName"
-            }.onSuccess { relPath ->
+            val res = inputStream.use { input ->
+                MediaStorageManager.optimizeAndSaveImage(
+                    assetsRootDir = assetsRootDir,
+                    subFolder = subFolder,
+                    rawFileName = fileName,
+                    inputStream = input
+                )
+            }
+            res.onSuccess { saved ->
                 withContext(Dispatchers.Main) {
-                    onSaved(relPath)
+                    onSaved(saved.relativePath)
                 }
-                AppLogger.info("MEDIA", "Gambar disimpan: $relPath")
-                _statusBannerMessage.value = "Gambar berhasil disimpan ($relPath)"
+                refreshStorageHealth()
+                val optInfo = if (saved.wasOptimized) {
+                    "dioptimasi ${MediaStorageManager.formatByteSize(saved.originalBytes)} → ${MediaStorageManager.formatByteSize(saved.savedBytes)}"
+                } else {
+                    MediaStorageManager.formatByteSize(saved.savedBytes)
+                }
+                AppLogger.info("MEDIA", "Gambar disimpan ($optInfo): ${saved.relativePath}")
+                _statusBannerMessage.value = "Gambar berhasil disimpan ($optInfo)"
             }.onFailure { err ->
                 AppLogger.error("MEDIA", "Gagal menyimpan gambar: ${err.message}")
                 _statusBannerMessage.value = "Gagal menyimpan gambar: ${err.message}"
@@ -649,10 +1187,103 @@ class MainViewModel(
         }
     }
 
+    fun importVideoAsset(fileName: String, inputStream: InputStream, onSaved: (String, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val clean = MediaStorageManager.sanitizeFileName(fileName)
+            val ext = clean.substringAfterLast('.', "mp4").lowercase()
+                .takeIf { it in MediaStorageManager.VIDEO_EXTENSIONS } ?: "mp4"
+            val base = clean.substringBeforeLast('.').ifBlank { "video" }
+            val targetName = "${System.currentTimeMillis()}_${base}.$ext"
+            val res = inputStream.use { input ->
+                MediaStorageManager.saveStreamWithGuard(
+                    assetsRootDir = assetsRootDir,
+                    targetRelativePath = "videos/$targetName",
+                    inputStream = input,
+                    maxBytes = MediaStorageManager.MAX_VIDEO_UPLOAD_BYTES
+                )
+            }
+            res.onSuccess { saved ->
+                val displayTitle = base.replace('_', ' ').replace('-', ' ').ifBlank { "Video Masjid" }
+                withContext(Dispatchers.Main) {
+                    onSaved(saved.relativePath, displayTitle)
+                }
+                refreshStorageHealth()
+                AppLogger.info("MEDIA", "Video disimpan (${MediaStorageManager.formatByteSize(saved.savedBytes)}): ${saved.relativePath}")
+                _statusBannerMessage.value = "Video '$displayTitle' berhasil disimpan (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
+            }.onFailure { err ->
+                AppLogger.error("MEDIA", "Gagal menyimpan video: ${err.message}")
+                _statusBannerMessage.value = "Gagal menyimpan video: ${err.message}"
+            }
+        }
+    }
+
+    fun syncMediaFromExternalFolder(sourceDir: File) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _statusBannerMessage.value = "Menyinkronkan media dari ${sourceDir.name} ke memori internal..."
+            val res = MediaStorageManager.syncFromExternalFolder(
+                sourceDir = sourceDir,
+                assetsRootDir = assetsRootDir
+            )
+            res.onSuccess { summary ->
+                if (summary.updatedLogoPath != null || summary.createdSlides.isNotEmpty()) {
+                    updateSettings { prev ->
+                        prev.copy(
+                            brand = if (summary.updatedLogoPath != null) {
+                                prev.brand.copy(logo = summary.updatedLogoPath)
+                            } else {
+                                prev.brand
+                            },
+                            slides = if (summary.createdSlides.isNotEmpty()) {
+                                prev.slides + summary.createdSlides
+                            } else {
+                                prev.slides
+                            }
+                        )
+                    }
+                }
+                if (summary.importedAudio > 0) {
+                    refreshAudioDurationsAsync()
+                    _audioInventoryTick.value += 1
+                }
+                refreshStorageHealth()
+                val msg = if (summary.totalImported == 0) {
+                    "Tidak ditemukan file gambar/audio/video baru di folder '${sourceDir.name}'."
+                } else {
+                    "Sync USB selesai! Diimpor ${summary.importedImages} gambar, ${summary.importedAudio} audio, " +
+                        "${summary.importedVideos} video (${MediaStorageManager.formatByteSize(summary.totalBytesCopied)}). " +
+                        "Flashdisk aman dicabut!"
+                }
+                AppLogger.info("MEDIA", msg)
+                _statusBannerMessage.value = msg
+            }.onFailure { err ->
+                AppLogger.error("MEDIA", "Gagal sync folder USB: ${err.message}")
+                _statusBannerMessage.value = "Gagal sync folder USB: ${err.message}"
+            }
+        }
+    }
+
+    fun cleanOrphanMedia() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val res = MediaStorageManager.cleanOrphanMedia(
+                assetsRootDir = assetsRootDir,
+                settings = settingsRepository.currentSettings
+            )
+            refreshStorageHealth()
+            val msg = if (res.deletedCount == 0) {
+                "Penyimpanan sudah bersih — tidak ada file media tidak terpakai."
+            } else {
+                "Berhasil membersihkan ${res.deletedCount} file tidak terpakai (membebaskan ${MediaStorageManager.formatByteSize(res.freedBytes)})!"
+            }
+            AppLogger.info("MEDIA", msg)
+            _statusBannerMessage.value = msg
+        }
+    }
+
     fun updateSettings(transform: (AppStateSettings) -> AppStateSettings) {
         viewModelScope.launch {
             settingsRepository.updateSettings(transform)
             _snapshotFlow.value = computeSnapshot(ZonedDateTime.now())
+            refreshStorageHealth()
         }
     }
 
@@ -727,13 +1358,16 @@ class MainViewModel(
 
     fun importFullBackupZip(inputStream: InputStream) {
         viewModelScope.launch(Dispatchers.IO) {
-            val res = BackupRestoreManager.restoreFromBackupZip(
-                inputStream = inputStream,
-                settingsRepository = settingsRepository,
-                assetsRootDir = assetsRootDir
-            )
+            val res = inputStream.use { stream ->
+                BackupRestoreManager.restoreFromBackupZip(
+                    inputStream = stream,
+                    settingsRepository = settingsRepository,
+                    assetsRootDir = assetsRootDir
+                )
+            }
             res.onSuccess { summary ->
                 refreshAudioDurationsAsync()
+                refreshStorageHealth()
                 _snapshotFlow.value = computeSnapshot(ZonedDateTime.now())
                 _statusBannerMessage.value = "Restore berhasil (${summary.restoredMosqueName})! " +
                     "Diekstrak ${summary.extractedAssetFilesCount} file media."

@@ -1,5 +1,7 @@
 package id.algaffar.jwstv.ui.components.clock
 
+import android.graphics.Paint
+import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -7,6 +9,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,10 +24,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -64,21 +73,21 @@ private fun clockMetricsFor(variant: ClockVariant): ClockMetrics = when (variant
         padH = 20.dp,
         padV = 8.dp,
         spacing = 8.dp,
-        cornerRadius = 16.dp,
+        cornerRadius = 30.dp,
         secBottomPad = 6.dp,
         secBadgePadH = 8.dp,
         secBadgePadV = 2.dp
     )
     ClockVariant.HEADER_CARD -> ClockMetrics(
-        mainFontSize = 94.sp,
-        secFontSize = 42.sp,
-        padH = 10.dp,
-        padV = 4.dp,
+        mainFontSize = 122.sp,
+        secFontSize = 52.sp,
+        padH = 12.dp,
+        padV = 6.dp,
         spacing = 12.dp,
-        cornerRadius = 18.dp,
-        secBottomPad = 6.dp,
-        secBadgePadH = 10.dp,
-        secBadgePadV = 3.dp
+        cornerRadius = 44.dp,
+        secBottomPad = 10.dp,
+        secBadgePadH = 12.dp,
+        secBadgePadV = 4.dp
     )
     ClockVariant.MAIN -> ClockMetrics(
         mainFontSize = 88.sp,
@@ -86,7 +95,7 @@ private fun clockMetricsFor(variant: ClockVariant): ClockMetrics = when (variant
         padH = 32.dp,
         padV = 16.dp,
         spacing = 10.dp,
-        cornerRadius = 20.dp,
+        cornerRadius = 44.dp,
         secBottomPad = 12.dp,
         secBadgePadH = 10.dp,
         secBadgePadV = 4.dp
@@ -100,7 +109,7 @@ private fun tightClockTextStyle(tabular: Boolean = true): TextStyle = TextStyle(
 
 /**
  * 8 Artistic Clock styles (`classic`, `golden`, `glass`, `wood`, `neon`, `segmented`, `emerald`, `monochrome`)
- * with `HEADER`, `HEADER_CARD` (full 480x120 card), and `MAIN` size variants.
+ * with `HEADER`, `HEADER_CARD` (full 480x180 card), and `MAIN` size variants.
  * Mirrors `src/components/Utils/ArtisticClocks.tsx`.
  */
 @Composable
@@ -597,11 +606,13 @@ private fun MonochromeArtisticClock(
 
 /**
  * Luxury Gold-Bezel Big Analog Clock for Slide (`analog_clock`) & Standby Fullscreen.
- * Mirrors `src/components/Screens/Shared/BigAnalogClock.tsx`.
+ * Mirrors `jws-android-algaffar/src/components/Screens/Shared/BigAnalogClock.tsx`
+ * across all 10 SVG layers (scaled cleanly from the 500x500 reference coordinate space).
  */
 @Composable
 fun BigAnalogClock(
     now: ZonedDateTime,
+    isSmall: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val hours = now.hour % 12
@@ -611,6 +622,14 @@ fun BigAnalogClock(
     val secondDeg = seconds * 6f
     val minuteDeg = minutes * 6f + seconds * 0.1f
     val hourDeg = hours * 30f + minutes * 0.5f
+
+    val numberPaint = remember {
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color(0xFFFFEA79).toArgb()
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        }
+    }
 
     Box(
         modifier = modifier
@@ -624,113 +643,227 @@ fun BigAnalogClock(
     ) {
         Canvas(
             modifier = Modifier
-                .size(560.dp)
-                .padding(16.dp)
+                .fillMaxHeight(if (isSmall) 0.94f else 0.95f)
+                .aspectRatio(1f)
         ) {
-            val radius = size.minDimension / 2f
-            val center = Offset(size.width / 2f, size.height / 2f)
+            val s = size.minDimension / 500f
+            val cx = size.width / 2f
+            val cy = size.height / 2f
+            val center = Offset(cx, cy)
 
-            drawCircle(color = Color(0xFFD4AF37), radius = radius, center = center)
-            drawCircle(color = Color(0xFF1A150A), radius = radius * 0.96f, center = center)
-            drawCircle(color = Color(0xFFB38728), radius = radius * 0.93f, center = center)
-            drawCircle(color = Color(0xFFFFD700), radius = radius * 0.91f, center = center)
-            drawCircle(color = Color(0xFF041A12), radius = radius * 0.89f, center = center)
+            fun pt(x: Float, y: Float): Offset = Offset(cx + (x - 250f) * s, cy + (y - 250f) * s)
 
+            // Layer 1: Outer Metallic Gold Bezel (5 concentric rings)
+            drawCircle(color = Color(0xFFD4AF37), radius = 246f * s, center = center)
+            drawCircle(color = Color(0xFF1A150A), radius = 238f * s, center = center)
+            drawCircle(color = Color(0xFFB38728), radius = 232f * s, center = center)
+            drawCircle(color = Color(0xFFFFD700), radius = 228f * s, center = center)
+            drawCircle(color = Color(0xFF14261D), radius = 225f * s, center = center)
+
+            // Layer 2: Dial Face
+            drawCircle(color = Color(0xFF041A12), radius = 222f * s, center = center)
             drawCircle(
-                color = Color(0xFFFFD700).copy(alpha = 0.14f),
-                radius = radius * 0.60f,
+                color = Color(0xFF0E3F2C),
+                radius = 222f * s,
                 center = center,
-                style = Stroke(width = 2.dp.toPx())
-            )
-            drawCircle(
-                color = Color(0xFFFFD700).copy(alpha = 0.12f),
-                radius = radius * 0.42f,
-                center = center,
-                style = Stroke(width = 1.5.dp.toPx())
+                style = Stroke(width = 2f * s)
             )
 
+            // Layer 3: Inner Arabesque Motif (Subtle Luxury Watermark)
+            val arabesqueColor = Color(0xFFFFD700).copy(alpha = 0.12f)
+            val arabesqueStroke = Stroke(width = 1.5f * s)
+            val squareTopLeft = pt(170f, 170f)
+            val squareSize = Size(160f * s, 160f * s)
+            val squareCorner = CornerRadius(8f * s, 8f * s)
+            drawRoundRect(
+                color = arabesqueColor,
+                topLeft = squareTopLeft,
+                size = squareSize,
+                cornerRadius = squareCorner,
+                style = arabesqueStroke
+            )
+            rotate(degrees = 45f, pivot = center) {
+                drawRoundRect(
+                    color = arabesqueColor,
+                    topLeft = squareTopLeft,
+                    size = squareSize,
+                    cornerRadius = squareCorner,
+                    style = arabesqueStroke
+                )
+            }
+            drawCircle(color = arabesqueColor, radius = 105f * s, center = center, style = arabesqueStroke)
+            drawCircle(color = arabesqueColor, radius = 145f * s, center = center, style = arabesqueStroke)
+
+            // Layer 4: 60 Ticks (12 Gold Hour Ticks + 48 Emerald Minute Ticks)
             for (i in 0 until 60) {
                 val isHour = i % 5 == 0
-                val rad = (i * 6.0 - 90.0) * PI / 180.0
-                val innerR = radius * (if (isHour) 0.74f else 0.80f)
-                val outerR = radius * 0.85f
-                val start = Offset(
-                    x = center.x + (innerR * cos(rad)).toFloat(),
-                    y = center.y + (innerR * sin(rad)).toFloat()
-                )
-                val end = Offset(
-                    x = center.x + (outerR * cos(rad)).toFloat(),
-                    y = center.y + (outerR * sin(rad)).toFloat()
-                )
+                val rad = (i * 6.0) * PI / 180.0
+                val r1 = (if (isHour) 194f else 204f) * s
+                val r2 = 214f * s
+                val x1 = cx + (r1 * sin(rad)).toFloat()
+                val y1 = cy - (r1 * cos(rad)).toFloat()
+                val x2 = cx + (r2 * sin(rad)).toFloat()
+                val y2 = cy - (r2 * cos(rad)).toFloat()
                 drawLine(
                     color = if (isHour) Color(0xFFFFD700) else Color(0xFF4E9F76),
-                    start = start,
-                    end = end,
-                    strokeWidth = if (isHour) 5.dp.toPx() else 2.dp.toPx(),
+                    start = Offset(x1, y1),
+                    end = Offset(x2, y2),
+                    strokeWidth = (if (isHour) 4.5f else 1.8f) * s,
                     cap = StrokeCap.Round
                 )
             }
 
-            val hourRad = (hourDeg - 90f) * PI / 180.0
-            drawLine(
-                color = Color(0xFFD4AF37),
-                start = center,
-                end = Offset(
-                    x = center.x + (radius * 0.48f * cos(hourRad)).toFloat(),
-                    y = center.y + (radius * 0.48f * sin(hourRad)).toFloat()
-                ),
-                strokeWidth = 10.dp.toPx(),
-                cap = StrokeCap.Round
-            )
+            // Layer 5: Numbers (1 - 12)
+            numberPaint.textSize = 36f * s
+            val fm = numberPaint.fontMetrics
+            val baselineShift = -(fm.ascent + fm.descent) / 2f
+            for (n in 1..12) {
+                val angleDeg = (n % 12) * 30.0
+                val rad = angleDeg * PI / 180.0
+                val r = 166f * s
+                val x = cx + (r * sin(rad)).toFloat()
+                val y = cy - (r * cos(rad)).toFloat()
+                drawContext.canvas.nativeCanvas.drawText(
+                    n.toString(),
+                    x,
+                    y + baselineShift,
+                    numberPaint
+                )
+            }
 
-            val minRad = (minuteDeg - 90f) * PI / 180.0
-            drawLine(
-                color = Color(0xFFFFF8DC),
-                start = center,
-                end = Offset(
-                    x = center.x + (radius * 0.68f * cos(minRad)).toFloat(),
-                    y = center.y + (radius * 0.68f * sin(minRad)).toFloat()
-                ),
-                strokeWidth = 7.dp.toPx(),
-                cap = StrokeCap.Round
+            // Layer 6: Golden Mosque Dome Emblem in Upper Dial (centered at 250, 142, scale 0.9)
+            val domeCx = cx
+            val domeCy = cy + (142f - 250f) * s
+            val ds = 0.9f * s
+            val domePath = Path().apply {
+                moveTo(domeCx, domeCy - 24f * ds)
+                cubicTo(
+                    domeCx - 9f * ds, domeCy - 17f * ds,
+                    domeCx - 15f * ds, domeCy - 6f * ds,
+                    domeCx - 15f * ds, domeCy + 7f * ds
+                )
+                lineTo(domeCx + 15f * ds, domeCy + 7f * ds)
+                cubicTo(
+                    domeCx + 15f * ds, domeCy - 6f * ds,
+                    domeCx + 9f * ds, domeCy - 17f * ds,
+                    domeCx, domeCy - 24f * ds
+                )
+                close()
+            }
+            drawPath(path = domePath, color = Color(0xFFFFD700).copy(alpha = 0.75f))
+            drawCircle(
+                color = Color(0xFFFFF2A3),
+                radius = 3f * ds,
+                center = Offset(domeCx, domeCy - 28f * ds)
             )
-
-            val secRad = (secondDeg - 90f) * PI / 180.0
-            drawLine(
-                color = Color(0xFFEF4444),
-                start = Offset(
-                    x = center.x - (radius * 0.14f * cos(secRad)).toFloat(),
-                    y = center.y - (radius * 0.14f * sin(secRad)).toFloat()
-                ),
-                end = Offset(
-                    x = center.x + (radius * 0.78f * cos(secRad)).toFloat(),
-                    y = center.y + (radius * 0.78f * sin(secRad)).toFloat()
-                ),
-                strokeWidth = 3.dp.toPx(),
-                cap = StrokeCap.Round
-            )
-
-            drawCircle(color = Color(0xFFD4AF37), radius = 14.dp.toPx(), center = center)
-            drawCircle(color = Color(0xFFEF4444), radius = 7.dp.toPx(), center = center)
         }
 
-        Column(
+        // Moving Hands Layer (only this lightweight Canvas redraws on 1Hz ticks)
+        Canvas(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 24.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Color.Black.copy(alpha = 0.65f))
-                .border(1.5.dp, Color(0xFFD4AF37).copy(alpha = 0.7f), RoundedCornerShape(50))
-                .padding(horizontal = 28.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxHeight(if (isSmall) 0.94f else 0.95f)
+                .aspectRatio(1f)
         ) {
-            Text(
-                text = now.format(DateTimeFormatter.ofPattern("HH:mm:ss")),
-                color = Color(0xFFFFEA79),
-                fontSize = 26.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Black
+            val s = size.minDimension / 500f
+            val cx = size.width / 2f
+            val cy = size.height / 2f
+            val center = Offset(cx, cy)
+
+            fun pt(x: Float, y: Float): Offset = Offset(cx + (x - 250f) * s, cy + (y - 250f) * s)
+
+            // Layer 7: Hour Hand (Gold Sword)
+            rotate(degrees = hourDeg, pivot = center) {
+                val hourBase = Path().apply {
+                    val p0 = pt(243f, 265f)
+                    val p1 = pt(257f, 265f)
+                    val p2 = pt(254f, 130f)
+                    val p3 = pt(250f, 110f)
+                    val p4 = pt(246f, 130f)
+                    moveTo(p0.x, p0.y)
+                    lineTo(p1.x, p1.y)
+                    lineTo(p2.x, p2.y)
+                    lineTo(p3.x, p3.y)
+                    lineTo(p4.x, p4.y)
+                    close()
+                }
+                drawPath(hourBase, color = Color(0xFFD4AF37))
+
+                val hourFacet = Path().apply {
+                    val p0 = pt(250f, 260f)
+                    val p1 = pt(254f, 260f)
+                    val p2 = pt(252f, 135f)
+                    val p3 = pt(250f, 115f)
+                    moveTo(p0.x, p0.y)
+                    lineTo(p1.x, p1.y)
+                    lineTo(p2.x, p2.y)
+                    lineTo(p3.x, p3.y)
+                    close()
+                }
+                drawPath(hourFacet, color = Color(0xFFFFF8DC))
+            }
+
+            // Layer 8: Minute Hand (Long Gold Sword)
+            rotate(degrees = minuteDeg, pivot = center) {
+                val minBase = Path().apply {
+                    val p0 = pt(244f, 275f)
+                    val p1 = pt(256f, 275f)
+                    val p2 = pt(253f, 65f)
+                    val p3 = pt(250f, 45f)
+                    val p4 = pt(247f, 65f)
+                    moveTo(p0.x, p0.y)
+                    lineTo(p1.x, p1.y)
+                    lineTo(p2.x, p2.y)
+                    lineTo(p3.x, p3.y)
+                    lineTo(p4.x, p4.y)
+                    close()
+                }
+                drawPath(minBase, color = Color(0xFFFFD700))
+
+                val minFacet = Path().apply {
+                    val p0 = pt(250f, 270f)
+                    val p1 = pt(253f, 270f)
+                    val p2 = pt(252f, 70f)
+                    val p3 = pt(250f, 50f)
+                    moveTo(p0.x, p0.y)
+                    lineTo(p1.x, p1.y)
+                    lineTo(p2.x, p2.y)
+                    lineTo(p3.x, p3.y)
+                    close()
+                }
+                drawPath(minFacet, color = Color(0xFFFFFFF0))
+            }
+
+            // Layer 9: Second Hand (Sport Red Needle)
+            rotate(degrees = secondDeg, pivot = center) {
+                drawCircle(color = Color(0xFFEF4444), radius = 7f * s, center = pt(250f, 285f))
+                drawLine(
+                    color = Color(0xFFEF4444),
+                    start = pt(250f, 295f),
+                    end = pt(250f, 35f),
+                    strokeWidth = 3f * s,
+                    cap = StrokeCap.Round
+                )
+                val arrowTip = Path().apply {
+                    val p0 = pt(246f, 45f)
+                    val p1 = pt(254f, 45f)
+                    val p2 = pt(250f, 25f)
+                    moveTo(p0.x, p0.y)
+                    lineTo(p1.x, p1.y)
+                    lineTo(p2.x, p2.y)
+                    close()
+                }
+                drawPath(arrowTip, color = Color(0xFFEF4444))
+            }
+
+            // Layer 10: Center Hub Nut
+            drawCircle(color = Color(0xFFD4AF37), radius = 14f * s, center = center)
+            drawCircle(
+                color = Color(0xFFFFF2A3),
+                radius = 14f * s,
+                center = center,
+                style = Stroke(width = 2f * s)
             )
+            drawCircle(color = Color(0xFFEF4444), radius = 7f * s, center = center)
         }
     }
 }

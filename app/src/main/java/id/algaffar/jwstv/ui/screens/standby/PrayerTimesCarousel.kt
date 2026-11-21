@@ -1,15 +1,8 @@
 package id.algaffar.jwstv.ui.screens.standby
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -18,8 +11,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,8 +28,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -45,14 +45,14 @@ import id.algaffar.jwstv.domain.engine.PrayerTimeItem
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
 import kotlinx.coroutines.delay
 
+private val SmoothCarouselEasing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
+
 /**
  * Displays 4 visible prayer cards at a time out of the 8 daily prayer times
  * (`Imsak`, `Subuh`, `Syuruq`, `Dhuha`, `Dzuhur/Jum'at`, `Ashar`, `Maghrib`, `Isya`)
- * in a seamless circular auto-scrolling carousel.
+ * in a seamless GPU-accelerated circular auto-scrolling carousel.
  *
- * Supports both Horizontal Bar (bottom of `HORIZONTAL` layout) and Vertical Sidebar
- * (left/right of `VERTICAL_LEFT` and `VERTICAL_RIGHT` layouts).
- * Mirrors `src/components/Screens/PrayerTimes/PrayerTimesList.tsx`.
+ * Always animates smoothly regardless of `performanceMode`.
  */
 @Composable
 fun PrayerTimesCarousel(
@@ -66,76 +66,76 @@ fun PrayerTimesCarousel(
     val visibleCount = 4
 
     var startIndex by remember { mutableIntStateOf(0) }
+    val slideProgress = remember { Animatable(0f) }
     val intervalMs = (scrollIntervalSeconds.coerceIn(2, 30) * 1000L)
 
     LaunchedEffect(intervalMs, totalCount) {
+        slideProgress.snapTo(0f)
+        if (totalCount <= visibleCount) return@LaunchedEffect
         while (true) {
             delay(intervalMs)
+            slideProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 850, easing = SmoothCarouselEasing)
+            )
             startIndex = (startIndex + 1) % totalCount
+            slideProgress.snapTo(0f)
         }
     }
 
-    val visibleItems = remember(items, startIndex) {
-        List(visibleCount) { offset ->
+    // Render 5 cards (4 visible + 1 incoming) so the strip glides smoothly by 1 full card slot
+    val windowItems = remember(items, startIndex) {
+        List(visibleCount + 1) { offset ->
             items[(startIndex + offset) % totalCount]
         }
     }
 
+    val density = LocalDensity.current
     if (isVertical) {
+        val cardHeightPx = with(density) { 225.dp.toPx() }
         Box(
-            modifier = modifier.size(width = 480.dp, height = 960.dp)
+            modifier = modifier
+                .size(width = 480.dp, height = 900.dp)
+                .clipToBounds(),
+            contentAlignment = Alignment.TopStart
         ) {
-            AnimatedContent(
-                targetState = startIndex,
-                modifier = Modifier.fillMaxSize(),
-                transitionSpec = {
-                    (slideInVertically(tween(550)) { h -> h / 3 } + fadeIn(tween(450)))
-                        .togetherWith(slideOutVertically(tween(550)) { h -> -h / 3 } + fadeOut(tween(350)))
-                        .using(SizeTransform(clip = false))
-                },
-                label = "VerticalPrayerCarousel"
-            ) { idx ->
-                val currentWindow = List(visibleCount) { offset ->
-                    items[(idx + offset) % totalCount]
-                }
-                Column(
-                    modifier = Modifier.size(width = 480.dp, height = 960.dp)
-                ) {
-                    currentWindow.forEach { prayerItem ->
-                        PrayerTimeCard(
-                            item = prayerItem,
-                            modifier = Modifier.size(width = 480.dp, height = 240.dp)
-                        )
+            Column(
+                modifier = Modifier
+                    .width(480.dp)
+                    .wrapContentHeight(align = Alignment.Top, unbounded = true)
+                    .graphicsLayer {
+                        translationY = -slideProgress.value * cardHeightPx
                     }
+            ) {
+                windowItems.forEach { prayerItem ->
+                    PrayerTimeCard(
+                        item = prayerItem,
+                        modifier = Modifier.size(width = 480.dp, height = 225.dp)
+                    )
                 }
             }
         }
     } else {
+        val cardWidthPx = with(density) { 480.dp.toPx() }
         Box(
-            modifier = modifier.size(width = 1920.dp, height = 240.dp)
+            modifier = modifier
+                .size(width = 1920.dp, height = 225.dp)
+                .clipToBounds(),
+            contentAlignment = Alignment.TopStart
         ) {
-            AnimatedContent(
-                targetState = startIndex,
-                modifier = Modifier.fillMaxSize(),
-                transitionSpec = {
-                    (slideInHorizontally(tween(550)) { w -> w / 4 } + fadeIn(tween(450)))
-                        .togetherWith(slideOutHorizontally(tween(550)) { w -> -w / 4 } + fadeOut(tween(350)))
-                        .using(SizeTransform(clip = false))
-                },
-                label = "HorizontalPrayerCarousel"
-            ) { idx ->
-                val currentWindow = List(visibleCount) { offset ->
-                    items[(idx + offset) % totalCount]
-                }
-                Row(
-                    modifier = Modifier.size(width = 1920.dp, height = 240.dp)
-                ) {
-                    currentWindow.forEach { prayerItem ->
-                        PrayerTimeCard(
-                            item = prayerItem,
-                            modifier = Modifier.size(width = 480.dp, height = 240.dp)
-                        )
+            Row(
+                modifier = Modifier
+                    .height(225.dp)
+                    .wrapContentWidth(align = Alignment.Start, unbounded = true)
+                    .graphicsLayer {
+                        translationX = -slideProgress.value * cardWidthPx
                     }
+            ) {
+                windowItems.forEach { prayerItem ->
+                    PrayerTimeCard(
+                        item = prayerItem,
+                        modifier = Modifier.size(width = 480.dp, height = 225.dp)
+                    )
                 }
             }
         }
@@ -174,12 +174,12 @@ private fun PrayerTimeCard(
 
     Box(
         modifier = modifier
-            .size(width = 480.dp, height = 240.dp)
+            .size(width = 480.dp, height = 225.dp)
             .padding(4.dp)
             .clip(RoundedCornerShape(18.dp))
             .background(cardBgBrush)
             .border(borderWidth, borderColor, RoundedCornerShape(18.dp))
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = 20.dp, vertical = 10.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxSize()

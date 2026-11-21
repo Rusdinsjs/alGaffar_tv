@@ -168,12 +168,16 @@ class Phase5ServerAndHardwareTest {
                     isAudioPlaying = true,
                     isCustomAudioPlaying = false
                 )
-            }
+            },
+            audioInventoryProvider = { mapOf("adzan" to listOf("fajr", "default")) }
         )
         val statusJson = server.buildStatusJson()
         assertEquals("tarhim", statusJson["state"]?.jsonPrimitive?.contentOrNull)
         assertEquals(true, statusJson["audio"]?.jsonPrimitive?.booleanOrNull)
         assertNotNull(statusJson["prayerSettings"]?.jsonObject)
+        assertNotNull(statusJson["brand"]?.jsonObject)
+        assertNotNull(statusJson["prayerConfig"]?.jsonObject)
+        assertNotNull(statusJson["audioSlots"]?.jsonObject)
         assertNotNull(statusJson["system"]?.jsonObject)
     }
 

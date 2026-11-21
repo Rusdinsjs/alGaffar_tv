@@ -2,6 +2,8 @@ package id.algaffar.jwstv.ui.screens.standby
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -41,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
+import id.algaffar.jwstv.ui.theme.LocalPerformanceMode
 import kotlinx.coroutines.delay
 
 /**
@@ -57,6 +60,7 @@ fun OverlayRunningText(
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
+    val isPerformanceMode = LocalPerformanceMode.current
     val activeMessages = remember(messages) {
         messages.map { it.trim() }.filter { it.isNotBlank() }
     }
@@ -101,16 +105,21 @@ fun OverlayRunningText(
 
     val currentMessage = activeMessages[currentIndex % activeMessages.size]
 
-    val infiniteTransition = rememberInfiniteTransition(label = "OverlayPulseTransition")
-    val dotAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 800),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "OverlayPulseDotAlpha"
-    )
+    val dotAlpha: Float = if (isPerformanceMode) {
+        1f
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "OverlayPulseTransition")
+        val animated by infiniteTransition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 800),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "OverlayPulseDotAlpha"
+        )
+        animated
+    }
 
     // Quarter-circle top-right curve, flush flat on left and bottom edges (matches diagram)
     val overlayShape = RoundedCornerShape(
@@ -122,8 +131,8 @@ fun OverlayRunningText(
 
     AnimatedVisibility(
         visible = isVisible,
-        enter = slideInHorizontally(tween(450)) { -it } + fadeIn(tween(400)),
-        exit = slideOutHorizontally(tween(350)) { -it } + fadeOut(tween(300)),
+        enter = if (isPerformanceMode) EnterTransition.None else slideInHorizontally(tween(450)) { -it } + fadeIn(tween(400)),
+        exit = if (isPerformanceMode) ExitTransition.None else slideOutHorizontally(tween(350)) { -it } + fadeOut(tween(300)),
         modifier = modifier
             .wrapContentWidth()
             .wrapContentHeight()
@@ -131,8 +140,12 @@ fun OverlayRunningText(
         AnimatedContent(
             targetState = currentMessage,
             transitionSpec = {
-                (slideInHorizontally(tween(450)) { -it / 2 } + fadeIn(tween(400)))
-                    .togetherWith(slideOutHorizontally(tween(350)) { -it / 2 } + fadeOut(tween(250)))
+                if (isPerformanceMode) {
+                    EnterTransition.None togetherWith ExitTransition.None
+                } else {
+                    (slideInHorizontally(tween(450)) { -it / 2 } + fadeIn(tween(400)))
+                        .togetherWith(slideOutHorizontally(tween(350)) { -it / 2 } + fadeOut(tween(250)))
+                }
             },
             label = "FloatingOverlayMessageTransition"
         ) { messageText ->

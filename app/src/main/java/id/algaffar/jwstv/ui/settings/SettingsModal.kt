@@ -151,10 +151,11 @@ private val SETTINGS_CATEGORIES = listOf(
         accentColor = Color(0xFF2DD4BF), // Teal
         tabs = listOf(
             SettingsSubTab("network", "Remote & Jaringan", Icons.Default.Wifi),
+            SettingsSubTab("keyboard", "Keyboard & Input", Icons.Default.Keyboard),
             SettingsSubTab("userManagement", "Kelola Admin", Icons.Default.People),
             SettingsSubTab("backup", "Data & Backup", Icons.Default.Download),
             SettingsSubTab("logs", "Log Aktivitas", Icons.Default.Terminal),
-            SettingsSubTab("remote_help", "Panduan Remote", Icons.Default.Keyboard)
+            SettingsSubTab("remote_help", "Panduan Remote", Icons.Default.Tv)
         )
     )
 )
@@ -366,6 +367,7 @@ fun SettingsModal(
 
                     // Category 5: Sistem
                     "network" -> RemoteNetworkSettingsTab(actions)
+                    "keyboard" -> KeyboardInputSettingsTab(settings, actions)
                     "userManagement" -> UserManagementSettingsTab(settings, actions)
                     "backup" -> BackupRestoreSettingsTab(actions)
                     "logs" -> LogViewerSettingsTab()

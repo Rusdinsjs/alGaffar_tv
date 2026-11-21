@@ -35,6 +35,7 @@ data class JwsThemePalette(
 )
 
 val LocalJwsTheme = staticCompositionLocalOf { ThemeEngine.BuiltInThemes.first { it.id == "emerald" } }
+val LocalPerformanceMode = staticCompositionLocalOf { true }
 
 /**
  * Manages the 17 built-in themes + custom user themes + 24-hour Auto-Theme rotation.
@@ -314,18 +315,24 @@ fun IslamicAmbientBackground(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit
 ) {
+    val isPerformanceMode = LocalPerformanceMode.current
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(
-                Brush.linearGradient(
-                    colors = listOf(palette.bgPrimary, palette.bgSecondary, palette.bgPrimary),
-                    start = Offset.Zero,
-                    end = Offset(1920f, 1080f)
-                )
+                if (isPerformanceMode) {
+                    Brush.verticalGradient(listOf(palette.bgPrimary, palette.bgSecondary))
+                } else {
+                    Brush.linearGradient(
+                        colors = listOf(palette.bgPrimary, palette.bgSecondary, palette.bgPrimary),
+                        start = Offset.Zero,
+                        end = Offset(1920f, 1080f)
+                    )
+                }
             )
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
+        if (!isPerformanceMode) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
             // Top-left and bottom-right ambient aurora glow
             drawCircle(
                 brush = Brush.radialGradient(
@@ -371,6 +378,7 @@ fun IslamicAmbientBackground(
                         style = Stroke(width = 2f)
                     )
                 }
+            }
             }
         }
 

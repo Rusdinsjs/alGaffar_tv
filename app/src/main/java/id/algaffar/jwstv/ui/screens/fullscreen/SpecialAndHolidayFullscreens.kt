@@ -1,6 +1,8 @@
 package id.algaffar.jwstv.ui.screens.fullscreen
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -62,9 +64,12 @@ import id.algaffar.jwstv.ui.components.clock.BigAnalogClock
 import id.algaffar.jwstv.ui.components.clock.ClockVariant
 import id.algaffar.jwstv.ui.screens.standby.JumatKeuanganSlideView
 import id.algaffar.jwstv.ui.screens.standby.JumatPetugasSlideView
+import id.algaffar.jwstv.ui.screens.standby.LocalSlideVideoPlayer
 import id.algaffar.jwstv.ui.screens.standby.NextPrayerCountdownCard
+import id.algaffar.jwstv.ui.screens.standby.WelcomeMasjidSlideView
 import id.algaffar.jwstv.ui.screens.standby.generateQrBitmap
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
+import id.algaffar.jwstv.ui.theme.LocalPerformanceMode
 import kotlinx.coroutines.delay
 import java.io.File
 import java.text.NumberFormat
@@ -690,7 +695,8 @@ fun StandbySlideshowFullscreen(
     var idx by remember { mutableIntStateOf(0) }
     val activeSlide = slides.getOrNull(idx % slides.size.coerceAtLeast(1))
 
-    LaunchedEffect(activeSlide?.id, slides.size) {
+    LaunchedEffect(activeSlide?.id, slides.size, snapshot.settings.slideConfig.autoPlay) {
+        if (!snapshot.settings.slideConfig.autoPlay || slides.size <= 1) return@LaunchedEffect
         val dur = (activeSlide?.duration ?: 10).coerceIn(3, 120) * 1000L
         delay(dur)
         if (slides.isNotEmpty()) {
@@ -699,21 +705,90 @@ fun StandbySlideshowFullscreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        if (activeSlide?.type == "analog_clock") {
-            BigAnalogClock(now = snapshot.now, modifier = Modifier.fillMaxSize())
-        } else if (activeSlide != null && activeSlide.imageUrl.isNotBlank()) {
-            val clean = activeSlide.imageUrl.removePrefix("jws-assets/").removePrefix("/")
-            val fileModel = assetsRootDir?.let { File(it, clean).takeIf { f -> f.exists() } }
-                ?: activeSlide.imageUrl
-            AsyncImage(
-                model = fileModel,
-                contentDescription = activeSlide.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+        val isCustomFullCanvasSlide = activeSlide == null ||
+            activeSlide.type !in setOf("image", "video")
+
+        when {
+            activeSlide?.type == "welcome" -> {
+                WelcomeMasjidSlideView(
+                    slide = activeSlide,
+                    brand = snapshot.settings.brand,
+                    isSmall = false,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            activeSlide?.type == "analog_clock" -> {
+                BigAnalogClock(
+                    now = snapshot.now,
+                    isSmall = false,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            activeSlide?.type == "text" -> {
+                id.algaffar.jwstv.ui.screens.standby.StyledTextSlideView(
+                    slide = activeSlide,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            activeSlide?.type == "video" && activeSlide.videoUrl.isNotBlank() -> {
+                val clean = activeSlide.videoUrl.removePrefix("jws-assets/").removePrefix("/")
+                val resolvedUri = remember(activeSlide.videoUrl, assetsRootDir) {
+                    if (activeSlide.videoUrl.startsWith("http://") ||
+                        activeSlide.videoUrl.startsWith("https://") ||
+                        activeSlide.videoUrl.startsWith("file://") ||
+                        activeSlide.videoUrl.startsWith("content://")
+                    ) {
+                        android.net.Uri.parse(activeSlide.videoUrl)
+                    } else {
+                        assetsRootDir?.let { File(it, clean).takeIf { f -> f.exists() } }
+                            ?.let { android.net.Uri.fromFile(it) }
+                    }
+                }
+                if (resolvedUri != null) {
+                    LocalSlideVideoPlayer(
+                        videoUri = resolvedUri,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+            activeSlide != null && activeSlide.type == "image" && activeSlide.imageUrl.isNotBlank() -> {
+                val clean = activeSlide.imageUrl.removePrefix("jws-assets/").removePrefix("/")
+                val fileModel = assetsRootDir?.let { File(it, clean).takeIf { f -> f.exists() } }
+                    ?: activeSlide.imageUrl
+                AsyncImage(
+                    model = fileModel,
+                    contentDescription = activeSlide.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            activeSlide != null -> {
+                val handled = id.algaffar.jwstv.ui.screens.standby.RenderSystemDataSlideIfApplicable(
+                    slide = activeSlide,
+                    settings = snapshot.settings,
+                    today = snapshot.schedule.date,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (!handled) {
+                    WelcomeMasjidSlideView(
+                        slide = null,
+                        brand = snapshot.settings.brand,
+                        isSmall = false,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+            else -> {
+                WelcomeMasjidSlideView(
+                    slide = null,
+                    brand = snapshot.settings.brand,
+                    isSmall = false,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
 
-        if (activeSlide?.type != "analog_clock") {
+        if (activeSlide != null && !isCustomFullCanvasSlide && (activeSlide.title.isNotBlank() || activeSlide.content.isNotBlank())) {
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -721,17 +796,18 @@ fun StandbySlideshowFullscreen(
                     .background(palette.bgPrimary.copy(alpha = 0.85f))
                     .padding(36.dp)
             ) {
-                Text(
-                    text = activeSlide?.title?.ifBlank { snapshot.settings.brand.name }
-                        ?: snapshot.settings.brand.name,
-                    color = palette.textPrimary,
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
-                if (!activeSlide?.content.isNullOrBlank()) {
+                if (activeSlide.title.isNotBlank()) {
+                    Text(
+                        text = activeSlide.title,
+                        color = palette.textPrimary,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+                if (activeSlide.content.isNotBlank()) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = activeSlide?.content.orEmpty(),
+                        text = activeSlide.content,
                         color = palette.textSecondary,
                         fontSize = 20.sp
                     )
@@ -761,25 +837,54 @@ fun ScreenSaverFullscreen(
     snapshot: JwsRuntimeSnapshot,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "ScreenSaverFloat")
-    val offsetX by infiniteTransition.animateFloat(
-        initialValue = -220f,
-        targetValue = 220f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(18_000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "FloatX"
-    )
-    val offsetY by infiniteTransition.animateFloat(
-        initialValue = -140f,
-        targetValue = 140f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(23_000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "FloatY"
-    )
+    val isPerformanceMode = LocalPerformanceMode.current
+    val offsetX: Float
+    val offsetY: Float
+
+    if (isPerformanceMode) {
+        var stepIdx by remember { mutableIntStateOf(0) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(12_000L)
+                stepIdx = (stepIdx + 1) % 6
+            }
+        }
+        val driftOffsets = remember {
+            listOf(
+                -180f to -100f,
+                160f to -110f,
+                190f to 90f,
+                -160f to 110f,
+                0f to -120f,
+                0f to 100f
+            )
+        }
+        val pair = driftOffsets[stepIdx % driftOffsets.size]
+        offsetX = pair.first
+        offsetY = pair.second
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "ScreenSaverFloat")
+        val animX by infiniteTransition.animateFloat(
+            initialValue = -220f,
+            targetValue = 220f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(18_000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "FloatX"
+        )
+        val animY by infiniteTransition.animateFloat(
+            initialValue = -140f,
+            targetValue = 140f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(23_000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "FloatY"
+        )
+        offsetX = animX
+        offsetY = animY
+    }
 
     Box(
         modifier = modifier
@@ -791,25 +896,12 @@ fun ScreenSaverFullscreen(
             modifier = Modifier.offset {
                 IntOffset(offsetX.roundToInt(), offsetY.roundToInt())
             },
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             ArtisticClock(
                 now = snapshot.now,
-                style = "classic",
+                style = snapshot.settings.brand.clockStyle,
                 variant = ClockVariant.MAIN
-            )
-            Text(
-                text = snapshot.settings.screensaver.message.ifBlank { snapshot.settings.brand.name },
-                color = Color.White.copy(alpha = 0.45f),
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = "Sholat Berikutnya: ${snapshot.schedule.nextPrayer.label} (${snapshot.schedule.nextPrayer.formattedTime})",
-                color = Color(0xFF10B981).copy(alpha = 0.6f),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
             )
         }
     }

@@ -62,7 +62,8 @@ class PrayerTimeCalculator {
      */
     fun calculateSchedule(
         now: ZonedDateTime,
-        settings: PrayerSettings
+        settings: PrayerSettings,
+        isJumatEnabled: Boolean = true
     ): DailyPrayerSchedule {
         val zoneId = resolveZoneId(settings.timezone)
         val zonedNow = now.withZoneSameInstant(zoneId)
@@ -71,11 +72,12 @@ class PrayerTimeCalculator {
 
         val todayTimesMap = computeEightTimesForDate(today, zoneId, settings)
 
-        // Determine next prayer among today's 8 times
+        // Determine next prayer strictly among today's 5 obligatory (Fardhu) prayers
+        // Mirrors `PrayerTimeContext.tsx` in jws-android-algaffar
         var nextPrayerId: PrayerId? = null
         var nextPrayerTime: ZonedDateTime? = null
 
-        for (prayerId in PrayerId.entries) {
+        for (prayerId in PrayerId.entries.filter { it.isFiveTimeFardhu }) {
             val candidateTime = todayTimesMap.getValue(prayerId)
             if (candidateTime.isAfter(zonedNow)) {
                 nextPrayerId = prayerId
@@ -84,12 +86,12 @@ class PrayerTimeCalculator {
             }
         }
 
-        // If all 8 times today have passed (after Isha), next prayer is tomorrow's Imsak
+        // If all 5 Fardhu prayers today have passed (after Isha), next prayer is tomorrow's Fajr (Subuh)
         if (nextPrayerId == null || nextPrayerTime == null) {
             val tomorrow = today.plusDays(1)
             val tomorrowTimesMap = computeEightTimesForDate(tomorrow, zoneId, settings)
-            nextPrayerId = PrayerId.IMSAK
-            nextPrayerTime = tomorrowTimesMap.getValue(PrayerId.IMSAK)
+            nextPrayerId = PrayerId.FAJR
+            nextPrayerTime = tomorrowTimesMap.getValue(PrayerId.FAJR)
         }
 
         val secondsToNext = ChronoUnit.SECONDS.between(zonedNow, nextPrayerTime).coerceAtLeast(0L)
@@ -98,16 +100,16 @@ class PrayerTimeCalculator {
             val t = todayTimesMap.getValue(id)
             PrayerTimeItem(
                 id = id,
-                label = id.displayName(isFriday = isFriday),
+                label = id.displayName(isFriday = isFriday && isJumatEnabled),
                 time = t,
                 formattedTime = t.format(timeFormatter),
-                isNext = (id == nextPrayerId && t.toLocalDate() == nextPrayerTime.toLocalDate())
+                isNext = (id == nextPrayerId)
             )
         }
 
         val nextItem = PrayerTimeItem(
             id = nextPrayerId,
-            label = nextPrayerId.displayName(isFriday = nextPrayerTime.dayOfWeek == DayOfWeek.FRIDAY),
+            label = nextPrayerId.displayName(isFriday = nextPrayerTime.dayOfWeek == DayOfWeek.FRIDAY && isJumatEnabled),
             time = nextPrayerTime,
             formattedTime = nextPrayerTime.format(timeFormatter),
             isNext = true

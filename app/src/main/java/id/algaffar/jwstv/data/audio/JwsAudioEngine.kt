@@ -98,9 +98,16 @@ class JwsAudioEngine(
         val state = tickResult.state
         val prayerId = tickResult.activePrayerId ?: PrayerId.DHUHR
 
+        val isTartilVideoWithAudio = state == AppState.TARTIL &&
+            settings.media.tartilMediaType.equals("video", ignoreCase = true) &&
+            settings.media.tartilVideo.isNotBlank()
+        val isTarhimVideoWithAudio = state == AppState.TARHIM &&
+            settings.media.tarhimMediaType.equals("video", ignoreCase = true) &&
+            settings.media.tarhimVideo.isNotBlank()
+
         val desiredCategory: String? = when (state) {
-            AppState.TARTIL -> "tartil"
-            AppState.TARHIM -> "tarhim"
+            AppState.TARTIL -> if (isTartilVideoWithAudio) null else "tartil"
+            AppState.TARHIM -> if (isTarhimVideoWithAudio) null else "tarhim"
             AppState.ADZAN -> {
                 val stageCfg = settings.prayers.forPrayer(prayerId)
                 if (stageCfg.isAdzan) "adzan" else null

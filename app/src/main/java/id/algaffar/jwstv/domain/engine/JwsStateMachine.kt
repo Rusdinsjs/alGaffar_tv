@@ -314,15 +314,9 @@ class JwsStateMachine(
             } else {
                 0L
             }
-            // Pre-Adzan total window starts at maxOf(tartilWindowSec + tarhimSec, tartilWindowSec)
-            // Note: In reference app, tartilDuration is minutes before Adzan (or before Tarhim if tartilDuration > tarhimDuration).
-            // If tartilDuration = 10m and tarhimDuration = 5m, Tartil runs from -10m to -5m, and Tarhim runs from -5m to 0m.
-            // If tarhim audio is longer than tartilDuration, total pre-adzan window starts at tarhimSec.
-            val preAdzanStartSec = if (tartilWindowSec > tarhimSec) {
-                tartilWindowSec
-            } else {
-                tartilWindowSec + tarhimSec
-            }
+            // Waktu Mulai Tartil = Waktu Adzan - Durasi Tartil (Tidak ditambah durasi tarhim),
+            // sesuai aturan jws-android-algaffar (`coreTransitions.ts`).
+            val preAdzanStartSec = maxOf(tartilWindowSec, tarhimSec)
 
             val secondsUntilAdzan = ChronoUnit.SECONDS.between(now, prayerTime)
 
@@ -340,10 +334,10 @@ class JwsStateMachine(
                         shouldFadeOutAudio = (secondsUntilAdzan in 1L..3L),
                         isNoSunnahWarningActive = false
                     )
-                } else if (tartilWindowSec > 0L) {
+                } else if (tartilWindowSec > 0L && secondsUntilAdzan <= tartilWindowSec) {
                     // Inside TARTIL
                     val remainingInTartil = (secondsUntilAdzan - tarhimSec).coerceAtLeast(1L)
-                    val totalTartilSec = (preAdzanStartSec - tarhimSec).coerceAtLeast(1L)
+                    val totalTartilSec = (tartilWindowSec - tarhimSec).coerceAtLeast(1L)
                     return StateMachineTickResult(
                         state = AppState.TARTIL,
                         activePrayerId = prayerId,
@@ -360,61 +354,19 @@ class JwsStateMachine(
             // B. At & Post-Adzan (elapsed >= 0) — Includes Crash/Reboot Recovery
             val elapsedSec = ChronoUnit.SECONDS.between(prayerTime, now)
             if (elapsedSec >= 0L) {
-                val adzanSec = if (stageConfig.isAdzan) {
-                    audioDurations.adzanSecondsFor(prayerId)
-                        ?: (stageConfig.adzanDuration.toLong().coerceAtLeast(1L) * 60L)
-                } else {
-                    stageConfig.adzanDuration.toLong().coerceAtLeast(1L) * 60L
-                }
-
-                // 1) ADZAN phase
-                if (elapsedSec < adzanSec) {
-                    val rem = adzanSec - elapsedSec
-                    return StateMachineTickResult(
-                        state = AppState.ADZAN,
-                        activePrayerId = prayerId,
-                        countdownSeconds = rem,
-                        totalStageSeconds = adzanSec,
-                        secondsUntilAdzan = 0L,
-                        shouldTriggerBeep = false,
-                        shouldFadeOutAudio = (rem in 1L..3L),
-                        isNoSunnahWarningActive = false
-                    )
-                }
-
-                // 1b) Optional DOA_ADZAN phase immediately after Adzan
-                val doaAdzanSec = if (settings.media.doaAdzanEnabled && !isFridayDhuhr) {
-                    settings.media.doaAdzanDuration.coerceIn(15, 120).toLong()
-                } else {
-                    0L
-                }
-                val endDoaAdzan = adzanSec + doaAdzanSec
-                if (doaAdzanSec > 0L && elapsedSec in adzanSec until endDoaAdzan) {
-                    val rem = endDoaAdzan - elapsedSec
-                    return StateMachineTickResult(
-                        state = AppState.DOA_ADZAN,
-                        activePrayerId = prayerId,
-                        countdownSeconds = rem,
-                        totalStageSeconds = doaAdzanSec,
-                        secondsUntilAdzan = null,
-                        shouldTriggerBeep = false,
-                        shouldFadeOutAudio = false,
-                        isNoSunnahWarningActive = false
-                    )
-                }
-
-                // 2) Friday (Jum'at) sequence: WAKTU_JUMAT -> KHUTBAH -> PELAKSANAAN_JUMAT
+                // 1) Friday (Jum'at) sequence: directly WAKTU_JUMAT -> KHUTBAH -> PELAKSANAAN_JUMAT
+                // Sesuai jws-android-algaffar (`coreTransitions.ts`), hari Jum'at tidak masuk ke state Adzan/Doa Adzan.
                 if (isFridayDhuhr) {
                     val waktuJumatSec = settings.jumat.waktuJumatDuration.toLong().coerceAtLeast(1L) * 60L
                     val khutbahSec = settings.jumat.khutbahDuration.toLong().coerceAtLeast(1L) * 60L
                     val sholatJumatSec = settings.jumat.sholatJumatDuration.toLong().coerceAtLeast(1L) * 60L
 
-                    val endWaktuJumat = adzanSec + waktuJumatSec
+                    val endWaktuJumat = waktuJumatSec
                     val endKhutbah = endWaktuJumat + khutbahSec
                     val endSholatJumat = endKhutbah + sholatJumatSec
 
                     when (elapsedSec) {
-                        in adzanSec until endWaktuJumat -> {
+                        in 0L until endWaktuJumat -> {
                             val rem = endWaktuJumat - elapsedSec
                             return StateMachineTickResult(
                                 state = AppState.WAKTU_JUMAT,
@@ -455,6 +407,49 @@ class JwsStateMachine(
                         }
                     }
                 } else {
+                    val adzanSec = if (stageConfig.isAdzan) {
+                        audioDurations.adzanSecondsFor(prayerId)
+                            ?: (stageConfig.adzanDuration.toLong().coerceAtLeast(1L) * 60L)
+                    } else {
+                        stageConfig.adzanDuration.toLong().coerceAtLeast(1L) * 60L
+                    }
+
+                    // 2) ADZAN phase
+                    if (elapsedSec < adzanSec) {
+                        val rem = adzanSec - elapsedSec
+                        return StateMachineTickResult(
+                            state = AppState.ADZAN,
+                            activePrayerId = prayerId,
+                            countdownSeconds = rem,
+                            totalStageSeconds = adzanSec,
+                            secondsUntilAdzan = 0L,
+                            shouldTriggerBeep = false,
+                            shouldFadeOutAudio = (rem in 1L..3L),
+                            isNoSunnahWarningActive = false
+                        )
+                    }
+
+                    // 2b) Optional DOA_ADZAN phase immediately after Adzan
+                    val doaAdzanSec = if (settings.media.doaAdzanEnabled) {
+                        settings.media.doaAdzanDuration.coerceIn(15, 120).toLong()
+                    } else {
+                        0L
+                    }
+                    val endDoaAdzan = adzanSec + doaAdzanSec
+                    if (doaAdzanSec > 0L && elapsedSec in adzanSec until endDoaAdzan) {
+                        val rem = endDoaAdzan - elapsedSec
+                        return StateMachineTickResult(
+                            state = AppState.DOA_ADZAN,
+                            activePrayerId = prayerId,
+                            countdownSeconds = rem,
+                            totalStageSeconds = doaAdzanSec,
+                            secondsUntilAdzan = null,
+                            shouldTriggerBeep = false,
+                            shouldFadeOutAudio = false,
+                            isNoSunnahWarningActive = false
+                        )
+                    }
+
                     // 3) Regular 5-time prayer sequence: [DOA_ADZAN ->] MENUNGGU_IQOMAH -> PELAKSANAAN_SHOLAT
                     val iqomahSec = stageConfig.iqomahDuration.toLong().coerceAtLeast(1L) * 60L
                     val sholatSec = stageConfig.sholatDuration.toLong().coerceAtLeast(1L) * 60L

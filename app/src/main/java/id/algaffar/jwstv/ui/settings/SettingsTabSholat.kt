@@ -243,27 +243,39 @@ fun PrayerAndStagesSettingsTab(
                 )
             }
 
+            HybridInfoBanner(
+                text = "Aturan jws-android-algaffar: Durasi Tartil dihitung mundur dari waktu Adzan (tidak ditambah durasi Tarhim). Durasi Tarhim (default 5 mnt) & Adzan otomatis mengikuti panjang file MP3/Video jika aktif.",
+                accentColor = Color(0xFF10B981)
+            )
+
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HybridNumberStepper(
-                    label = "Durasi Tartil",
+                    label = "Durasi Tartil (Sebelum Adzan)",
                     value = currentCfg.tartilDuration,
-                    min = 0,
+                    min = 5,
                     max = 60,
                     enabled = currentCfg.isTartil,
                     onValueChange = { v -> updateStage(selectedPrayer) { it.copy(tartilDuration = v) } },
                     modifier = Modifier.weight(1f)
                 )
                 HybridNumberStepper(
-                    label = "Durasi Tarhim",
-                    value = currentCfg.tarhimDuration,
-                    min = 0,
-                    max = 30,
-                    enabled = currentCfg.isTarhim,
-                    onValueChange = { v -> updateStage(selectedPrayer) { it.copy(tarhimDuration = v) } },
+                    label = "Durasi Menunggu Iqomah",
+                    value = currentCfg.iqomahDuration,
+                    min = 3,
+                    max = 15,
+                    onValueChange = { v -> updateStage(selectedPrayer) { it.copy(iqomahDuration = v) } },
                     modifier = Modifier.weight(1f)
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HybridNumberStepper(
+                    label = "Durasi Pelaksanaan Sholat",
+                    value = currentCfg.sholatDuration,
+                    min = 5,
+                    max = 30,
+                    onValueChange = { v -> updateStage(selectedPrayer) { it.copy(sholatDuration = v) } },
+                    modifier = Modifier.weight(1f)
+                )
                 HybridNumberStepper(
                     label = "Durasi Adzan (Manual)",
                     value = currentCfg.adzanDuration,
@@ -273,22 +285,7 @@ fun PrayerAndStagesSettingsTab(
                     onValueChange = { v -> updateStage(selectedPrayer) { it.copy(adzanDuration = v) } },
                     modifier = Modifier.weight(1f)
                 )
-                HybridNumberStepper(
-                    label = "Durasi Menunggu Iqomah",
-                    value = currentCfg.iqomahDuration,
-                    min = 1,
-                    max = 30,
-                    onValueChange = { v -> updateStage(selectedPrayer) { it.copy(iqomahDuration = v) } },
-                    modifier = Modifier.weight(1f)
-                )
             }
-            HybridNumberStepper(
-                label = "Durasi Mode Tenang Pelaksanaan Sholat",
-                value = currentCfg.sholatDuration,
-                min = 5,
-                max = 45,
-                onValueChange = { v -> updateStage(selectedPrayer) { it.copy(sholatDuration = v) } }
-            )
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HybridTextInput(

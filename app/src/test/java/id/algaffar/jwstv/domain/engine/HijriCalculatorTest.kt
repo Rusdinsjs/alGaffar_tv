@@ -53,4 +53,52 @@ class HijriCalculatorTest {
         assertTrue("Expected at least 1 PHBI event in Feb-Apr 2026 (Ramadhan/Eid)", events.isNotEmpty())
         assertTrue(events.all { it.daysUntil in 0..60 })
     }
+
+    @Test
+    fun `getUpcomingIslamicEvents supports configurable gregorian, custom, and disabled events`() {
+        val now = ZonedDateTime.of(2026, 5, 10, 9, 0, 0, 0, makassarZone)
+        val maghrib = now.withHour(18).withMinute(15)
+        val customConfig = listOf(
+            id.algaffar.jwstv.domain.model.CustomIslamicEventItem(
+                id = "g-1",
+                name = "Rapat DKM Masjid",
+                type = "gregorian",
+                gregorianDate = "2026-05-15",
+                enabled = true
+            ),
+            id.algaffar.jwstv.domain.model.CustomIslamicEventItem(
+                id = "c-1",
+                name = "Tabligh Akbar",
+                type = "custom",
+                customSubtitle = "Ahad Ba'da Subuh",
+                enabled = true
+            ),
+            id.algaffar.jwstv.domain.model.CustomIslamicEventItem(
+                id = "d-1",
+                name = "Agenda Nonaktif",
+                type = "custom",
+                customSubtitle = "Tidak Muncul",
+                enabled = false
+            )
+        )
+
+        val events = calculator.getUpcomingIslamicEvents(
+            now = now,
+            maghribTime = maghrib,
+            hijriAdjustment = 0,
+            maxDays = 30,
+            customEvents = customConfig
+        )
+
+        val gregorianEvent = events.firstOrNull { it.name == "Rapat DKM Masjid" }
+        assertTrue("Expected Gregorian event to be matched", gregorianEvent != null)
+        assertEquals(5, gregorianEvent?.daysUntil)
+
+        val customEvent = events.firstOrNull { it.name == "Tabligh Akbar" }
+        assertTrue("Expected Custom event to be included", customEvent != null)
+        assertEquals(-1, customEvent?.daysUntil)
+        assertEquals("Ahad Ba'da Subuh", customEvent?.customSubtitle)
+
+        assertTrue("Disabled event should be excluded", events.none { it.name == "Agenda Nonaktif" })
+    }
 }

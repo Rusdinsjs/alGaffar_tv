@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Info
@@ -30,28 +32,48 @@ import androidx.compose.material.icons.filled.ToggleOn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.algaffar.jwstv.data.auth.AuthManager
 import id.algaffar.jwstv.data.cctv.FinancialSummaryData
+import id.algaffar.jwstv.data.media.StorageHealthSnapshot
 import id.algaffar.jwstv.domain.model.AppStateSettings
 import id.algaffar.jwstv.domain.model.UserAccount
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
+import kotlinx.coroutines.delay
 import java.io.File
 import java.util.Locale
 
@@ -67,6 +89,9 @@ data class SettingsActions(
     val onImportTakjilExcel: () -> Unit,
     val onExportBackupZip: () -> Unit,
     val onImportBackupZip: () -> Unit,
+    val onSyncUsbFolder: () -> Unit,
+    val onRefreshStorageHealth: () -> Unit,
+    val onCleanOrphanMedia: () -> Unit,
     val onOpenDebugSimulator: () -> Unit,
     val onToggleManualRelay: (Int, Boolean) -> Unit,
     val onDiscoverOnvifCameras: () -> Unit,
@@ -74,6 +99,7 @@ data class SettingsActions(
     val onStartDirectLive: (source: String, customId: String, durationMinutes: Int) -> Unit,
     val onStopDirectLive: () -> Unit,
     val onPickImageAsset: (subFolder: String, onSaved: (String) -> Unit) -> Unit,
+    val onPickVideoAsset: (onSaved: (path: String, title: String) -> Unit) -> Unit,
     val onPickPrayerAudio: (category: String, slotName: String) -> Unit,
     val onDeletePrayerAudio: (category: String, slotName: String) -> Unit,
     val onTogglePreviewPrayerAudio: (category: String, slotName: String) -> Unit,
@@ -83,6 +109,7 @@ data class SettingsActions(
     val onFindPrayerAudioSlot: (category: String, slotName: String) -> Pair<Boolean, String>,
     val onListCustomAudioFiles: () -> List<Pair<String, String>>,
     val assetsRootDir: File?,
+    val storageHealth: StorageHealthSnapshot,
     val remoteServerUrl: String,
     val remoteQrPairingUrl: String,
     val remoteAuthToken: String,
@@ -431,7 +458,29 @@ fun HybridCoordinateStepper(
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
-    var textVal by remember(value) { mutableStateOf(String.format(Locale.US, "%.4f", value)) }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val vkPolicy = LocalVirtualKeyboardPolicy.current
+    var isFocused by remember { mutableStateOf(false) }
+    var textVal by remember {
+        val initial = String.format(Locale.US, "%.4f", value)
+        mutableStateOf(TextFieldValue(initial, TextRange(initial.length)))
+    }
+
+    LaunchedEffect(value, isFocused) {
+        if (!isFocused) {
+            val formatted = String.format(Locale.US, "%.4f", value)
+            if (formatted != textVal.text) {
+                textVal = TextFieldValue(formatted, TextRange(formatted.length))
+            }
+        }
+    }
+
+    LaunchedEffect(isFocused, vkPolicy.allowVirtualKeyboard) {
+        if (isFocused && !vkPolicy.allowVirtualKeyboard) {
+            keyboardController?.hide()
+        }
+    }
 
     Row(
         modifier = modifier
@@ -458,30 +507,84 @@ fun HybridCoordinateStepper(
                 label = "-0.01",
                 onClick = { onValueChange((value - 0.01).coerceIn(min, max)) }
             )
-            BasicTextField(
-                value = textVal,
-                onValueChange = { raw ->
-                    textVal = raw
-                    raw.toDoubleOrNull()?.let { parsed ->
-                        if (parsed in min..max) onValueChange(parsed)
-                    }
-                },
-                singleLine = true,
-                textStyle = TextStyle(
-                    color = palette.accentSecondary,
-                    fontSize = 16.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.ExtraBold,
-                    textAlign = TextAlign.Center
-                ),
-                cursorBrush = SolidColor(palette.accent),
-                modifier = Modifier
-                    .width(120.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(palette.bgSecondary)
-                    .border(1.dp, palette.border, RoundedCornerShape(10.dp))
-                    .padding(horizontal = 10.dp, vertical = 10.dp)
-            )
+            VirtualKeyboardGuard(allowVirtualKeyboard = vkPolicy.allowVirtualKeyboard) {
+                BasicTextField(
+                    value = textVal,
+                    onValueChange = { raw ->
+                        textVal = raw
+                        raw.text.replace(',', '.').toDoubleOrNull()?.let { parsed ->
+                            if (parsed in min..max) onValueChange(parsed)
+                        }
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Done,
+                        autoCorrectEnabled = false
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            keyboardController?.hide()
+                            focusManager.moveFocus(FocusDirection.Next)
+                        }
+                    ),
+                    textStyle = TextStyle(
+                        color = palette.accentSecondary,
+                        fontSize = 16.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center
+                    ),
+                    cursorBrush = SolidColor(palette.accent),
+                    modifier = Modifier
+                        .width(128.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(palette.bgSecondary)
+                        .border(
+                            width = if (isFocused) 2.5.dp else 1.dp,
+                            color = if (isFocused) TvFocusAmber else palette.border,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .onFocusChanged { isFocused = it.isFocused }
+                        .onPreviewKeyEvent { keyEvent ->
+                            if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when (keyEvent.key) {
+                                Key.DirectionCenter -> {
+                                    if (vkPolicy.allowVirtualKeyboard) {
+                                        keyboardController?.show()
+                                    } else {
+                                        keyboardController?.hide()
+                                    }
+                                    true
+                                }
+                                Key.DirectionUp -> {
+                                    focusManager.moveFocus(FocusDirection.Up)
+                                    true
+                                }
+                                Key.DirectionDown -> {
+                                    focusManager.moveFocus(FocusDirection.Down)
+                                    true
+                                }
+                                Key.Enter, Key.NumPadEnter -> {
+                                    keyboardController?.hide()
+                                    focusManager.moveFocus(FocusDirection.Next)
+                                    true
+                                }
+                                Key.Tab -> {
+                                    focusManager.moveFocus(if (keyEvent.isShiftPressed) FocusDirection.Previous else FocusDirection.Next)
+                                    true
+                                }
+                                Key.Escape -> {
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                    true
+                                }
+                                else -> false
+                            }
+                        }
+                        .padding(horizontal = 10.dp, vertical = 10.dp)
+                )
+            }
             HybridButton(
                 label = "+0.01",
                 onClick = { onValueChange((value + 0.01).coerceIn(min, max)) }
@@ -496,61 +599,240 @@ fun HybridTextInput(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String = "",
+    singleLine: Boolean = true,
+    keyboardType: KeyboardType = KeyboardType.Text,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val vkPolicy = LocalVirtualKeyboardPolicy.current
+    val latestOnValueChange by rememberUpdatedState(onValueChange)
+
     var isFocused by remember { mutableStateOf(false) }
+    var fieldValue by remember {
+        mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length)))
+    }
+    var lastEmittedText by remember { mutableStateOf(value) }
+
+    fun flushNow() {
+        val currentText = fieldValue.text
+        if (currentText != lastEmittedText) {
+            lastEmittedText = currentText
+            latestOnValueChange(currentText)
+        }
+    }
+
+    // Sync external value ONLY when field is NOT focused so 1Hz ticks or async disk saves
+    // NEVER overwrite active IME composition or jump the cursor while typing!
+    LaunchedEffect(value, isFocused) {
+        if (!isFocused && value != fieldValue.text) {
+            fieldValue = TextFieldValue(text = value, selection = TextRange(value.length))
+            lastEmittedText = value
+        }
+    }
+
+    LaunchedEffect(isFocused, vkPolicy.allowVirtualKeyboard) {
+        if (isFocused && !vkPolicy.allowVirtualKeyboard) {
+            keyboardController?.hide()
+        }
+    }
+
+    // Debounced commit while typing (smooth zero-jank typing on both D-Pad IME & PC keyboard)
+    LaunchedEffect(fieldValue.text) {
+        val pending = fieldValue.text
+        if (pending != lastEmittedText) {
+            delay(250L)
+            if (fieldValue.text == pending && pending != lastEmittedText) {
+                lastEmittedText = pending
+                latestOnValueChange(pending)
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { flushNow() }
+    }
 
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         if (label.isNotBlank()) {
-            Text(
-                text = label.uppercase(),
-                color = palette.textSecondary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            textStyle = TextStyle(
-                color = palette.textPrimary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
-            ),
-            cursorBrush = SolidColor(palette.accent),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(palette.bgPrimary.copy(alpha = 0.85f))
-                .border(
-                    width = if (isFocused) 2.5.dp else 1.dp,
-                    color = if (isFocused) TvFocusAmber else palette.border,
-                    shape = RoundedCornerShape(12.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = label.uppercase(),
+                    color = if (isFocused) TvFocusAmber else palette.textSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
                 )
-                .onFocusChanged { isFocused = it.isFocused }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            decorationBox = { innerTextField ->
-                Box {
-                    if (value.isEmpty() && placeholder.isNotEmpty()) {
-                        Text(
-                            text = placeholder,
-                            color = palette.textSecondary.copy(alpha = 0.45f),
-                            fontSize = 15.sp
-                        )
+                if (isFocused) {
+                    val hintText = if (vkPolicy.allowVirtualKeyboard) {
+                        if (singleLine) "OK: Keyboard • ▲▼: Pindah • Enter: Selesai" else "OK: Keyboard • Esc: Selesai"
+                    } else {
+                        if (singleLine) "Mode Keyboard PC • ▲▼: Pindah • Enter: Selesai" else "Mode Keyboard PC • Esc: Selesai"
                     }
-                    innerTextField()
+                    Text(
+                        text = hintText,
+                        color = palette.accent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
-        )
+        }
+        VirtualKeyboardGuard(allowVirtualKeyboard = vkPolicy.allowVirtualKeyboard) {
+            BasicTextField(
+                value = fieldValue,
+                onValueChange = { updated ->
+                    val sanitized = if (singleLine && updated.text.contains('\n')) {
+                        val clean = updated.text.replace("\r", "").replace("\n", "")
+                        updated.copy(text = clean, selection = TextRange(clean.length))
+                    } else {
+                        updated
+                    }
+                    fieldValue = sanitized
+                },
+                singleLine = singleLine,
+                maxLines = if (singleLine) 1 else 6,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = keyboardType,
+                    imeAction = if (singleLine) ImeAction.Done else ImeAction.Default,
+                    autoCorrectEnabled = false
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        flushNow()
+                        keyboardController?.hide()
+                    }
+                ),
+                textStyle = TextStyle(
+                    color = palette.textPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                ),
+                cursorBrush = SolidColor(palette.accent),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        if (isFocused) palette.bgPrimary else palette.bgPrimary.copy(alpha = 0.85f)
+                    )
+                    .border(
+                        width = if (isFocused) 2.5.dp else 1.dp,
+                        color = if (isFocused) TvFocusAmber else palette.border,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .onFocusChanged { state ->
+                        val wasFocused = isFocused
+                        isFocused = state.isFocused
+                        if (state.isFocused && !wasFocused) {
+                            // Place cursor at end on initial focus for natural appending/backspacing
+                            fieldValue = fieldValue.copy(selection = TextRange(fieldValue.text.length))
+                            if (!vkPolicy.allowVirtualKeyboard) {
+                                keyboardController?.hide()
+                            }
+                        } else if (!state.isFocused && wasFocused) {
+                            flushNow()
+                        }
+                    }
+                    .onPreviewKeyEvent { keyEvent ->
+                        if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (keyEvent.key) {
+                            Key.DirectionCenter -> {
+                                if (vkPolicy.allowVirtualKeyboard) {
+                                    keyboardController?.show()
+                                } else {
+                                    keyboardController?.hide()
+                                }
+                                true
+                            }
+                            Key.Enter, Key.NumPadEnter -> {
+                                if (singleLine) {
+                                    flushNow()
+                                    keyboardController?.hide()
+                                    focusManager.moveFocus(FocusDirection.Down)
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            Key.Tab -> {
+                                flushNow()
+                                focusManager.moveFocus(
+                                    if (keyEvent.isShiftPressed) FocusDirection.Previous else FocusDirection.Next
+                                )
+                                true
+                            }
+                            Key.Escape -> {
+                                flushNow()
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                                true
+                            }
+                            Key.DirectionUp -> {
+                                if (singleLine) {
+                                    flushNow()
+                                    focusManager.moveFocus(FocusDirection.Up)
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            Key.DirectionDown -> {
+                                if (singleLine) {
+                                    flushNow()
+                                    focusManager.moveFocus(FocusDirection.Down)
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            Key.DirectionLeft -> {
+                                if (fieldValue.selection.collapsed && fieldValue.selection.start == 0) {
+                                    flushNow()
+                                    focusManager.moveFocus(FocusDirection.Left)
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            Key.DirectionRight -> {
+                                if (fieldValue.selection.collapsed && fieldValue.selection.end == fieldValue.text.length) {
+                                    flushNow()
+                                    focusManager.moveFocus(FocusDirection.Right)
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            else -> false
+                        }
+                    }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (fieldValue.text.isEmpty() && placeholder.isNotEmpty()) {
+                            Text(
+                                text = placeholder,
+                                color = palette.textSecondary.copy(alpha = 0.45f),
+                                fontSize = 15.sp
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
+            )
+        }
     }
 }
 
 /**
- * Multi-Role PIN Login Guard with On-Screen TV D-Pad & Touch Numeric Keypad.
+ * Multi-Role PIN Login Guard with On-Screen TV D-Pad, Touch & Physical PC Keyboard Numeric Input.
  * Default Superadmin: username `admin`, PIN `732911`.
  */
 @Composable
@@ -562,6 +844,11 @@ fun PinLoginGuardScreen(
     val palette = LocalJwsTheme.current
     var pinInput by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf("") }
+    val firstKeyFocus = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        runCatching { firstKeyFocus.requestFocus() }
+    }
 
     fun attemptLogin(candidatePin: String) {
         val matched = AuthManager.authenticate(
@@ -576,10 +863,49 @@ fun PinLoginGuardScreen(
         }
     }
 
+    fun appendDigit(digit: String) {
+        errorMessage = ""
+        if (pinInput.length < 8) {
+            pinInput += digit
+            if (pinInput.length == 6) {
+                AuthManager.authenticate("", pinInput, users)?.let(onAuthenticated)
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.88f)),
+            .background(Color.Black.copy(alpha = 0.88f))
+            .onPreviewKeyEvent { keyEvent ->
+                if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (keyEvent.key) {
+                    Key.Zero, Key.NumPad0 -> { appendDigit("0"); true }
+                    Key.One, Key.NumPad1 -> { appendDigit("1"); true }
+                    Key.Two, Key.NumPad2 -> { appendDigit("2"); true }
+                    Key.Three, Key.NumPad3 -> { appendDigit("3"); true }
+                    Key.Four, Key.NumPad4 -> { appendDigit("4"); true }
+                    Key.Five, Key.NumPad5 -> { appendDigit("5"); true }
+                    Key.Six, Key.NumPad6 -> { appendDigit("6"); true }
+                    Key.Seven, Key.NumPad7 -> { appendDigit("7"); true }
+                    Key.Eight, Key.NumPad8 -> { appendDigit("8"); true }
+                    Key.Nine, Key.NumPad9 -> { appendDigit("9"); true }
+                    Key.Backspace, Key.Delete -> {
+                        errorMessage = ""
+                        if (pinInput.isNotEmpty()) pinInput = pinInput.dropLast(1)
+                        true
+                    }
+                    Key.Enter, Key.NumPadEnter -> {
+                        attemptLogin(pinInput)
+                        true
+                    }
+                    Key.Escape -> {
+                        onCancel()
+                        true
+                    }
+                    else -> false
+                }
+            },
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -605,7 +931,7 @@ fun PinLoginGuardScreen(
                 fontWeight = FontWeight.ExtraBold
             )
             Text(
-                text = "Masukkan 6 digit PIN menggunakan Remote TV (D-Pad) atau sentuh tombol angka",
+                text = "Masukkan 6 digit PIN lewat Remote TV (D-Pad), Keyboard PC, atau sentuh tombol angka",
                 color = palette.textSecondary,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center
@@ -652,6 +978,16 @@ fun PinLoginGuardScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         r.forEach { key ->
+                            val btnMod = if (key == "1") {
+                                Modifier
+                                    .weight(1f)
+                                    .height(54.dp)
+                                    .focusRequester(firstKeyFocus)
+                            } else {
+                                Modifier
+                                    .weight(1f)
+                                    .height(54.dp)
+                            }
                             HybridButton(
                                 label = key,
                                 isPrimary = (key == "MASUK"),
@@ -661,19 +997,10 @@ fun PinLoginGuardScreen(
                                     when (key) {
                                         "HAPUS" -> if (pinInput.isNotEmpty()) pinInput = pinInput.dropLast(1)
                                         "MASUK" -> attemptLogin(pinInput)
-                                        else -> {
-                                            if (pinInput.length < 8) {
-                                                pinInput += key
-                                                if (pinInput.length == 6) {
-                                                    AuthManager.authenticate("", pinInput, users)?.let(onAuthenticated)
-                                                }
-                                            }
-                                        }
+                                        else -> appendDigit(key)
                                     }
                                 },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(54.dp)
+                                modifier = btnMod
                             )
                         }
                     }

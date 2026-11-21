@@ -61,14 +61,14 @@ data class BrandSettings(
 
 @Serializable
 data class PrayerStageConfig(
-    val tartilDuration: Int = 10,     // minutes before Adzan
-    val tarhimDuration: Int = 5,      // minutes before Adzan (auto-synced with audio length if available)
-    val adzanDuration: Int = 4,       // minutes (auto-synced with audio length if isAdzan == true)
+    val tartilDuration: Int = 20,     // minutes before Adzan (not added on top of tarhimDuration)
+    val tarhimDuration: Int = 5,      // minutes before Adzan (auto-synced with audio/video length if available)
+    val adzanDuration: Int = 5,       // minutes (auto-synced with audio length if isAdzan == true)
     val iqomahDuration: Int = 10,     // minutes countdown before sholat
-    val sholatDuration: Int = 15,     // minutes quiet sholat screen
-    val isTartil: Boolean = true,     // enable tartil stage before prayer
-    val isTarhim: Boolean = true,     // enable tarhim stage before adzan
-    val isAdzan: Boolean = true,      // play adzan audio or visual-only
+    val sholatDuration: Int = 10,     // minutes quiet sholat screen
+    val isTartil: Boolean = false,    // enable tartil stage before prayer
+    val isTarhim: Boolean = false,    // enable tarhim stage before adzan
+    val isAdzan: Boolean = false,     // play adzan audio or visual-only
     val imam: String = "",
     val muadzin: String = "",
     val sholatMessage: String = "Rapatkan Shaf dan Matikan Gadget",
@@ -79,39 +79,44 @@ data class PrayerStageConfig(
 @Serializable
 data class FivePrayerConfigs(
     val fajr: PrayerStageConfig = PrayerStageConfig(
-        tartilDuration = 15,
+        tartilDuration = 20,
         tarhimDuration = 5,
-        adzanDuration = 4,
-        iqomahDuration = 12,
-        sholatDuration = 15
+        adzanDuration = 5,
+        iqomahDuration = 10,
+        sholatDuration = 15,
+        adzanMessage = "Fajar Menyingsing, Saatnya Bersujud"
     ),
     val dhuhr: PrayerStageConfig = PrayerStageConfig(
-        tartilDuration = 10,
+        tartilDuration = 20,
         tarhimDuration = 5,
-        adzanDuration = 4,
+        adzanDuration = 5,
         iqomahDuration = 10,
-        sholatDuration = 15
+        sholatDuration = 10,
+        adzanMessage = "Cahaya Terang, Hati Tenang Dalam Shalat"
     ),
     val asr: PrayerStageConfig = PrayerStageConfig(
-        tartilDuration = 10,
+        tartilDuration = 20,
         tarhimDuration = 5,
-        adzanDuration = 4,
+        adzanDuration = 5,
         iqomahDuration = 10,
-        sholatDuration = 15
+        sholatDuration = 10,
+        adzanMessage = "Sore Berkah, Langkah Menuju Kemenangan"
     ),
     val maghrib: PrayerStageConfig = PrayerStageConfig(
-        tartilDuration = 10,
+        tartilDuration = 15,
         tarhimDuration = 5,
-        adzanDuration = 4,
-        iqomahDuration = 7,
-        sholatDuration = 15
+        adzanDuration = 5,
+        iqomahDuration = 5,
+        sholatDuration = 10,
+        adzanMessage = "Tenggelam Mentari, Terbitlah Kedamaian Hati"
     ),
     val isha: PrayerStageConfig = PrayerStageConfig(
-        tartilDuration = 10,
+        tartilDuration = 20,
         tarhimDuration = 5,
-        adzanDuration = 4,
+        adzanDuration = 5,
         iqomahDuration = 10,
-        sholatDuration = 15
+        sholatDuration = 15,
+        adzanMessage = "Malam Menjemput, Mengadu Di Depan Sang Pencipta"
     )
 ) {
     fun forPrayer(prayerId: PrayerId): PrayerStageConfig = when (prayerId) {
@@ -171,8 +176,8 @@ data class JumatKeuanganSettings(
 
 @Serializable
 data class JumatSlideshowSettings(
-    val showPetugas: Boolean = true,
-    val showKeuangan: Boolean = true,
+    val showPetugas: Boolean = false,
+    val showKeuangan: Boolean = false,
     val slideDuration: Int = 10 // seconds per slide
 )
 
@@ -342,11 +347,27 @@ data class InfoQurbanSettings(
 // ==================== SLIDES, STANDBY SLIDESHOW & SCREENSAVER ====================
 
 @Serializable
+data class SlideTextStyle(
+    val bold: Boolean = false,
+    val italic: Boolean = false,
+    val fontSize: String = "3xl",     // "base" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "6xl"
+    val fontColor: String = "#FFFFFF",
+    val textAlign: String = "center"  // "left" | "center" | "right"
+)
+
+@Serializable
+data class SlideGlobalConfig(
+    val autoPlay: Boolean = true,
+    val defaultDuration: Int = 15,
+    val maxVideoResolution: String = "1080p" // "720p" | "1080p" | "4k" | "unlimited"
+)
+
+@Serializable
 data class SlideItem(
     val id: String = "",
     val title: String = "",
     val content: String = "",
-    val type: String = "image", // "image" | "video" | "text"
+    val type: String = "image", // "welcome" | "analog_clock" | "text" | "image" | "video" | system slide types
     val imageUrl: String = "",
     val videoUrl: String = "",
     val duration: Int = 10, // seconds
@@ -356,8 +377,48 @@ data class SlideItem(
     val showInJumat: Boolean = false,
     val showInRamadhan: Boolean = false,
     val showInIdulFitri: Boolean = false,
-    val showInIdulAdha: Boolean = false
-)
+    val showInIdulAdha: Boolean = false,
+    val textStyle: SlideTextStyle = SlideTextStyle()
+) {
+    companion object {
+        const val DEFAULT_WELCOME_TEMPLATE: String =
+            "SELAMAT DATANG DI\n{{Nama Masjid}}\n{{Alamat Masjid}}\nSELAMA BERADA DI DALAM MASJID\nHARAP TENANG DAN KHIDMAT"
+
+        /**
+         * Default system slides mirroring `DEFAULT_SLIDE_SETTINGS` in `jws-android-algaffar/src/types/appState.ts`.
+         */
+        fun defaultSystemSlides(): List<SlideItem> = listOf(
+            SlideItem(
+                id = "default-slide-welcome",
+                title = "Ucapan Selamat Datang di Masjid",
+                content = DEFAULT_WELCOME_TEMPLATE,
+                type = "welcome",
+                duration = 15,
+                enabled = true,
+                showInMain = true,
+                showInSlideshow = true,
+                showInJumat = true,
+                showInRamadhan = true,
+                showInIdulFitri = true,
+                showInIdulAdha = true
+            ),
+            SlideItem(
+                id = "default-slide-analog-clock",
+                title = "Jam Analog Besar",
+                content = "Jam Analog Besar",
+                type = "analog_clock",
+                duration = 20,
+                enabled = true,
+                showInMain = true,
+                showInSlideshow = true,
+                showInJumat = true,
+                showInRamadhan = true,
+                showInIdulFitri = true,
+                showInIdulAdha = true
+            )
+        )
+    }
+}
 
 @Serializable
 data class StandbySlideshowSettings(
@@ -657,17 +718,23 @@ data class InfoDisplaySettings(
 data class MediaDisplaySettings(
     val tartilMediaType: String = "image", // "image" | "video"
     val tarhimMediaType: String = "image", // "image" | "video"
+    val tartilVideo: String = "",
+    val tarhimVideo: String = "",
     val tartilImages: List<String> = emptyList(),
     val tarhimImages: List<String> = emptyList(),
     val tartilSlideInterval: Int = 12,
     val tarhimSlideInterval: Int = 12,
-    val doaAdzanEnabled: Boolean = false,
-    val doaAdzanDuration: Int = 45, // seconds (30-60)
+    val doaAdzanEnabled: Boolean = true,
+    val doaAdzanDuration: Int = 45, // seconds (15-120)
     val doaAdzanImage: String = "",
     val khutbahJumatImage: String = "",
+    val khutbahIdulFitriImage: String = "",
+    val khutbahIdulAdhaImage: String = "",
     val ceramahTarawihImage: String = "",
     val sholat5WaktuImage: String = "",
     val sholatJumatImage: String = "",
+    val sholatIdulFitriImage: String = "",
+    val sholatIdulAdhaImage: String = "",
     val sholatTarawihWitirImage: String = ""
 )
 
@@ -675,7 +742,7 @@ data class MediaDisplaySettings(
 
 @Serializable
 data class AppStateSettings(
-    val schemaVersion: Int = 2,
+    val schemaVersion: Int = 3,
     val currentState: AppState = AppState.STANDBY,
     val brand: BrandSettings = BrandSettings(),
     val prayerSettings: PrayerSettings = PrayerSettings(),
@@ -685,7 +752,8 @@ data class AppStateSettings(
     val idulFitri: IdulFitriSettings = IdulFitriSettings(),
     val idulAdha: IdulAdhaSettings = IdulAdhaSettings(),
     val infoQurban: InfoQurbanSettings = InfoQurbanSettings(),
-    val slides: List<SlideItem> = emptyList(),
+    val slideConfig: SlideGlobalConfig = SlideGlobalConfig(),
+    val slides: List<SlideItem> = SlideItem.defaultSystemSlides(),
     val standbySlideshow: StandbySlideshowSettings = StandbySlideshowSettings(),
     val screensaver: ScreenSaverSettings = ScreenSaverSettings(),
     val cctv: CctvSettings = CctvSettings(),
@@ -700,6 +768,7 @@ data class AppStateSettings(
     val media: MediaDisplaySettings = MediaDisplaySettings(),
     val globalVolume: Float = 1.0f,
     val performanceMode: Boolean = true,
+    val virtualKeyboardMode: String = "auto", // "auto" | "enabled" | "disabled"
     val overlayTextList: List<String> = listOf(
         "Selamat datang di Masjid Al-Gaffar — Mohon luruskan dan rapatkan shaf serta nonaktifkan dering HP saat sholat berlangsung.",
         "Mari makmurkan masjid dengan sholat berjamaah tepat waktu dan infaq terbaik melalui QRIS Masjid Al-Gaffar."
@@ -710,15 +779,15 @@ data class AppStateSettings(
     val mosqueInfoList: List<InfoCardItem> = listOf(
         InfoCardItem(
             id = "info-1",
-            title = "Kajian Rutin Ba'da Maghrib",
-            content = "Hadirilah kajian tafsir & fiqih setiap malam Jum'at dan Ahad di ruang utama Masjid Al-Gaffar.",
+            title = "INFO KAJIAN",
+            content = "Memahami Makna Shalat",
             subtitle = "Ba'da Maghrib @ Ruang Utama"
         ),
         InfoCardItem(
             id = "info-2",
-            title = "Layanan Zakat, Infaq & Sedekah",
-            content = "Salurkan infaq terbaik Anda melalui kotak amal atau scan QRIS Digital Masjid Al-Gaffar.",
-            subtitle = "Setiap Hari • DKM Al-Gaffar"
+            title = "INFAQ & SEDEKAH",
+            content = "Salurkan Infaq Terbaik Anda",
+            subtitle = "Via QRIS Masjid Al-Gaffar"
         )
     ),
     val users: List<UserAccount> = listOf(UserAccount())

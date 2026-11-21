@@ -7,15 +7,20 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Icon
@@ -39,6 +44,7 @@ import id.algaffar.jwstv.data.auth.AuthManager
 import id.algaffar.jwstv.data.auth.UserRole
 import id.algaffar.jwstv.data.logging.AppLogger
 import id.algaffar.jwstv.data.logging.LogLevel
+import id.algaffar.jwstv.data.media.MediaStorageManager
 import id.algaffar.jwstv.domain.model.AppStateSettings
 import id.algaffar.jwstv.domain.model.UserAccount
 import id.algaffar.jwstv.ui.screens.standby.generateQrBitmap
@@ -270,10 +276,130 @@ fun UserManagementSettingsTab(
 
 @Composable
 fun BackupRestoreSettingsTab(actions: SettingsActions) {
+    val palette = LocalJwsTheme.current
+    val health = actions.storageHealth
+    val statusColor = if (health.isLowStorage) Color(0xFFEF4444) else Color(0xFF10B981)
+    val usedFraction = (health.internalUsedPercent / 100f).coerceIn(0f, 1f)
+
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        // 1. Storage Guard & Orphan Media Cleaner
+        HybridSectionCard(
+            title = "Pengaman Memori Internal (Storage Guard)",
+            subtitle = "Pantau sisa ruang STB/TV, rincian aset lokal `jws-assets/`, dan bersihkan gambar/video lama yang sudah tidak dipakai",
+            headerAction = {
+                HybridButton(
+                    label = "Refresh Storage",
+                    icon = Icons.Default.Refresh,
+                    onClick = actions.onRefreshStorageHealth
+                )
+            }
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                StorageStatBox(
+                    title = "SISA MEMORI INTERNAL TV",
+                    value = MediaStorageManager.formatByteSize(health.usableInternalBytes),
+                    sub = if (health.isLowStorage) "MEMORI RENDAH (< 300 MB)" else "AMAN • Batas minimal 300 MB",
+                    accentColor = statusColor,
+                    modifier = Modifier.weight(1.2f)
+                )
+                StorageStatBox(
+                    title = "TOTAL ASET JWS (${health.totalFileCount} FILE)",
+                    value = MediaStorageManager.formatByteSize(health.jwsAssetsUsedBytes),
+                    sub = "Img ${MediaStorageManager.formatByteSize(health.imagesBytes)} • Aud ${MediaStorageManager.formatByteSize(health.audioBytes)} • Vid ${MediaStorageManager.formatByteSize(health.videosBytes)}",
+                    accentColor = palette.accent,
+                    modifier = Modifier.weight(1.5f)
+                )
+                StorageStatBox(
+                    title = "FILE TIDAK TERPAKAI (YATIM)",
+                    value = "${health.orphanFileCount} File",
+                    sub = if (health.orphanFileCount > 0) "Bisa dihemat ${MediaStorageManager.formatByteSize(health.orphanBytes)}" else "Penyimpanan bersih",
+                    accentColor = if (health.orphanFileCount > 0) Color(0xFFFBBF24) else Color(0xFF34D399),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Internal Storage Usage Bar
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Pemakaian Partisi Internal (${health.internalUsedPercent}%)",
+                        color = palette.textSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Total ${MediaStorageManager.formatByteSize(health.totalInternalBytes)}",
+                        color = palette.textSecondary,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(palette.bgPrimary)
+                        .border(1.dp, palette.border, RoundedCornerShape(50))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(usedFraction)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(50))
+                            .background(statusColor)
+                    )
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HybridButton(
+                    label = if (health.orphanFileCount > 0) {
+                        "Bersihkan ${health.orphanFileCount} File Tidak Terpakai (${MediaStorageManager.formatByteSize(health.orphanBytes)})"
+                    } else {
+                        "Bersihkan File Tidak Terpakai"
+                    },
+                    icon = Icons.Default.CleaningServices,
+                    isDanger = health.orphanFileCount > 0,
+                    onClick = actions.onCleanOrphanMedia
+                )
+            }
+
+            HybridInfoBanner(
+                text = "Auto-Optimasi Aktif: Semua poster/gambar yang diunggah otomatis diperkecil ke resolusi 1920×1080 (Logo 512×512). Upload/impor otomatis ditolak bila sisa memori internal < 300 MB.",
+                accentColor = statusColor
+            )
+        }
+
+        // 2. USB Bulk Folder Sync
+        HybridSectionCard(
+            title = "Import / Sync Massal 1 Folder dari Flashdisk USB",
+            subtitle = "Salin banyak poster gambar, video (.mp4), dan audio (Tartil/Tarhim/Adzan/Kustom) sekaligus ke gudang internal — setelah selesai Flashdisk aman dicabut"
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                HybridButton(
+                    label = "Sync 1 Folder dari Flashdisk USB",
+                    icon = Icons.Default.FolderOpen,
+                    isPrimary = true,
+                    onClick = actions.onSyncUsbFolder
+                )
+            }
+            HybridInfoBanner(
+                text = "Mendukung struktur folder `jws-assets/` (audio/tarhim, audio/adzan, images/slides, videos) MAUPUN folder datar berisi campuran gambar, MP3 (`tarhim_fajr.mp3`, `adzan_default.mp3`, dll.), dan video.",
+                accentColor = Color(0xFF38BDF8)
+            )
+        }
+
+        // 3. Full Backup & Restore ZIP
         HybridSectionCard(
             title = "Backup & Restore Lengkap (.zip) — Kompatibel Tauri Lama",
-            subtitle = "Cadangkan atau pulihkan seluruh konfigurasi JSON + seluruh aset media (logo, slide, audio) dalam 1 file ZIP"
+            subtitle = "Cadangkan atau pulihkan seluruh konfigurasi JSON + seluruh aset media (logo, slide, audio, video) dalam 1 file ZIP"
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 HybridButton(
@@ -294,6 +420,44 @@ fun BackupRestoreSettingsTab(actions: SettingsActions) {
                 accentColor = Color(0xFF14B8A6)
             )
         }
+    }
+}
+
+@Composable
+private fun StorageStatBox(
+    title: String,
+    value: String,
+    sub: String,
+    accentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalJwsTheme.current
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(palette.bgPrimary.copy(alpha = 0.85f))
+            .border(1.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = title,
+            color = palette.textSecondary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = value,
+            color = accentColor,
+            fontSize = 22.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Black
+        )
+        Text(
+            text = sub,
+            color = palette.textSecondary,
+            fontSize = 11.sp
+        )
     }
 }
 
@@ -397,6 +561,136 @@ fun LogViewerSettingsTab() {
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun KeyboardInputSettingsTab(
+    settings: AppStateSettings,
+    actions: SettingsActions
+) {
+    val palette = LocalJwsTheme.current
+    val vkPolicy = LocalVirtualKeyboardPolicy.current
+    var testInput by remember { mutableStateOf("") }
+
+    val statusColor = if (vkPolicy.allowVirtualKeyboard) Color(0xFF38BDF8) else Color(0xFF10B981)
+    val hwColor = if (vkPolicy.hasPhysicalKeyboard) Color(0xFF10B981) else Color(0xFFF59E0B)
+
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        HybridSectionCard(
+            title = "Pengaturan Keyboard Virtual (On-Screen Keyboard)",
+            subtitle = "Nonaktifkan keyboard virtual secara otomatis saat menggunakan keyboard fisik / PC, atau atur secara manual"
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Hardware detection status card
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(hwColor.copy(alpha = 0.12f))
+                        .border(1.dp, hwColor.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "DETEKSI KEYBOARD FISIK / PC",
+                        color = palette.textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (vkPolicy.hasPhysicalKeyboard) "TERDETEKSI" else "TIDAK TERDETEKSI",
+                        color = hwColor,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = if (vkPolicy.detectedKeyboardNames.isNotEmpty()) {
+                            vkPolicy.detectedKeyboardNames.joinToString(" • ")
+                        } else {
+                            "Tidak ada keyboard USB / Bluetooth / PC terhubung"
+                        },
+                        color = palette.textSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+
+                // Effective virtual keyboard status card
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(statusColor.copy(alpha = 0.12f))
+                        .border(1.dp, statusColor.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "STATUS KEYBOARD VIRTUAL SAAT INI",
+                        color = palette.textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (vkPolicy.allowVirtualKeyboard) "AKTIF (MUNCUL)" else "NONAKTIF (DISEMBUNYIKAN)",
+                        color = statusColor,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = when (vkPolicy.normalizedMode) {
+                            VirtualKeyboardPolicy.MODE_ENABLED -> "Dipaksa aktif oleh pengaturan manual"
+                            VirtualKeyboardPolicy.MODE_DISABLED -> "Dimatikan secara manual (hanya ketik keyboard fisik)"
+                            else -> if (vkPolicy.hasPhysicalKeyboard) {
+                                "Otomatis nonaktif karena keyboard fisik/PC terdeteksi"
+                            } else {
+                                "Otomatis aktif karena tidak ada keyboard fisik"
+                            }
+                        },
+                        color = palette.textSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            Text(
+                text = "PILIH MODE KEYBOARD VIRTUAL",
+                color = palette.textSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+            HybridSegmentedRow(
+                options = listOf(
+                    VirtualKeyboardPolicy.MODE_AUTO to "Otomatis (Nonaktif jika Keyboard PC Terdeteksi)",
+                    VirtualKeyboardPolicy.MODE_DISABLED to "Nonaktif (Matikan Keyboard Virtual)",
+                    VirtualKeyboardPolicy.MODE_ENABLED to "Aktif (Selalu Tampilkan Keyboard Virtual)"
+                ),
+                selectedId = vkPolicy.normalizedMode,
+                onSelect = { selected ->
+                    actions.onUpdateSettings { it.copy(virtualKeyboardMode = selected) }
+                }
+            )
+
+            HybridInfoBanner(
+                text = "Pada mode 'Otomatis' atau 'Nonaktif', kotak teks tetap bisa menerima ketikan langsung dari keyboard USB/Bluetooth/PC tanpa memunculkan popup keyboard virtual yang menutupi layar.",
+                accentColor = Color(0xFF10B981)
+            )
+        }
+
+        HybridSectionCard(
+            title = "Uji Coba Input Teks",
+            subtitle = "Fokuskan kotak di bawah lalu ketik dengan keyboard PC / Remote untuk memastikan perilaku keyboard virtual"
+        ) {
+            HybridTextInput(
+                label = "Kotak Uji Coba Pengetikan",
+                value = testInput,
+                placeholder = "Klik / tekan OK di sini lalu coba ketik...",
+                onValueChange = { testInput = it }
+            )
         }
     }
 }

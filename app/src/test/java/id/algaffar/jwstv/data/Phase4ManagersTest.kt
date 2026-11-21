@@ -149,4 +149,37 @@ class Phase4ManagersTest {
             tempDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun `Default system slides include Welcome Greeting and Big Analog Clock and migrate legacy empty slides`() = runBlocking {
+        val defaults = id.algaffar.jwstv.domain.model.AppStateSettings()
+        assertEquals(2, defaults.slides.size)
+        assertEquals("welcome", defaults.slides[0].type)
+        assertEquals(15, defaults.slides[0].duration)
+        assertEquals("analog_clock", defaults.slides[1].type)
+        assertEquals(20, defaults.slides[1].duration)
+
+        val parsedLines = id.algaffar.jwstv.ui.screens.standby.parseWelcomeMasjidLines(
+            rawContent = defaults.slides[0].content,
+            mosqueName = "Masjid Babul Gaffar",
+            mosqueAddress = "Jl. Tamalaki Tahombu, Kolaka"
+        )
+        assertEquals("SELAMAT DATANG DI", parsedLines.line1)
+        assertEquals("Masjid Babul Gaffar", parsedLines.line2)
+        assertEquals("Jl. Tamalaki Tahombu, Kolaka", parsedLines.line3)
+        assertEquals("SELAMA BERADA DI DALAM MASJID", parsedLines.line4)
+        assertEquals("HARAP TENANG DAN KHIDMAT", parsedLines.line5)
+
+        val tempDir = Files.createTempDirectory("jws_slide_migration_test").toFile()
+        try {
+            val settingsFile = tempDir.resolve("jws_settings.json")
+            settingsFile.writeText("""{"schemaVersion":2,"slides":[]}""", Charsets.UTF_8)
+            val repo = SettingsRepository(storageFile = settingsFile)
+            assertEquals(3, repo.currentSettings.schemaVersion)
+            assertTrue(repo.currentSettings.slides.any { it.type == "welcome" })
+            assertTrue(repo.currentSettings.slides.any { it.type == "analog_clock" })
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

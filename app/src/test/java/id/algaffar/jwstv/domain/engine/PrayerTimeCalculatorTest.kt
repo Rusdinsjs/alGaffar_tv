@@ -117,13 +117,45 @@ class PrayerTimeCalculatorTest {
     }
 
     @Test
-    fun `after Isha has passed, nextPrayer rolls over to tomorrow Imsak`() {
+    fun `after Isha has passed, nextPrayer rolls over to tomorrow Fajr`() {
         val settings = PrayerSettings()
         val lateNight = ZonedDateTime.of(2026, 3, 10, 22, 30, 0, 0, makassarZone)
         val schedule = calculator.calculateSchedule(lateNight, settings)
 
-        assertEquals(PrayerId.IMSAK, schedule.nextPrayer.id)
+        assertEquals(PrayerId.FAJR, schedule.nextPrayer.id)
         assertEquals(lateNight.toLocalDate().plusDays(1), schedule.nextPrayer.time.toLocalDate())
         assertTrue(schedule.secondsToNextPrayer > 3600L)
+        assertTrue(schedule.items.first { it.id == PrayerId.FAJR }.isNext)
+    }
+
+    @Test
+    fun `nextPrayer skips non-obligatory times (Syuruq and Dhuha) and targets Dhuhr after Fajr`() {
+        val settings = PrayerSettings()
+        // 05:30 is after Subuh (~05:00) and before Syuruq (~06:15) & Dhuha (~06:35)
+        val afterSubuh = ZonedDateTime.of(2026, 3, 10, 5, 30, 0, 0, makassarZone)
+        val schedule = calculator.calculateSchedule(afterSubuh, settings)
+
+        assertEquals(PrayerId.DHUHR, schedule.nextPrayer.id)
+        assertTrue(schedule.items.first { it.id == PrayerId.DHUHR }.isNext)
+    }
+
+    @Test
+    fun `Dhuhr label stays Dzuhur on Friday when isJumatEnabled is false`() {
+        val settings = PrayerSettings()
+        val fridayNow = ZonedDateTime.of(2026, 3, 13, 9, 0, 0, 0, makassarZone)
+        val schedule = calculator.calculateSchedule(fridayNow, settings, isJumatEnabled = false)
+
+        assertEquals("Dzuhur", schedule.items.first { it.id == PrayerId.DHUHR }.label)
+        assertEquals("Dzuhur", schedule.nextPrayer.label)
+    }
+
+    @Test
+    fun `formatNextPrayerCountdown matches jws-android-algaffar H-MM-SS and MM-SS rules`() {
+        assertEquals("00:00", id.algaffar.jwstv.ui.screens.standby.formatNextPrayerCountdown(0L))
+        assertEquals("00:00", id.algaffar.jwstv.ui.screens.standby.formatNextPrayerCountdown(-5L))
+        assertEquals("05:09", id.algaffar.jwstv.ui.screens.standby.formatNextPrayerCountdown(309L))
+        assertEquals("59:59", id.algaffar.jwstv.ui.screens.standby.formatNextPrayerCountdown(3599L))
+        assertEquals("1:00:00", id.algaffar.jwstv.ui.screens.standby.formatNextPrayerCountdown(3600L))
+        assertEquals("10:05:09", id.algaffar.jwstv.ui.screens.standby.formatNextPrayerCountdown(36309L))
     }
 }

@@ -41,7 +41,8 @@ class SettingsRepository(
         return try {
             if (storageFile.exists() && storageFile.length() > 0L) {
                 val raw = storageFile.readText(Charsets.UTF_8)
-                jsonSerializer.decodeFromString<AppStateSettings>(migrateLegacyJsonPaths(raw))
+                val parsed = jsonSerializer.decodeFromString<AppStateSettings>(migrateLegacyJsonPaths(raw))
+                migrateSettingsSchema(parsed)
             } else {
                 AppStateSettings()
             }
@@ -50,19 +51,33 @@ class SettingsRepository(
         }
     }
 
+    private fun migrateSettingsSchema(settings: AppStateSettings): AppStateSettings {
+        if (settings.schemaVersion >= 3) return settings
+        val hasSystemSlides = settings.slides.any { it.type == "welcome" || it.type == "analog_clock" }
+        val migratedSlides = if (hasSystemSlides) {
+            settings.slides
+        } else {
+            id.algaffar.jwstv.domain.model.SlideItem.defaultSystemSlides() + settings.slides
+        }
+        return settings.copy(
+            schemaVersion = 3,
+            slides = migratedSlides
+        )
+    }
+
     suspend fun updateSettings(transform: (AppStateSettings) -> AppStateSettings): AppStateSettings {
         return mutex.withLock {
             val updated = transform(_settingsFlow.value)
-            persistToDisk(updated)
             _settingsFlow.value = updated
+            persistToDisk(updated)
             updated
         }
     }
 
     suspend fun replaceSettings(newSettings: AppStateSettings) {
         mutex.withLock {
-            persistToDisk(newSettings)
             _settingsFlow.value = newSettings
+            persistToDisk(newSettings)
         }
     }
 
@@ -73,7 +88,7 @@ class SettingsRepository(
     suspend fun importBackupJson(rawJson: String): Result<AppStateSettings> {
         return runCatching {
             val normalizedJson = migrateLegacyJsonPaths(rawJson)
-            val parsed = jsonSerializer.decodeFromString<AppStateSettings>(normalizedJson)
+            val parsed = migrateSettingsSchema(jsonSerializer.decodeFromString<AppStateSettings>(normalizedJson))
             replaceSettings(parsed)
             parsed
         }
