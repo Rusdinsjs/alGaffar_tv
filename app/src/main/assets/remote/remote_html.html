@@ -119,10 +119,10 @@
             cursor: pointer;
         }
 
-        .container { padding: 14px; max-width: 560px; margin: 0 auto; }
+        .container { padding: 14px; width: 100%; max-width: 580px; margin: 0 auto; }
 
         .tab-content { display: none; animation: fadeUp 0.22s ease-out; }
-        .tab-content.active { display: block; }
+        .tab-content.active { display: flex; flex-direction: column; gap: 14px; }
 
         @keyframes fadeUp {
             from { opacity: 0; transform: translateY(8px); }
@@ -133,9 +133,31 @@
             background: var(--card);
             border-radius: 20px;
             padding: 18px;
-            margin-bottom: 14px;
+            margin-bottom: 0;
             border: 1px solid var(--border);
             box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+        }
+
+        @media (min-width: 680px) {
+            .container { max-width: 100%; padding: 18px 24px; }
+            .tab-content.active {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 16px;
+                align-items: start;
+            }
+        }
+
+        @media (min-width: 1120px) {
+            .container { max-width: 1480px; padding: 24px 32px; }
+            .tab-content.active {
+                grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+                gap: 20px;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .grid-2 { grid-template-columns: 1fr; }
         }
 
         .card-title {
@@ -194,7 +216,8 @@
             margin-top: 14px;
         }
 
-        button.action-btn {
+        button.action-btn,
+        button.toggle-btn {
             background: var(--card-2);
             border: 1px solid var(--border);
             padding: 12px 10px;
@@ -210,11 +233,13 @@
             transition: all 0.15s;
         }
 
-        button.action-btn:active { transform: scale(0.96); }
+        button.action-btn:active,
+        button.toggle-btn:active { transform: scale(0.96); }
         button.action-btn.danger { color: #fca5a5; border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.12); }
         button.action-btn.accent { color: #6ee7b7; border-color: rgba(16, 185, 129, 0.35); background: rgba(16, 185, 129, 0.12); }
         button.action-btn.active { background: var(--accent-2); color: #fff; border-color: rgba(255, 255, 255, 0.3); }
-        button.action-btn.on {
+        button.action-btn.on,
+        button.toggle-btn.on {
             background: linear-gradient(135deg, #059669, #10b981);
             color: #fff;
             border-color: #34d399;
@@ -378,6 +403,20 @@
             justify-content: space-around;
             padding: 10px 8px calc(16px + env(safe-area-inset-bottom)) 8px;
             z-index: 1000;
+        }
+
+        @media (min-width: 720px) {
+            .bottom-nav {
+                left: 50%;
+                right: auto;
+                transform: translateX(-50%);
+                width: min(680px, 92vw);
+                bottom: 12px;
+                border: 1px solid var(--border);
+                border-radius: 20px;
+                padding: 10px 16px;
+                box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
+            }
         }
 
         .nav-item {
@@ -583,23 +622,89 @@
                     <button class="action-btn" onclick="sendCommand('next_theme')">🎨 TEMA BERIKUTNYA</button>
                     <button class="action-btn" onclick="sendCommand('next_layout')">📐 GANTI LAYOUT</button>
                 </div>
+                <hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">
+                <div class="grid-2" style="align-items:end;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Durasi Standby Slideshow (Detik)</label>
+                        <input type="number" min="5" max="120" id="standbySlideDur" value="15">
+                    </div>
+                    <button class="submit-btn secondary" style="margin-top:0;" onclick="saveStandbySlideshow()">💾 SIMPAN STANDBY</button>
+                </div>
             </div>
 
             <div class="card">
                 <span class="card-title">Aksi Cepat, Live & Simulasi</span>
                 <div class="grid-2">
-                    <button class="action-btn" onclick="sendCommand('play_infaq')">🪙 QR INFAQ</button>
-                    <button class="action-btn" onclick="sendCommand('play_online_finance')">📊 KEUANGAN ONLINE</button>
-                    <button id="live-Cm1v4bteXbI" class="action-btn" onclick="sendCommand('set_live_source', { videoId: 'Cm1v4bteXbI' })">🕋 LIVE MAKKAH</button>
-                    <button id="live-9A1S0xAPVIs" class="action-btn" onclick="sendCommand('set_live_source', { videoId: '9A1S0xAPVIs' })">🕌 LIVE MADINAH</button>
-                    <button id="btn-cctv" class="action-btn" onclick="sendCommand('play_cctv')">👁️ CCTV</button>
+                    <button id="btn-infaq" class="action-btn" onclick="sendCommand('play_infaq')">🪙 QR INFAQ</button>
+                    <button id="btn-finance" class="action-btn" onclick="sendCommand('play_online_finance')">📊 KEUANGAN ONLINE</button>
+                    <button id="live-makkah" class="action-btn" onclick="playLivePreset('makkah')">🕋 LIVE MAKKAH</button>
+                    <button id="live-madinah" class="action-btn" onclick="playLivePreset('madinah')">🕌 LIVE MADINAH</button>
+                    <button id="live-custom" class="action-btn" onclick="playLivePreset('custom')">📺 LIVE KUSTOM</button>
                     <button id="btn-audio" class="action-btn" onclick="sendCommand('play_custom_audio')">🎵 AUDIO KUSTOM</button>
-                    <button class="action-btn" onclick="sendCommand('play_slideshow')">🎞️ SLIDESHOW</button>
-                    <button class="action-btn" onclick="sendCommand('screensaver')">🌙 SCREENSAVER</button>
+                    <button id="btn-slideshow" class="action-btn" onclick="sendCommand('play_slideshow')">🎞️ SLIDESHOW</button>
+                    <button id="btn-screensaver" class="action-btn" onclick="sendCommand('screensaver')">🌙 SCREENSAVER</button>
                     <button class="action-btn" onclick="sendCommand('test_beep')">🔔 UJI BEEP 1000Hz</button>
-                    <button class="action-btn" onclick="sendCommand('test_adzan')">📢 UJI LAYAR ADZAN</button>
+                    <button id="btn-adzan" class="action-btn" onclick="sendCommand('test_adzan')" style="grid-column: span 2;">📢 UJI LAYAR ADZAN</button>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                    <select id="simStateSelect" style="flex:1;">
+                        <option value="standby_slideshow">Standby Slideshow</option>
+                        <option value="screensaver">Screensaver</option>
+                        <option value="tartil">Tartil</option>
+                        <option value="tarhim">Tarhim</option>
+                        <option value="adzan">Adzan</option>
+                        <option value="menunggu_iqomah">Menunggu Iqomah</option>
+                        <option value="pelaksanaan_sholat">Pelaksanaan Sholat</option>
+                        <option value="waktu_jumat">Waktu Jum'at</option>
+                        <option value="khutbah">Khutbah Jum'at</option>
+                        <option value="pelaksanaan_jumat">Pelaksanaan Jum'at</option>
+                        <option value="tarawih">Tarawih</option>
+                        <option value="sholat_tarawih">Sholat Tarawih</option>
+                        <option value="idul_fitri">Idul Fitri</option>
+                        <option value="sholat_idul_fitri">Sholat Idul Fitri</option>
+                        <option value="khutbah_idul_fitri">Khutbah Idul Fitri</option>
+                        <option value="idul_adha">Idul Adha</option>
+                        <option value="sholat_idul_adha">Sholat Idul Adha</option>
+                        <option value="khutbah_idul_adha">Khutbah Idul Adha</option>
+                        <option value="info_qurban">Info Qurban</option>
+                        <option value="live">Live YouTube</option>
+                        <option value="masjid_qr">QR Infaq Masjid</option>
+                        <option value="finance_qr">QR Keuangan Online</option>
+                        <option value="jumat_qr">QR Kas Jum'at</option>
+                        <option value="online_finance">Keuangan Online</option>
+                    </select>
+                    <button class="action-btn accent" onclick="simulateSelectedState()">▶ SIMULASI</button>
                 </div>
                 <button class="submit-btn danger" style="margin-top:12px;" onclick="sendCommand('stop')">⏹ KEMBALI KE STANDBY OTOMATIS</button>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Preset ID / URL YouTube Live</span>
+                <div class="form-group">
+                    <label>Makkah Live (ID / URL YouTube)</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="liveMakkahId" placeholder="Cm1v4bteXbI" style="flex:1;">
+                        <button class="action-btn" style="padding:10px 14px;" onclick="playLivePreset('makkah')">▶ Putar</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Madinah Live (ID / URL YouTube)</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="liveMadinahId" placeholder="9A1S0xAPVIs" style="flex:1;">
+                        <button class="action-btn" style="padding:10px 14px;" onclick="playLivePreset('madinah')">▶ Putar</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Custom Live (ID / URL YouTube)</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="liveCustomId" placeholder="Masukkan Video ID atau URL YouTube" style="flex:1;">
+                        <button class="action-btn" style="padding:10px 14px;" onclick="playLivePreset('custom')">▶ Putar</button>
+                    </div>
+                </div>
+                <div class="grid-2" style="margin-top:6px;">
+                    <button id="liveAudioBtn" class="toggle-btn" onclick="toggleLiveAudio()">🔊 AUDIO LIVE: AKTIF</button>
+                    <button class="submit-btn" style="margin-top:0;" onclick="saveLivePresets()">💾 SIMPAN PRESET</button>
+                </div>
             </div>
         </div>
 
@@ -667,10 +772,14 @@
             </div>
 
             <div class="card">
-                <span class="card-title">QR Infaq & Keuangan Online</span>
+                <span class="card-title">QR Infaq Digital &amp; Keuangan Online</span>
+                <div class="grid-2" style="margin-bottom:10px;">
+                    <button id="qrEnabledBtn" class="toggle-btn" onclick="toggleRemoteFlag('qrEnabledBtn')">Aktifkan QR Infaq</button>
+                    <button id="qrShowFloatingBtn" class="toggle-btn" onclick="toggleRemoteFlag('qrShowFloatingBtn')">Banner Melayang</button>
+                </div>
                 <div class="form-group">
-                    <label>Tautan / Payload QRIS Infaq</label>
-                    <input type="text" id="qrLink" placeholder="https://...">
+                    <label>Tautan / Payload QRIS Infaq Digital</label>
+                    <input type="text" id="qrLink" placeholder="https://... atau payload QRIS">
                 </div>
                 <div class="grid-2">
                     <div class="form-group">
@@ -692,18 +801,39 @@
                         <input type="text" id="qrAn" placeholder="DKM Masjid Al-Gaffar">
                     </div>
                 </div>
-                <button class="submit-btn" onclick="saveMasjidQr()">SIMPAN QR INFAQ</button>
+                <button class="submit-btn" onclick="saveMasjidQr()">💾 SIMPAN QR INFAQ DIGITAL</button>
 
                 <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+                <div class="grid-2" style="margin-bottom:10px;">
+                    <button id="financeEnabledBtn" class="toggle-btn" onclick="toggleRemoteFlag('financeEnabledBtn')">Aktifkan Keuangan Online</button>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Refresh (Menit)</label>
+                        <input type="number" min="1" max="60" id="financeRefresh" value="5">
+                    </div>
+                </div>
                 <div class="form-group">
-                    <label>URL Google Sheets Keuangan Online</label>
+                    <label>URL Google Sheets Keuangan Online (CSV/JSON)</label>
                     <input type="text" id="financeUrl" placeholder="https://docs.google.com/spreadsheets/...">
                 </div>
                 <div class="form-group">
-                    <label>URL Laporan Publik (QR Keuangan)</label>
+                    <label>URL Laporan Publik (Untuk QR Keuangan Online)</label>
                     <input type="text" id="financeReportUrl" placeholder="https://...">
                 </div>
-                <button class="submit-btn secondary" onclick="saveOnlineFinance()">SIMPAN KEUANGAN ONLINE</button>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Bank (Keuangan Online)</label>
+                        <input type="text" id="financeBank" placeholder="BSI">
+                    </div>
+                    <div class="form-group">
+                        <label>No. Rekening</label>
+                        <input type="text" id="financeRek" placeholder="1234567890">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Atas Nama Rekening</label>
+                    <input type="text" id="financeAn" placeholder="DKM Masjid Al-Gaffar">
+                </div>
+                <button class="submit-btn secondary" onclick="saveOnlineFinance()">💾 SIMPAN QR KEUANGAN ONLINE</button>
             </div>
         </div>
 
@@ -757,55 +887,7 @@
                 </div>
             </div>
 
-            <div class="card">
-                <span class="card-title">Mode Acara & Petugas Jum'at</span>
-                <div class="grid-2" style="margin-bottom:14px;">
-                    <button id="toggle-jumat" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'jumat' })">🕌 MODE JUMAT</button>
-                    <button id="toggle-ramadhan" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'ramadhan' })">🌙 RAMADHAN</button>
-                    <button id="toggle-idul_fitri" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'idul_fitri' })">🕋 IDUL FITRI</button>
-                    <button id="toggle-idul_adha" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'idul_adha' })">🐑 IDUL ADHA</button>
-                    <button id="toggle-slideshow" class="action-btn" style="grid-column:span 2" onclick="sendCommand('toggle_mode', { mode: 'slideshow' })">🎞️ AUTO SLIDESHOW FULLSCREEN</button>
-                </div>
-                <div class="grid-3">
-                    <div class="form-group">
-                        <label>Khotib</label>
-                        <input type="text" id="jumatKhotib" placeholder="Ust. ...">
-                    </div>
-                    <div class="form-group">
-                        <label>Imam</label>
-                        <input type="text" id="jumatImam" placeholder="Ust. ...">
-                    </div>
-                    <div class="form-group">
-                        <label>Muadzin</label>
-                        <input type="text" id="jumatMuadzin" placeholder="Sdr. ...">
-                    </div>
-                </div>
-                <div class="grid-2">
-                    <button class="submit-btn" onclick="saveJumatPetugas()">SIMPAN PETUGAS JUM'AT</button>
-                    <div style="display:flex;gap:6px;align-items:center;margin-top:6px;">
-                        <input type="number" min="1" max="30" id="ramadhanNight" placeholder="Malam 1-30">
-                        <button class="mini-btn on" style="height:44px;padding:0 12px;" onclick="saveRamadhanNight()">Mlm</button>
-                    </div>
-                </div>
-            </div>
-
-            <div id="prayerStagesContainer"></div>
-        </div>
-
-        <!-- TAB 4: MEDIA & UPLOAD -->
-        <div id="tab-media" class="tab-content">
-            <div class="card">
-                <span class="card-title">
-                    <span>Pengaman Memori TV (Storage Guard)</span>
-                    <span id="mediaStorageBadge" style="font-size:11px;color:var(--accent);font-weight:800;">AMAN</span>
-                </span>
-                <div id="mediaStorageSummary" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
-                    Memuat status penyimpanan internal TV...
-                </div>
-                <button class="submit-btn secondary" id="btnCleanOrphan" onclick="sendCommand('cleanup_orphan_media', {}, 'Membersihkan file media tidak terpakai...')">
-                    🧹 BERSIHKAN FILE TIDAK TERPAKAI
-                </button>
-            </div>
+            <div id="prayerStagesContainer" style="display:contents;"></div>
 
             <div class="card">
                 <span class="card-title">Kontrol Volume Master TV</span>
@@ -836,6 +918,7 @@
                             <option value="asr">Ashar</option>
                             <option value="maghrib">Maghrib</option>
                             <option value="isha">Isya</option>
+                            <option value="jumat">Jum'at</option>
                             <option value="default">Default (Semua)</option>
                         </select>
                     </div>
@@ -857,6 +940,29 @@
                     <span>Manajemen Slide, Poster & Video</span>
                     <button class="mini-btn" onclick="resetDefaultSlides()">Reset Default</button>
                 </span>
+                <div class="form-group">
+                    <label>Mode Tampil Slide Baru (Multi-Pilih)</label>
+                    <div id="newSlideModes" style="display:flex;flex-wrap:wrap;gap:6px;">
+                        <label style="display:inline-flex;align-items:center;gap:5px;background:var(--card-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin:0;cursor:pointer;text-transform:none;">
+                            <input type="checkbox" value="main" checked> Standby Utama
+                        </label>
+                        <label style="display:inline-flex;align-items:center;gap:5px;background:var(--card-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin:0;cursor:pointer;text-transform:none;">
+                            <input type="checkbox" value="slideshow" checked> Slideshow
+                        </label>
+                        <label style="display:inline-flex;align-items:center;gap:5px;background:var(--card-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin:0;cursor:pointer;text-transform:none;">
+                            <input type="checkbox" value="jumat"> Jum'at
+                        </label>
+                        <label style="display:inline-flex;align-items:center;gap:5px;background:var(--card-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin:0;cursor:pointer;text-transform:none;">
+                            <input type="checkbox" value="ramadhan"> Ramadhan
+                        </label>
+                        <label style="display:inline-flex;align-items:center;gap:5px;background:var(--card-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin:0;cursor:pointer;text-transform:none;">
+                            <input type="checkbox" value="idul_fitri"> Idul Fitri
+                        </label>
+                        <label style="display:inline-flex;align-items:center;gap:5px;background:var(--card-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin:0;cursor:pointer;text-transform:none;">
+                            <input type="checkbox" value="idul_adha"> Idul Adha
+                        </label>
+                    </div>
+                </div>
                 <div class="form-group">
                     <label>Upload Poster Gambar Baru (PNG / JPG — Auto-Optimasi 1080p)</label>
                     <input type="file" id="slideImageInput" accept="image/*">
@@ -887,9 +993,82 @@
                 </div>
                 <button class="submit-btn secondary" onclick="addTextSlide()">+ TAMBAH SLIDE TEKS</button>
 
+                <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Jenis Slide System</label>
+                        <select id="newSystemSlideType">
+                            <option value="welcome">Sambutan Masjid</option>
+                            <option value="analog_clock">Jam Analog Besar</option>
+                            <option value="jumat_petugas">Petugas Jum'at</option>
+                            <option value="jumat_keuangan">Kas Infaq Jum'at</option>
+                            <option value="qr_jumat">QR Kas Jum'at</option>
+                            <option value="ramadhan_petugas">Petugas Ramadhan</option>
+                            <option value="ramadhan_keuangan">Keuangan Ramadhan</option>
+                            <option value="ramadhan_takjil">Daftar Ta'jil</option>
+                            <option value="ramadhan_jadwal">Jadwal Ramadhan</option>
+                            <option value="ramadhan_laporan_akhir">Laporan Akhir Ramadhan</option>
+                            <option value="idulfitri_petugas">Petugas Idul Fitri</option>
+                            <option value="iduladha_petugas">Petugas Idul Adha</option>
+                            <option value="iduladha_qurban">Daftar Qurban</option>
+                            <option value="online_finance">Kas Umum (Online)</option>
+                            <option value="qr_infaq">QR Code Infaq</option>
+                            <option value="qr_finance">QR Kas Online</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Durasi (Detik)</label>
+                        <input type="number" min="4" max="120" id="newSystemSlideDur" value="15">
+                    </div>
+                </div>
+                <button class="submit-btn secondary" onclick="addSystemSlide()">+ TAMBAH SLIDE SYSTEM</button>
+
                 <div style="margin-top:14px;">
                     <label>Daftar Slide Aktif di TV</label>
                     <div id="slidesListBox" class="list-box"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Konten Slide Tartil &amp; Tarhim</span>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Target Layar</label>
+                        <select id="ttTarget" onchange="renderTartilTarhimMedia()">
+                            <option value="tartil">Layar Tartil (Pra-Sholat)</option>
+                            <option value="tarhim">Layar Tarhim (Menjelang Adzan)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Mode Tampilan</label>
+                        <select id="ttMode">
+                            <option value="image">Slide Gambar</option>
+                            <option value="video">Video MP4/WEBM</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Interval Slide Gambar (Detik)</label>
+                        <input type="number" min="3" max="60" id="ttInterval" value="12">
+                    </div>
+                    <div class="form-group" style="display:flex; align-items:flex-end;">
+                        <button class="submit-btn secondary" style="width:100%;" onclick="saveTartilTarhimConfig()">💾 SIMPAN MODE</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Unggah Gambar Slide Tartil / Tarhim (PNG / JPG — Auto 1080p)</label>
+                    <input type="file" id="ttImageInput" accept="image/*">
+                </div>
+                <button class="submit-btn" onclick="uploadTartilTarhimImage()">🖼️ UNGGAH GAMBAR SLIDE</button>
+                <div class="form-group" style="margin-top:12px;">
+                    <label>Unggah Video Tartil / Tarhim (MP4 / WEBM — Maks 250 MB)</label>
+                    <input type="file" id="ttVideoInput" accept="video/mp4,video/webm,video/x-matroska,.mp4,.webm,.mkv,.mov">
+                </div>
+                <button class="submit-btn secondary" onclick="uploadTartilTarhimVideo()">🎬 UNGGAH VIDEO SLIDE</button>
+                <div style="margin-top:14px;">
+                    <label>Konten Terpasang</label>
+                    <div id="ttMediaListBox" class="list-box"></div>
                 </div>
             </div>
 
@@ -900,9 +1079,13 @@
                     <select id="mediaBgSlot">
                         <option value="doa_adzan">Layar Do'a Setelah Adzan</option>
                         <option value="khutbah_jumat">Latar Khutbah Jum'at</option>
+                        <option value="khutbah_idul_fitri">Latar Khutbah Idul Fitri</option>
+                        <option value="khutbah_idul_adha">Latar Khutbah Idul Adha</option>
                         <option value="ceramah_tarawih">Latar Ceramah Tarawih</option>
                         <option value="sholat_5_waktu">Latar Sholat 5 Waktu</option>
                         <option value="sholat_jumat">Latar Sholat Jum'at</option>
+                        <option value="sholat_idul_fitri">Latar Sholat Idul Fitri</option>
+                        <option value="sholat_idul_adha">Latar Sholat Idul Adha</option>
                         <option value="sholat_tarawih_witir">Latar Sholat Tarawih & Witir</option>
                     </select>
                 </div>
@@ -911,6 +1094,313 @@
                     <input type="file" id="mediaBgInput" accept="image/*">
                 </div>
                 <button class="submit-btn secondary" onclick="uploadMediaBgFile()">🖼️ UNGGAH LATAR IBADAH</button>
+            </div>
+        </div>
+
+        <!-- TAB 4: ACARA & SAKLAR -->
+        <div id="tab-acara" class="tab-content">
+            <div class="card">
+                <span class="card-title">Mode Acara &amp; Layar Khusus</span>
+                <div class="grid-2">
+                    <button id="toggle-jumat" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'jumat' })">🕌 MODE JUMAT</button>
+                    <button id="toggle-ramadhan" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'ramadhan' })">🌙 RAMADHAN</button>
+                    <button id="toggle-idul_fitri" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'idul_fitri' })">🕋 IDUL FITRI</button>
+                    <button id="toggle-idul_adha" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'idul_adha' })">🐑 IDUL ADHA</button>
+                    <button id="toggle-info_qurban" class="action-btn" onclick="toggleInfoQurban()">🐄 INFO QURBAN</button>
+                    <button id="toggle-slideshow" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'slideshow' })">🎞️ AUTO SLIDESHOW</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Petugas &amp; Kas Infaq Jum'at</span>
+                <div class="grid-3">
+                    <div class="form-group">
+                        <label>Khotib</label>
+                        <input type="text" id="jumatKhotib" placeholder="Ust. ...">
+                    </div>
+                    <div class="form-group">
+                        <label>Imam</label>
+                        <input type="text" id="jumatImam" placeholder="Ust. ...">
+                    </div>
+                    <div class="form-group">
+                        <label>Muadzin</label>
+                        <input type="text" id="jumatMuadzin" placeholder="Sdr. ...">
+                    </div>
+                </div>
+                <button class="submit-btn" onclick="saveJumatPetugas()">💾 SIMPAN PETUGAS JUM'AT</button>
+                <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">
+                <div class="grid-3">
+                    <div class="form-group">
+                        <label>Saldo Lalu (Rp)</label>
+                        <input type="number" min="0" id="jumatSaldoLalu" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Pemasukan (Rp)</label>
+                        <input type="number" min="0" id="jumatPemasukan" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Pengeluaran (Rp)</label>
+                        <input type="number" min="0" id="jumatPengeluaran" placeholder="0">
+                    </div>
+                </div>
+                <button class="submit-btn secondary" onclick="saveJumatKeuangan()">💰 SIMPAN KAS JUM'AT</button>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Ramadhan (Petugas, Kas, Ta'jil &amp; Sirine)</span>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Malam Ke- (1–30)</label>
+                        <input type="number" min="1" max="30" id="ramadhanNight" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Tahun Hijriyah</label>
+                        <input type="text" id="ramadhanHijriYear" placeholder="1447">
+                    </div>
+                </div>
+                <div class="grid-3">
+                    <div class="form-group">
+                        <label>Penceramah</label>
+                        <input type="text" id="ramPenceramah" placeholder="Ust. ...">
+                    </div>
+                    <div class="form-group">
+                        <label>Imam Tarawih</label>
+                        <input type="text" id="ramImamTarawih" placeholder="Ust. ...">
+                    </div>
+                    <div class="form-group">
+                        <label>Imam Witir</label>
+                        <input type="text" id="ramImamWitir" placeholder="Ust. ...">
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Saldo Awal (Rp)</label>
+                        <input type="number" min="0" id="ramSaldoAwal" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Pengeluaran (Rp)</label>
+                        <input type="number" min="0" id="ramPengeluaran" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Infaq Pria (Rp)</label>
+                        <input type="number" min="0" id="ramInfaqPria" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Infaq Wanita (Rp)</label>
+                        <input type="number" min="0" id="ramInfaqWanita" value="0">
+                    </div>
+                </div>
+                <button class="submit-btn" onclick="saveRamadhanAll()">💾 SIMPAN DATA RAMADHAN</button>
+                <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">
+                <div class="form-group">
+                    <label>Tambah Donatur Ta'jil Malam Aktif</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" id="ramTakjilInput" placeholder="Keluarga H. Ahmad" style="flex:1;">
+                        <button class="action-btn accent" onclick="addRamadhanTakjil()">+ Ta'jil</button>
+                    </div>
+                </div>
+                <div id="ramTakjilList" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;"></div>
+                <div class="grid-2" style="margin-bottom:10px;">
+                    <button id="ramSirineBtn" class="toggle-btn" onclick="toggleRemoteFlag('ramSirineBtn')">🔔 Sirine Ramadhan</button>
+                    <button id="ramSirineMaghribBtn" class="toggle-btn" onclick="toggleRemoteFlag('ramSirineMaghribBtn')">Maghrib</button>
+                    <button id="ramSirineImsakBtn" class="toggle-btn" onclick="toggleRemoteFlag('ramSirineImsakBtn')">Imsak</button>
+                    <button id="ramSirineSahurBtn" class="toggle-btn" onclick="toggleRemoteFlag('ramSirineSahurBtn')">Sahur</button>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Jam Sahur (HH:mm)</label>
+                        <input type="text" id="ramSahurTime" placeholder="03:00">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Ulang (1–5x)</label>
+                        <input type="number" min="1" max="5" id="ramSirineRepeat" value="1">
+                    </div>
+                </div>
+                <button class="submit-btn secondary" onclick="saveRamadhanSirine()">🔔 SIMPAN SIRINE RAMADHAN</button>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Hari Raya Idul Fitri</span>
+                <div class="grid-3">
+                    <div class="form-group">
+                        <label>Khotib</label>
+                        <input type="text" id="fitriKhotib" placeholder="Ust. ...">
+                    </div>
+                    <div class="form-group">
+                        <label>Imam</label>
+                        <input type="text" id="fitriImam" placeholder="Ust. ...">
+                    </div>
+                    <div class="form-group">
+                        <label>Bilal</label>
+                        <input type="text" id="fitriBilal" placeholder="Sdr. ...">
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Durasi Sholat (Mnt)</label>
+                        <input type="number" min="10" max="90" id="fitriSholatDur" value="45">
+                    </div>
+                    <div class="form-group">
+                        <label>Durasi Khutbah (Mnt)</label>
+                        <input type="number" min="10" max="60" id="fitriKhutbahDur" value="30">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Pesan Sholat Ied</label>
+                    <input type="text" id="fitriSholatMsg" placeholder="Gema Idul Fitri - Raih Kemenangan">
+                </div>
+                <div class="form-group">
+                    <label>Pesan Khutbah Ied</label>
+                    <input type="text" id="fitriKhutbahMsg" placeholder="Menyimak Khutbah Idul Fitri">
+                </div>
+                <button class="submit-btn" onclick="saveIdulFitri()">💾 SIMPAN IDUL FITRI</button>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Idul Adha &amp; Kelompok Qurban</span>
+                <div class="grid-3">
+                    <div class="form-group">
+                        <label>Khotib</label>
+                        <input type="text" id="adhaKhotib" placeholder="Ust. ...">
+                    </div>
+                    <div class="form-group">
+                        <label>Imam</label>
+                        <input type="text" id="adhaImam" placeholder="Ust. ...">
+                    </div>
+                    <div class="form-group">
+                        <label>Bilal</label>
+                        <input type="text" id="adhaBilal" placeholder="Sdr. ...">
+                    </div>
+                </div>
+                <button class="submit-btn" onclick="saveIdulAdhaPetugas()">💾 SIMPAN PETUGAS IDUL ADHA</button>
+                <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Nama Kelompok</label>
+                        <input type="text" id="qurbanGroupName" placeholder="Kelompok 1">
+                    </div>
+                    <div class="form-group">
+                        <label>Hewan</label>
+                        <select id="qurbanAnimalType">
+                            <option value="Sapi">Sapi</option>
+                            <option value="Kambing">Kambing</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Daftar Peserta (Pisahkan dengan koma)</label>
+                    <input type="text" id="qurbanMembersCsv" placeholder="H. Ahmad, Bpk. Budi, Ibu Siti...">
+                </div>
+                <button class="submit-btn secondary" onclick="addQurbanGroup()">+ TAMBAH KELOMPOK QURBAN</button>
+                <div id="qurbanGroupsList" class="list-box" style="margin-top:12px;"></div>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Screensaver &amp; Hardware Saklar (Relay)</span>
+                <div style="margin-bottom:10px;">
+                    <button id="screensaverEnabledBtn" class="toggle-btn" style="width:100%;" onclick="toggleRemoteFlag('screensaverEnabledBtn')">🌙 Aktifkan Screensaver Otomatis</button>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Jam Mulai (HH:mm)</label>
+                        <input type="text" id="ssStartTime" placeholder="22:00">
+                    </div>
+                    <div class="form-group">
+                        <label>Jam Selesai (HH:mm)</label>
+                        <input type="text" id="ssEndTime" placeholder="03:30">
+                    </div>
+                </div>
+                <button class="submit-btn secondary" onclick="saveScreensaver()">💾 SIMPAN SCREENSAVER</button>
+                <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">
+                <div class="grid-2" style="margin-bottom:10px;">
+                    <button id="switchMasterBtn" class="toggle-btn" onclick="toggleSwitchMaster()">⚡ Saklar Otomatis</button>
+                    <select id="switchConnType">
+                        <option value="wifi">WiFi HTTP Relay</option>
+                        <option value="usb">USB Serial OTG</option>
+                    </select>
+                </div>
+                <div class="grid-3">
+                    <div class="form-group">
+                        <label>IP Relay WiFi</label>
+                        <input type="text" id="switchWifiIp" placeholder="192.168.1.50">
+                    </div>
+                    <div class="form-group">
+                        <label>Port USB Serial</label>
+                        <input type="text" id="switchUsbPort" placeholder="/dev/ttyUSB0">
+                    </div>
+                    <div class="form-group">
+                        <label>Baud Rate</label>
+                        <input type="number" min="9600" max="115200" id="switchBaudRate" value="9600">
+                    </div>
+                </div>
+                <button class="submit-btn secondary" onclick="saveSwitchConfig()">⚡ SIMPAN HARDWARE SAKLAR</button>
+
+                <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">
+                <div class="form-group">
+                    <label>Pilih Channel Saklar (PIN 1–8)</label>
+                    <select id="switchChannelSelect" onchange="renderSelectedSwitchEditor()"></select>
+                </div>
+                <div id="switchChannelEditor"></div>
+            </div>
+        </div>
+
+        <!-- TAB 5: SISTEM -->
+        <div id="tab-sistem" class="tab-content">
+            <div class="card">
+                <span class="card-title">
+                    <span>Memori TV &amp; Backup Pengaturan</span>
+                    <span id="mediaStorageBadge" style="font-size:11px;color:var(--accent);font-weight:800;">AMAN</span>
+                </span>
+                <div id="mediaStorageSummary" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+                    Memuat status penyimpanan internal TV...
+                </div>
+                <div class="grid-2">
+                    <button class="submit-btn secondary" id="btnCleanOrphan" onclick="sendCommand('cleanup_orphan_media', {}, 'Membersihkan file media tidak terpakai...')">
+                        🧹 BERSIHKAN MEDIA
+                    </button>
+                    <button class="submit-btn" onclick="downloadBackupJson()">
+                        📥 BACKUP JSON
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Kelola Admin &amp; PIN Akses TV</span>
+                <div id="usersListBox" class="list-box"></div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Role Akun</label>
+                        <select id="adminPinRole">
+                            <option value="user">Operator (user)</option>
+                            <option value="admin">Admin DKM (admin)</option>
+                            <option value="superadmin">Superadmin (superadmin)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>PIN Baru (Min 4 Digit)</label>
+                        <input type="password" id="adminNewPin" placeholder="******" inputmode="numeric">
+                    </div>
+                </div>
+                <button class="submit-btn" onclick="saveAdminPin()">🔐 PERBARUI PIN AKUN</button>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Remote Server &amp; Koneksi</span>
+                <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:12px;">
+                    Server Remote Lokal berjalan pada port <b>1421</b> dengan proteksi Bearer Token &amp; Rate Limiter (120 req/menit).
+                </div>
+                <div class="grid-2">
+                    <button class="action-btn accent" onclick="pollStatus().then(() => showToast('✅ Status TV diperbarui!'))">🔄 REFRESH STATUS</button>
+                    <button class="action-btn danger" onclick="logoutAuth()">🚪 KELUAR SESI</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <span class="card-title">
+                    <span>Log Aktivitas TV (25 Terbaru)</span>
+                    <button class="mini-btn del" onclick="sendCommand('clear_logs', {}, '🗑️ Log dibersihkan')">Kosongkan</button>
+                </span>
+                <div id="logsListBox" class="list-box" style="max-height:360px;overflow-y:auto;"></div>
             </div>
         </div>
     </div>
@@ -928,9 +1418,13 @@
             <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
             <span>Sholat</span>
         </button>
-        <button class="nav-item" onclick="switchTab('media', event)">
-            <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" /></svg>
-            <span>Media</span>
+        <button class="nav-item" onclick="switchTab('acara', event)">
+            <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
+            <span>Acara</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('sistem', event)">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            <span>Sistem</span>
         </button>
     </nav>
 
@@ -1075,7 +1569,7 @@
         async function uploadBinaryFile(category, slot, file) {
             if (!AUTH_TOKEN) { showAuthModal(true); return; }
             if (!file) { showToast('Pilih file terlebih dahulu!', true); return; }
-            const maxMb = (category === 'slide_video' || category === 'video') ? 250
+            const maxMb = (category === 'slide_video' || category === 'video' || category === 'tartil_video' || category === 'tarhim_video') ? 250
                 : (category === 'tartil' || category === 'tarhim' || category === 'adzan' || category === 'custom') ? 50
                 : 25;
             if (file.size > maxMb * 1024 * 1024) { showToast(`Ukuran file melebihi batas ${maxMb} MB!`, true); return; }
@@ -1112,16 +1606,22 @@
             uploadBinaryFile('logo', '', inp.files[0]).then(() => { inp.value = ''; });
         }
 
+        function getSelectedSlideModes() {
+            const boxes = document.querySelectorAll('#newSlideModes input[type="checkbox"]:checked');
+            const modes = Array.from(boxes).map(b => b.value);
+            return modes.length ? modes : ['main', 'slideshow'];
+        }
+
         function uploadSlideImageFile() {
             const inp = document.getElementById('slideImageInput');
             if (!inp.files || !inp.files[0]) { showToast('Pilih gambar poster dulu!', true); return; }
-            uploadBinaryFile('slide_image', '', inp.files[0]).then(() => { inp.value = ''; });
+            uploadBinaryFile('slide_image', getSelectedSlideModes().join(','), inp.files[0]).then(() => { inp.value = ''; });
         }
 
         function uploadSlideVideoFile() {
             const inp = document.getElementById('slideVideoInput');
             if (!inp.files || !inp.files[0]) { showToast('Pilih file video MP4/WEBM dulu!', true); return; }
-            uploadBinaryFile('slide_video', '', inp.files[0]).then(() => { inp.value = ''; });
+            uploadBinaryFile('slide_video', getSelectedSlideModes().join(','), inp.files[0]).then(() => { inp.value = ''; });
         }
 
         function uploadMediaBgFile() {
@@ -1182,22 +1682,113 @@
             if (confirm('Hapus semua kartu pengumuman?')) sendCommand('clear_info', {}, 'Semua Info Card dihapus');
         }
 
+        function toggleRemoteFlag(btnId) {
+            const btn = document.getElementById(btnId);
+            if (!btn) return;
+            pendingUpdates[btnId] = Date.now();
+            btn.classList.toggle('on');
+        }
+
         function saveMasjidQr() {
+            const enabledBtn = document.getElementById('qrEnabledBtn');
+            const floatingBtn = document.getElementById('qrShowFloatingBtn');
             sendCommand('update_masjid_qr', {
+                enabled: enabledBtn ? enabledBtn.classList.contains('on') : true,
+                showFloating: floatingBtn ? floatingBtn.classList.contains('on') : false,
                 link: document.getElementById('qrLink').value.trim(),
                 label: document.getElementById('qrLabel').value.trim(),
                 bankName: document.getElementById('qrBank').value.trim(),
                 nomorRekening: document.getElementById('qrRek').value.trim(),
                 atasNama: document.getElementById('qrAn').value.trim()
-            }, '✅ Pengaturan QR Infaq disimpan!');
+            }, '✅ Pengaturan QR Infaq Digital disimpan!');
         }
 
         function saveOnlineFinance() {
+            const enabledBtn = document.getElementById('financeEnabledBtn');
             sendCommand('update_online_finance', {
-                enabled: true,
+                enabled: enabledBtn ? enabledBtn.classList.contains('on') : true,
                 url: document.getElementById('financeUrl').value.trim(),
-                reportUrl: document.getElementById('financeReportUrl').value.trim()
-            }, '✅ Pengaturan Keuangan Online disimpan!');
+                reportUrl: document.getElementById('financeReportUrl').value.trim(),
+                bankName: document.getElementById('financeBank').value.trim(),
+                nomorRekening: document.getElementById('financeRek').value.trim(),
+                atasNama: document.getElementById('financeAn').value.trim(),
+                refreshIntervalMinutes: parseInt(document.getElementById('financeRefresh').value, 10) || 5
+            }, '✅ Pengaturan QR Keuangan Online disimpan!');
+        }
+
+        function addSystemSlide() {
+            const sel = document.getElementById('newSystemSlideType');
+            const type = sel ? sel.value : '';
+            const title = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : type;
+            const duration = parseInt(document.getElementById('newSystemSlideDur').value, 10) || 15;
+            if (!type) return;
+            const modes = getSelectedSlideModes();
+            sendCommand('add_system_slide', {
+                type,
+                title,
+                duration,
+                showInMain: modes.includes('main'),
+                showInSlideshow: modes.includes('slideshow'),
+                showInJumat: modes.includes('jumat'),
+                showInRamadhan: modes.includes('ramadhan'),
+                showInIdulFitri: modes.includes('idul_fitri'),
+                showInIdulAdha: modes.includes('idul_adha')
+            }, `✅ Slide System "${title}" ditambahkan!`);
+        }
+
+        let lastTartilTarhimMedia = null;
+
+        function saveTartilTarhimConfig() {
+            const target = document.getElementById('ttTarget').value;
+            const mediaType = document.getElementById('ttMode').value;
+            const interval = parseInt(document.getElementById('ttInterval').value, 10) || 12;
+            sendCommand('update_tartil_tarhim_media', { target, mediaType, interval }, `✅ Mode slide ${target.toUpperCase()} disimpan!`);
+        }
+
+        function uploadTartilTarhimImage() {
+            const target = document.getElementById('ttTarget').value;
+            const inp = document.getElementById('ttImageInput');
+            if (!inp.files || !inp.files[0]) { showToast('Pilih gambar slide terlebih dahulu!', true); return; }
+            uploadBinaryFile(`${target}_image`, '', inp.files[0]).then(() => { inp.value = ''; });
+        }
+
+        function uploadTartilTarhimVideo() {
+            const target = document.getElementById('ttTarget').value;
+            const inp = document.getElementById('ttVideoInput');
+            if (!inp.files || !inp.files[0]) { showToast('Pilih video terlebih dahulu!', true); return; }
+            uploadBinaryFile(`${target}_video`, '', inp.files[0]).then(() => { inp.value = ''; });
+        }
+
+        function deleteTartilTarhimImage(target, idx) {
+            sendCommand('update_tartil_tarhim_media', { target, deleteImageIndex: idx }, '🗑️ Gambar slide dihapus');
+        }
+
+        function clearTartilTarhimVideo(target) {
+            sendCommand('update_tartil_tarhim_media', { target, clearVideo: true }, '🗑️ Video slide dihapus');
+        }
+
+        function renderTartilTarhimMedia(data) {
+            if (data) lastTartilTarhimMedia = data;
+            const tt = lastTartilTarhimMedia;
+            const box = document.getElementById('ttMediaListBox');
+            if (!tt || !box) return;
+            const target = document.getElementById('ttTarget')?.value || 'tartil';
+            const mode = target === 'tarhim' ? tt.tarhimMediaType : tt.tartilMediaType;
+            const interval = target === 'tarhim' ? tt.tarhimSlideInterval : tt.tartilSlideInterval;
+            const video = target === 'tarhim' ? tt.tarhimVideo : tt.tartilVideo;
+            const images = (target === 'tarhim' ? tt.tarhimImages : tt.tartilImages) || [];
+
+            setInputSafely('ttMode', mode || 'image');
+            setInputSafely('ttInterval', interval || 12);
+
+            const rows = [];
+            if (video) {
+                rows.push(`<div class="list-item"><div class="list-item-text"><b>🎬 Video ${target.toUpperCase()}</b><span>${escapeHtml(video)}</span></div><button class="mini-btn del" onclick="clearTartilTarhimVideo('${target}')">Hapus</button></div>`);
+            }
+            images.forEach((img, idx) => {
+                rows.push(`<div class="list-item"><div class="list-item-text"><b>🖼️ Slide ${idx + 1}</b><span>${escapeHtml(img)}</span></div><button class="mini-btn del" onclick="deleteTartilTarhimImage('${target}', ${idx})">Hapus</button></div>`);
+            });
+            box.innerHTML = rows.length ? rows.join('') : `<div style="font-size:12px;color:var(--text-secondary);">Belum ada konten slide ${target} terpasang.</div>`;
         }
 
         function savePrayerConfig() {
@@ -1236,7 +1827,18 @@
             const content = document.getElementById('newSlideContent').value.trim();
             const duration = parseInt(document.getElementById('newSlideDur').value, 10) || 12;
             if (!content) { showToast('Isi slide teks wajib diisi!', true); return; }
-            sendCommand('add_text_slide', { title: title || 'Pengumuman Masjid', content, duration }, '✅ Slide teks ditambahkan!');
+            const modes = getSelectedSlideModes();
+            sendCommand('add_text_slide', {
+                title: title || 'Pengumuman Masjid',
+                content,
+                duration,
+                showInMain: modes.includes('main'),
+                showInSlideshow: modes.includes('slideshow'),
+                showInJumat: modes.includes('jumat'),
+                showInRamadhan: modes.includes('ramadhan'),
+                showInIdulFitri: modes.includes('idul_fitri'),
+                showInIdulAdha: modes.includes('idul_adha')
+            }, '✅ Slide teks ditambahkan!');
             document.getElementById('newSlideTitle').value = '';
             document.getElementById('newSlideContent').value = '';
         }
@@ -1285,21 +1887,43 @@
                     </div>
                 `).join('');
 
-            // Slides list
+            // Slides list with multi-select mode checklist
             const slideBox = document.getElementById('slidesListBox');
             const slides = status.slides || [];
+            const modeDefs = [
+                { key: 'main', field: 'showInMain', label: 'Utama' },
+                { key: 'slideshow', field: 'showInSlideshow', label: 'Slideshow' },
+                { key: 'jumat', field: 'showInJumat', label: 'Jum\'at' },
+                { key: 'ramadhan', field: 'showInRamadhan', label: 'Ramadhan' },
+                { key: 'idul_fitri', field: 'showInIdulFitri', label: 'Idul Fitri' },
+                { key: 'idul_adha', field: 'showInIdulAdha', label: 'Idul Adha' }
+            ];
             slideBox.innerHTML = slides.length === 0
                 ? '<div style="font-size:12px;color:var(--text-secondary);">Belum ada slide.</div>'
-                : slides.map(s => `
-                    <div class="list-item">
-                        <div class="list-item-text">
-                            <div class="list-item-title">[${escapeHtml(s.type).toUpperCase()}] ${escapeHtml(s.title || s.id)}</div>
-                            <div class="list-item-sub">Durasi: ${s.duration} dtk</div>
+                : slides.map(s => {
+                    const sid = escapeHtml(s.id);
+                    const checks = modeDefs.map(m => {
+                        const checked = !!s[m.field];
+                        return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:10px;background:${checked ? 'rgba(16,185,129,0.16)' : 'rgba(255,255,255,0.03)'};border:1px solid ${checked ? 'rgba(16,185,129,0.45)' : 'var(--border)'};color:${checked ? '#6ee7b7' : 'var(--text-secondary)'};border-radius:6px;padding:3px 7px;margin:0;cursor:pointer;text-transform:none;">
+                            <input type="checkbox" ${checked ? 'checked' : ''} onchange="sendCommand('toggle_slide_mode', { id: '${sid}', mode: '${m.key}' })" style="width:12px;height:12px;margin:0;accent-color:var(--accent);"> ${m.label}
+                        </label>`;
+                    }).join('');
+                    return `
+                        <div class="list-item" style="flex-direction:column;align-items:stretch;gap:8px;">
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                                <div class="list-item-text">
+                                    <div class="list-item-title">[${escapeHtml(s.type).toUpperCase()}] ${escapeHtml(s.title || s.id)}</div>
+                                    <div class="list-item-sub">Durasi: ${s.duration} dtk</div>
+                                </div>
+                                <div style="display:flex;gap:6px;">
+                                    <button class="mini-btn ${s.enabled ? 'on' : ''}" onclick="sendCommand('toggle_slide', { id: '${sid}' })">${s.enabled ? 'AKTIF' : 'OFF'}</button>
+                                    <button class="mini-btn del" onclick="sendCommand('delete_slide', { id: '${sid}' }, 'Slide dihapus')">Hapus</button>
+                                </div>
+                            </div>
+                            <div style="display:flex;flex-wrap:wrap;gap:5px;">${checks}</div>
                         </div>
-                        <button class="mini-btn ${s.enabled ? 'on' : ''}" onclick="sendCommand('toggle_slide', { id: '${escapeHtml(s.id)}' })">${s.enabled ? 'AKTIF' : 'OFF'}</button>
-                        <button class="mini-btn del" onclick="sendCommand('delete_slide', { id: '${escapeHtml(s.id)}' }, 'Slide dihapus')">Hapus</button>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
 
             // Audio Inventory list
             const audioBox = document.getElementById('audioInventoryBox');
@@ -1366,17 +1990,92 @@
                     setInputSafely('cfgHijriAdj', status.prayerConfig.hijriAdjustment);
                 }
 
+                if (status.standbySlideshow) {
+                    setInputSafely('standbySlideDur', status.standbySlideshow.slideDuration || 15);
+                }
+
                 if (status.jumat) {
                     setInputSafely('jumatKhotib', status.jumat.khotib);
                     setInputSafely('jumatImam', status.jumat.imam);
                     setInputSafely('jumatMuadzin', status.jumat.muadzin);
+                    setInputSafely('jumatSaldoLalu', status.jumat.saldoKasLalu ?? 0);
+                    setInputSafely('jumatPemasukan', status.jumat.pemasukan ?? 0);
+                    setInputSafely('jumatPengeluaran', status.jumat.pengeluaran ?? 0);
                 }
 
                 if (status.ramadhan) {
                     setInputSafely('ramadhanNight', status.ramadhan.currentNight);
+                    setInputSafely('ramadhanHijriYear', status.ramadhan.hijriYear);
+                    setInputSafely('ramPenceramah', status.ramadhan.penceramah);
+                    setInputSafely('ramImamTarawih', status.ramadhan.imamTarawih);
+                    setInputSafely('ramImamWitir', status.ramadhan.imamWitir);
+                    setInputSafely('ramSaldoAwal', status.ramadhan.saldoAwal ?? 0);
+                    setInputSafely('ramInfaqPria', status.ramadhan.penerimaanPria ?? 0);
+                    setInputSafely('ramInfaqWanita', status.ramadhan.penerimaanWanita ?? 0);
+                    setInputSafely('ramPengeluaran', status.ramadhan.pengeluaran ?? 0);
+                    setInputSafely('ramSahurTime', status.ramadhan.sirineSahurTime || '03:00');
+                    setInputSafely('ramSirineRepeat', status.ramadhan.sirineRepeat || 1);
+                    const tList = status.ramadhan.takjil || [];
+                    const tEl = document.getElementById('ramTakjilList');
+                    if (tEl) {
+                        tEl.innerHTML = tList.length
+                            ? `Donatur Malam Ke-${status.ramadhan.currentNight}: <b>${tList.map(escapeHtml).join(', ')}</b> <button class="mini-btn del" style="margin-left:6px;" onclick="clearRamadhanTakjil()">Kosongkan</button>`
+                            : `Belum ada donatur Ta'jil malam ke-${status.ramadhan.currentNight}.`;
+                    }
+                    syncToggleFlag('ramSirineBtn', !!status.ramadhan.sirineEnabled);
+                    syncToggleFlag('ramSirineMaghribBtn', !!status.ramadhan.sirineMaghrib);
+                    syncToggleFlag('ramSirineImsakBtn', !!status.ramadhan.sirineImsak);
+                    syncToggleFlag('ramSirineSahurBtn', !!status.ramadhan.sirineSahur);
+                }
+
+                if (status.idulFitri) {
+                    setInputSafely('fitriKhotib', status.idulFitri.khotib);
+                    setInputSafely('fitriImam', status.idulFitri.imam);
+                    setInputSafely('fitriBilal', status.idulFitri.bilal);
+                    setInputSafely('fitriSholatDur', status.idulFitri.sholatDuration);
+                    setInputSafely('fitriKhutbahDur', status.idulFitri.khutbahDuration);
+                    setInputSafely('fitriSholatMsg', status.idulFitri.sholatMessage);
+                    setInputSafely('fitriKhutbahMsg', status.idulFitri.khutbahMessage);
+                }
+
+                if (status.idulAdha) {
+                    setInputSafely('adhaKhotib', status.idulAdha.khotib);
+                    setInputSafely('adhaImam', status.idulAdha.imam);
+                    setInputSafely('adhaBilal', status.idulAdha.bilal);
+                    syncToggleFlag('toggle-info_qurban', !!status.idulAdha.infoQurbanEnabled);
+                    renderQurbanGroups(status.idulAdha.qurbanGroups || []);
+                }
+
+                if (status.screensaver) {
+                    syncToggleFlag('screensaverEnabledBtn', !!status.screensaver.enabled);
+                    setInputSafely('ssStartTime', status.screensaver.startTime || '22:00');
+                    setInputSafely('ssEndTime', status.screensaver.endTime || '03:30');
+                }
+
+                if (status.switchConfig) {
+                    syncToggleFlag('switchMasterBtn', !!status.switchConfig.enabled);
+                    setInputSafely('switchConnType', status.switchConfig.connectionType || 'wifi');
+                    setInputSafely('switchWifiIp', status.switchConfig.wifiIp || '192.168.1.50');
+                    setInputSafely('switchUsbPort', status.switchConfig.usbPort || '/dev/ttyUSB0');
+                    setInputSafely('switchBaudRate', status.switchConfig.baudRate || 9600);
+                    renderSwitchChannels(status.switchConfig.channels || []);
+                }
+
+                if (status.users) {
+                    renderUsersList(status.users);
+                }
+
+                if (status.logs) {
+                    renderLogsList(status.logs);
                 }
 
                 if (status.masjidQr) {
+                    if (!pendingUpdates['qrEnabledBtn'] || (Date.now() - pendingUpdates['qrEnabledBtn'] >= 2500)) {
+                        document.getElementById('qrEnabledBtn')?.classList.toggle('on', !!status.masjidQr.enabled);
+                    }
+                    if (!pendingUpdates['qrShowFloatingBtn'] || (Date.now() - pendingUpdates['qrShowFloatingBtn'] >= 2500)) {
+                        document.getElementById('qrShowFloatingBtn')?.classList.toggle('on', !!status.masjidQr.showFloatingOnMain);
+                    }
                     setInputSafely('qrLink', status.masjidQr.link);
                     setInputSafely('qrLabel', status.masjidQr.label);
                     setInputSafely('qrBank', status.masjidQr.bankName);
@@ -1385,8 +2084,19 @@
                 }
 
                 if (status.onlineFinance) {
+                    if (!pendingUpdates['financeEnabledBtn'] || (Date.now() - pendingUpdates['financeEnabledBtn'] >= 2500)) {
+                        document.getElementById('financeEnabledBtn')?.classList.toggle('on', !!status.onlineFinance.enabled);
+                    }
                     setInputSafely('financeUrl', status.onlineFinance.url);
                     setInputSafely('financeReportUrl', status.onlineFinance.reportUrl);
+                    setInputSafely('financeBank', status.onlineFinance.bankName);
+                    setInputSafely('financeRek', status.onlineFinance.nomorRekening);
+                    setInputSafely('financeAn', status.onlineFinance.atasNama);
+                    setInputSafely('financeRefresh', status.onlineFinance.refreshIntervalMinutes);
+                }
+
+                if (status.tartilTarhimMedia) {
+                    renderTartilTarhimMedia(status.tartilTarhimMedia);
                 }
 
                 if (status.infoSettings) {
@@ -1394,8 +2104,12 @@
                     if (bf) bf.classList.toggle('on', !!status.infoSettings.enableSunnahFasting);
                 }
 
-                document.getElementById('btn-cctv').classList.toggle('active', status.state === 'cctv');
-                document.getElementById('btn-audio').classList.toggle('active', !!status.customAudio);
+                document.getElementById('btn-audio')?.classList.toggle('active', !!status.customAudio);
+                document.getElementById('btn-infaq')?.classList.toggle('active', status.state === 'masjid_qr');
+                document.getElementById('btn-finance')?.classList.toggle('active', status.state === 'online_finance');
+                document.getElementById('btn-slideshow')?.classList.toggle('active', status.state === 'standby_slideshow');
+                document.getElementById('btn-screensaver')?.classList.toggle('active', status.state === 'screensaver');
+                document.getElementById('btn-adzan')?.classList.toggle('active', status.state === 'adzan');
 
                 const toggleIds = ['toggle-jumat', 'toggle-ramadhan', 'toggle-idul_fitri', 'toggle-idul_adha', 'toggle-slideshow'];
                 const statusKeys = ['jumatEnabled', 'ramadhanEnabled', 'idulFitriEnabled', 'idulAdhaEnabled', 'slideshowEnabled'];
@@ -1405,9 +2119,20 @@
                     if (btn) btn.classList.toggle('on', !!status[statusKeys[idx]]);
                 });
 
-                document.querySelectorAll('[id^="live-"]').forEach(b => {
-                    b.classList.toggle('active', status.state === 'live' && b.id === `live-${status.activeLiveVideoId}`);
+                const activeSource = (status.liveSource || (status.liveConfig && status.liveConfig.source) || 'makkah').toLowerCase();
+                ['makkah', 'madinah', 'custom'].forEach(src => {
+                    const btn = document.getElementById(`live-${src}`);
+                    if (btn) btn.classList.toggle('active', status.state === 'live' && activeSource === src);
                 });
+                if (status.liveConfig) {
+                    setInputSafely('liveMakkahId', status.liveConfig.makkahVideoId || 'Cm1v4bteXbI');
+                    setInputSafely('liveMadinahId', status.liveConfig.madinahVideoId || '9A1S0xAPVIs');
+                    setInputSafely('liveCustomId', status.liveConfig.customVideoId || '');
+                    const isAudioOn = !status.liveConfig.muted;
+                    syncToggleFlag('liveAudioBtn', isAudioOn);
+                    const lab = document.getElementById('liveAudioBtn');
+                    if (lab) lab.textContent = isAudioOn ? '🔊 AUDIO LIVE: AKTIF' : '🔇 AUDIO LIVE: BISU';
+                }
 
                 if (status.prayerSettings) {
                     PRAYERS_META.forEach(p => {
@@ -1473,6 +2198,373 @@
             } catch (e) {
                 statusEl.textContent = 'TERPUTUS DARI TV';
                 statusEl.classList.add('offline');
+            }
+        }
+
+        function playLivePreset(source) {
+            const inputMap = {
+                makkah: 'liveMakkahId',
+                madinah: 'liveMadinahId',
+                custom: 'liveCustomId'
+            };
+            const el = document.getElementById(inputMap[source]);
+            const videoId = el ? el.value.trim() : '';
+            if (source === 'custom' && !videoId) {
+                showToast('Masukkan ID atau URL YouTube untuk Custom Live terlebih dahulu.', true);
+                if (el) el.focus();
+                return;
+            }
+            sendCommand('set_live_source', { source, videoId });
+        }
+
+        function saveLivePresets() {
+            const makkahVideoId = (document.getElementById('liveMakkahId')?.value || '').trim();
+            const madinahVideoId = (document.getElementById('liveMadinahId')?.value || '').trim();
+            const customVideoId = (document.getElementById('liveCustomId')?.value || '').trim();
+            sendCommand('save_live_presets', { makkahVideoId, madinahVideoId, customVideoId });
+        }
+
+        function toggleLiveAudio() {
+            const btn = document.getElementById('liveAudioBtn');
+            const nextAudioOn = !(btn?.classList.contains('on'));
+            pendingUpdates['liveAudioBtn'] = Date.now();
+            btn?.classList.toggle('on', nextAudioOn);
+            if (btn) btn.textContent = nextAudioOn ? '🔊 AUDIO LIVE: AKTIF' : '🔇 AUDIO LIVE: BISU';
+            sendCommand('toggle_live_mute', { muted: !nextAudioOn }, nextAudioOn ? '🔊 Audio Live diaktifkan!' : '🔇 Audio Live dibisukan');
+        }
+
+        function syncToggleFlag(id, isOn) {
+            if (pendingUpdates[id] && (Date.now() - pendingUpdates[id] < 2500)) return;
+            document.getElementById(id)?.classList.toggle('on', !!isOn);
+        }
+
+        function saveStandbySlideshow() {
+            const dur = parseInt(document.getElementById('standbySlideDur')?.value, 10) || 15;
+            sendCommand('update_standby_slideshow', { slideDuration: dur }, '✅ Durasi Standby Slideshow disimpan!');
+        }
+
+        function simulateSelectedState() {
+            const state = document.getElementById('simStateSelect')?.value || 'standby_slideshow';
+            sendCommand('simulate_state', { state, durationSeconds: 300 }, `▶ Simulasi state: ${state}`);
+        }
+
+        function saveJumatKeuangan() {
+            sendCommand('update_jumat_keuangan', {
+                saldoKasLalu: parseInt(document.getElementById('jumatSaldoLalu')?.value, 10) || 0,
+                pemasukan: parseInt(document.getElementById('jumatPemasukan')?.value, 10) || 0,
+                pengeluaran: parseInt(document.getElementById('jumatPengeluaran')?.value, 10) || 0
+            }, '💰 Kas Jum\'at disimpan!');
+        }
+
+        function saveRamadhanAll() {
+            sendCommand('update_ramadhan_full', {
+                currentNight: parseInt(document.getElementById('ramadhanNight')?.value, 10) || 1,
+                hijriYear: (document.getElementById('ramadhanHijriYear')?.value || '1447').trim(),
+                penceramah: document.getElementById('ramPenceramah')?.value.trim(),
+                imamTarawih: document.getElementById('ramImamTarawih')?.value.trim(),
+                imamWitir: document.getElementById('ramImamWitir')?.value.trim(),
+                saldoAwal: parseInt(document.getElementById('ramSaldoAwal')?.value, 10) || 0,
+                penerimaanPria: parseInt(document.getElementById('ramInfaqPria')?.value, 10) || 0,
+                penerimaanWanita: parseInt(document.getElementById('ramInfaqWanita')?.value, 10) || 0,
+                pengeluaran: parseInt(document.getElementById('ramPengeluaran')?.value, 10) || 0
+            }, '✅ Data Ramadhan malam aktif disimpan!');
+        }
+
+        function addRamadhanTakjil() {
+            const inp = document.getElementById('ramTakjilInput');
+            const name = inp?.value.trim() || '';
+            if (!name) return;
+            sendCommand('update_ramadhan_full', {
+                currentNight: parseInt(document.getElementById('ramadhanNight')?.value, 10) || 1,
+                addTakjilDonor: name
+            }, '✅ Donatur Ta\'jil ditambahkan!');
+            inp.value = '';
+        }
+
+        function clearRamadhanTakjil() {
+            sendCommand('update_ramadhan_full', {
+                currentNight: parseInt(document.getElementById('ramadhanNight')?.value, 10) || 1,
+                clearTakjilNight: true
+            }, '🗑️ Daftar Ta\'jil malam ini dikosongkan');
+        }
+
+        function saveRamadhanSirine() {
+            sendCommand('update_ramadhan_full', {
+                sirineEnabled: document.getElementById('ramSirineBtn')?.classList.contains('on'),
+                sirineMaghrib: document.getElementById('ramSirineMaghribBtn')?.classList.contains('on'),
+                sirineImsak: document.getElementById('ramSirineImsakBtn')?.classList.contains('on'),
+                sirineSahur: document.getElementById('ramSirineSahurBtn')?.classList.contains('on'),
+                sirineSahurTime: (document.getElementById('ramSahurTime')?.value || '03:00').trim(),
+                sirineRepeat: parseInt(document.getElementById('ramSirineRepeat')?.value, 10) || 1
+            }, '🔔 Pengaturan Sirine Ramadhan disimpan!');
+        }
+
+        function saveIdulFitri() {
+            sendCommand('update_idul_fitri', {
+                khotib: document.getElementById('fitriKhotib')?.value.trim(),
+                imam: document.getElementById('fitriImam')?.value.trim(),
+                bilal: document.getElementById('fitriBilal')?.value.trim(),
+                sholatDuration: parseInt(document.getElementById('fitriSholatDur')?.value, 10) || 45,
+                khutbahDuration: parseInt(document.getElementById('fitriKhutbahDur')?.value, 10) || 30,
+                sholatMessage: document.getElementById('fitriSholatMsg')?.value.trim(),
+                khutbahMessage: document.getElementById('fitriKhutbahMsg')?.value.trim()
+            }, '✅ Pengaturan Idul Fitri disimpan!');
+        }
+
+        function toggleInfoQurban() {
+            const btn = document.getElementById('toggle-info_qurban');
+            const next = !(btn?.classList.contains('on'));
+            pendingUpdates['toggle-info_qurban'] = Date.now();
+            btn?.classList.toggle('on', next);
+            sendCommand('update_idul_adha', { infoQurbanEnabled: next }, `Info Qurban ${next ? 'Aktif' : 'Nonaktif'}`);
+        }
+
+        function saveIdulAdhaPetugas() {
+            sendCommand('update_idul_adha', {
+                khotib: document.getElementById('adhaKhotib')?.value.trim(),
+                imam: document.getElementById('adhaImam')?.value.trim(),
+                bilal: document.getElementById('adhaBilal')?.value.trim()
+            }, '✅ Petugas Idul Adha disimpan!');
+        }
+
+        function addQurbanGroup() {
+            const groupName = document.getElementById('qurbanGroupName')?.value.trim() || '';
+            const animalType = document.getElementById('qurbanAnimalType')?.value || 'Sapi';
+            const membersCsv = document.getElementById('qurbanMembersCsv')?.value.trim() || '';
+            if (!groupName || !membersCsv) { showToast('Isi nama kelompok & daftar peserta!', true); return; }
+            sendCommand('update_idul_adha', {
+                addGroupName: groupName,
+                addAnimalType: animalType,
+                addMembersCsv: membersCsv
+            }, '✅ Kelompok Qurban ditambahkan!');
+            document.getElementById('qurbanMembersCsv').value = '';
+        }
+
+        function deleteQurbanGroup(id) {
+            sendCommand('update_idul_adha', { deleteGroupId: id }, '🗑️ Kelompok Qurban dihapus');
+        }
+
+        function renderQurbanGroups(groups) {
+            const box = document.getElementById('qurbanGroupsList');
+            if (!box) return;
+            box.innerHTML = groups.length
+                ? groups.map(g => `<div class="list-item"><div class="list-item-text"><div class="list-item-title">${escapeHtml(g.groupName)} (${escapeHtml(g.animalType)})</div><div class="list-item-sub">${(g.members || []).map(escapeHtml).join(', ')}</div></div><button class="mini-btn del" onclick="deleteQurbanGroup('${escapeHtml(g.id)}')">Hapus</button></div>`).join('')
+                : '<div style="font-size:12px;color:var(--text-secondary);">Belum ada kelompok Qurban.</div>';
+        }
+
+        function saveScreensaver() {
+            sendCommand('update_screensaver', {
+                enabled: document.getElementById('screensaverEnabledBtn')?.classList.contains('on'),
+                startTime: (document.getElementById('ssStartTime')?.value || '22:00').trim(),
+                endTime: (document.getElementById('ssEndTime')?.value || '03:30').trim()
+            }, '🌙 Pengaturan Screensaver disimpan!');
+        }
+
+        function toggleSwitchMaster() {
+            const btn = document.getElementById('switchMasterBtn');
+            const next = !(btn?.classList.contains('on'));
+            pendingUpdates['switchMasterBtn'] = Date.now();
+            btn?.classList.toggle('on', next);
+            sendCommand('toggle_switch_master', { enabled: next }, `Saklar Otomatis ${next ? 'Aktif' : 'Nonaktif'}`);
+        }
+
+        function saveSwitchConfig() {
+            sendCommand('toggle_switch_master', {
+                connectionType: document.getElementById('switchConnType')?.value || 'wifi',
+                wifiIp: (document.getElementById('switchWifiIp')?.value || '').trim(),
+                usbPort: (document.getElementById('switchUsbPort')?.value || '/dev/ttyUSB0').trim(),
+                baudRate: parseInt(document.getElementById('switchBaudRate')?.value, 10) || 9600
+            }, '⚡ Konfigurasi Hardware Saklar disimpan!');
+        }
+
+        function testSwitchPin(pin, turnOn) {
+            sendCommand('test_switch_pin', { pin, turnOn }, `Pin ${pin} -> ${turnOn ? 'ON' : 'OFF'}`);
+        }
+
+        let cachedSwitchChannels = [];
+
+        function renderSwitchChannels(channels) {
+            cachedSwitchChannels = channels || [];
+            const sel = document.getElementById('switchChannelSelect');
+            if (!sel) return;
+            const prevVal = sel.value;
+            sel.innerHTML = cachedSwitchChannels.map(ch =>
+                `<option value="${escapeHtml(ch.id)}">PIN ${ch.pin} — ${escapeHtml(ch.name)} ${ch.enabled ? '(AKTIF)' : '(OFF)'}</option>`
+            ).join('');
+            if (prevVal && cachedSwitchChannels.some(c => c.id === prevVal)) {
+                sel.value = prevVal;
+            }
+            const editor = document.getElementById('switchChannelEditor');
+            if (editor && editor.contains(document.activeElement)) return;
+            renderSelectedSwitchEditor();
+        }
+
+        function renderSelectedSwitchEditor() {
+            const sel = document.getElementById('switchChannelSelect');
+            const editor = document.getElementById('switchChannelEditor');
+            if (!sel || !editor) return;
+            const ch = cachedSwitchChannels.find(c => c.id === sel.value) || cachedSwitchChannels[0];
+            if (!ch) {
+                editor.innerHTML = '';
+                return;
+            }
+            const sched = ch.schedules || {};
+            const prayers = [
+                { id: 'fajr', label: 'Subuh' },
+                { id: 'dhuhr', label: 'Dzuhur' },
+                { id: 'asr', label: 'Ashar' },
+                { id: 'maghrib', label: 'Maghrib' },
+                { id: 'isha', label: 'Isya' }
+            ];
+            const stateOptions = [
+                { id: 'tartil', label: 'Tartil' },
+                { id: 'tarhim', label: 'Tarhim' },
+                { id: 'adzan', label: 'Adzan' },
+                { id: 'menunggu_iqomah', label: 'Menunggu Iqomah' },
+                { id: 'pelaksanaan_sholat', label: 'Pelaksanaan Sholat' },
+                { id: 'standby', label: 'Standby' }
+            ];
+            const makeStateOpts = (selected) => stateOptions.map(o =>
+                `<option value="${o.id}" ${selected === o.id ? 'selected' : ''}>${o.label}</option>`
+            ).join('');
+
+            const prayerRows = prayers.map(p => {
+                const s = sched[p.id] || {};
+                const onVal = (s.onOffset !== null && s.onOffset !== undefined) ? s.onOffset : '';
+                const offVal = (s.offOffset !== null && s.offOffset !== undefined) ? s.offOffset : '';
+                return `
+                    <div class="list-item" style="flex-direction:column;align-items:stretch;gap:6px;">
+                        <div class="list-item-title">${p.label.toUpperCase()}</div>
+                        <div class="grid-2">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label>Nyala Sebelum (Mnt)</label>
+                                <input type="number" id="sw-on-${p.id}" value="${onVal}" placeholder="Kosong = nonaktif">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label>Mati Sesudah (Mnt)</label>
+                                <input type="number" id="sw-off-${p.id}" value="${offVal}" placeholder="Kosong = nonaktif">
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            editor.innerHTML = `
+                <div class="grid-2" style="margin-bottom:10px;align-items:end;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Nama Saklar (PIN ${ch.pin})</label>
+                        <input type="text" id="swChName" value="${escapeHtml(ch.name)}">
+                    </div>
+                    <button id="swChEnabledBtn" class="toggle-btn ${ch.enabled ? 'on' : ''}" onclick="this.classList.toggle('on'); this.textContent = this.classList.contains('on') ? '✅ AKTIF: ON' : '⛔ AKTIF: OFF';">
+                        ${ch.enabled ? '✅ AKTIF: ON' : '⛔ AKTIF: OFF'}
+                    </button>
+                </div>
+                <div class="grid-2" style="margin-bottom:10px;">
+                    <button class="action-btn accent" onclick="testSwitchPin(${ch.pin}, true)">▶ TEST PIN ${ch.pin} ON</button>
+                    <button class="action-btn danger" onclick="testSwitchPin(${ch.pin}, false)">⏹ TEST PIN ${ch.pin} OFF</button>
+                </div>
+                <div class="form-group">
+                    <label>Mode Pemicu</label>
+                    <select id="swChMode" onchange="document.getElementById('swPrayerBox').style.display = this.value === 'prayer' ? 'block' : 'none'; document.getElementById('swStateBox').style.display = this.value === 'state' ? 'block' : 'none';">
+                        <option value="prayer" ${ch.triggerMode === 'prayer' ? 'selected' : ''}>Berdasarkan Waktu Sholat</option>
+                        <option value="state" ${ch.triggerMode === 'state' ? 'selected' : ''}>Berdasarkan Status Aplikasi</option>
+                    </select>
+                </div>
+                <div id="swPrayerBox" style="display:${ch.triggerMode === 'prayer' ? 'block' : 'none'};">
+                    <div class="list-box">${prayerRows}</div>
+                </div>
+                <div id="swStateBox" style="display:${ch.triggerMode === 'state' ? 'block' : 'none'};">
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>ON pada State</label>
+                            <select id="swChOnState">${makeStateOpts(ch.onState || 'tartil')}</select>
+                        </div>
+                        <div class="form-group">
+                            <label>Offset ON (Menit)</label>
+                            <input type="number" min="-30" max="60" id="swChOnOffset" value="${ch.onStateOffset ?? 0}">
+                        </div>
+                        <div class="form-group">
+                            <label>OFF pada State</label>
+                            <select id="swChOffState">${makeStateOpts(ch.offState || 'pelaksanaan_sholat')}</select>
+                        </div>
+                        <div class="form-group">
+                            <label>Offset OFF (Menit)</label>
+                            <input type="number" min="-30" max="60" id="swChOffOffset" value="${ch.offStateOffset ?? 0}">
+                        </div>
+                    </div>
+                </div>
+                <button class="submit-btn" onclick="saveSelectedSwitchChannel('${escapeHtml(ch.id)}')">💾 SIMPAN KONFIGURASI PIN ${ch.pin}</button>
+            `;
+        }
+
+        function saveSelectedSwitchChannel(id) {
+            const parseNullableInt = (elId) => {
+                const raw = (document.getElementById(elId)?.value ?? '').trim();
+                if (!raw) return null;
+                const n = parseInt(raw, 10);
+                return Number.isNaN(n) ? null : n;
+            };
+            const schedules = {};
+            ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'].forEach(pid => {
+                schedules[pid] = {
+                    onOffset: parseNullableInt(`sw-on-${pid}`),
+                    offOffset: parseNullableInt(`sw-off-${pid}`)
+                };
+            });
+            sendCommand('update_switch_channel', {
+                id,
+                name: (document.getElementById('swChName')?.value || '').trim(),
+                enabled: document.getElementById('swChEnabledBtn')?.classList.contains('on'),
+                triggerMode: document.getElementById('swChMode')?.value || 'prayer',
+                schedules,
+                onState: document.getElementById('swChOnState')?.value || 'tartil',
+                onStateOffset: parseInt(document.getElementById('swChOnOffset')?.value, 10) || 0,
+                offState: document.getElementById('swChOffState')?.value || 'pelaksanaan_sholat',
+                offStateOffset: parseInt(document.getElementById('swChOffOffset')?.value, 10) || 0
+            }, '✅ Konfigurasi channel saklar disimpan!');
+        }
+
+        function renderUsersList(users) {
+            const box = document.getElementById('usersListBox');
+            if (!box) return;
+            box.innerHTML = users.length
+                ? users.map(u => `<div class="list-item"><div class="list-item-text"><div class="list-item-title">${escapeHtml(u.username)}</div><div class="list-item-sub">Role: ${escapeHtml(u.role)}</div></div></div>`).join('')
+                : '<div style="font-size:12px;color:var(--text-secondary);">Default Superadmin aktif.</div>';
+        }
+
+        function saveAdminPin() {
+            const role = document.getElementById('adminPinRole')?.value || 'user';
+            const newPin = (document.getElementById('adminNewPin')?.value || '').trim();
+            if (newPin.length < 4) { showToast('PIN minimal 4 digit!', true); return; }
+            sendCommand('update_admin_pin', { role, newPin }, `🔐 PIN akun ${role} diperbarui!`);
+            document.getElementById('adminNewPin').value = '';
+        }
+
+        function renderLogsList(logs) {
+            const box = document.getElementById('logsListBox');
+            if (!box) return;
+            box.innerHTML = logs.length
+                ? logs.map(l => `<div class="list-item"><div class="list-item-text"><div class="list-item-title">[${escapeHtml(l.level)}] ${escapeHtml(l.tag)} • ${escapeHtml(l.time)}</div><div class="list-item-sub">${escapeHtml(l.message)}</div></div></div>`).join('')
+                : '<div style="font-size:12px;color:var(--text-secondary);">Belum ada log aktivitas.</div>';
+        }
+
+        async function downloadBackupJson() {
+            if (!AUTH_TOKEN) { showAuthModal(true); return; }
+            try {
+                const res = await fetch('/api/backup', { headers: { 'Authorization': `Bearer ${AUTH_TOKEN}` } });
+                if (!res.ok) { showToast('❌ Gagal mengunduh backup!', true); return; }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'jws-algaffar-backup.json';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                showToast('📥 Backup JSON berhasil diunduh!');
+            } catch (e) {
+                showToast('❌ Gagal mengunduh backup!', true);
             }
         }
 

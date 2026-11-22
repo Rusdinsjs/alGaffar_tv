@@ -10,20 +10,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import java.net.InetAddress
-import java.net.SocketTimeoutException
 import java.time.LocalDate
-import java.util.UUID
 import java.util.concurrent.TimeUnit
-
-@Serializable
-data class DiscoveredOnvifCamera(
-    val name: String,
-    val url: String,
-    val address: String
-)
 
 @Serializable
 data class FinancialTransactionItem(
@@ -44,103 +32,12 @@ data class FinancialSummaryData(
 )
 
 /**
- * ONVIF Camera LAN Discovery via UDP Multicast WS-Discovery (`239.255.255.250:3702`).
- * Mirrors `discover_onvif_cameras` in `src-tauri/src/lib.rs`.
- */
-object OnvifDiscoveryManager {
-
-    private const val MULTICAST_ADDRESS = "239.255.255.250"
-    private const val MULTICAST_PORT = 3702
-
-    fun buildWsDiscoveryProbeXml(messageId: String = UUID.randomUUID().toString()): String =
-        """<?xml version="1.0" encoding="UTF-8"?>
-<e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope"
-            xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing"
-            xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"
-            xmlns:dn="http://www.onvif.org/ver10/network/wsdl">
-  <e:Header>
-    <w:MessageID>uuid:$messageId</w:MessageID>
-    <w:To e:mustUnderstand="true">urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>
-    <w:Action a:mustUnderstand="true" xmlns:a="http://www.w3.org/2003/05/soap-envelope">http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>
-  </e:Header>
-  <e:Body>
-    <d:Probe>
-      <d:Types>dn:NetworkVideoTransmitter</d:Types>
-    </d:Probe>
-  </e:Body>
-</e:Envelope>"""
-
-    suspend fun discoverCameras(
-        timeoutMs: Int = 1500,
-        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
-    ): List<DiscoveredOnvifCamera> = withContext(ioDispatcher) {
-        val discovered = mutableListOf<DiscoveredOnvifCamera>()
-        runCatching {
-            DatagramSocket().use { socket ->
-                socket.broadcast = true
-                socket.soTimeout = timeoutMs
-
-                val probeBytes = buildWsDiscoveryProbeXml().toByteArray(Charsets.UTF_8)
-                val group = InetAddress.getByName(MULTICAST_ADDRESS)
-                val packet = DatagramPacket(probeBytes, probeBytes.size, group, MULTICAST_PORT)
-                socket.send(packet)
-
-                val recvBuf = ByteArray(8192)
-                val deadline = System.currentTimeMillis() + timeoutMs
-                while (System.currentTimeMillis() < deadline) {
-                    try {
-                        val recvPacket = DatagramPacket(recvBuf, recvBuf.size)
-                        socket.receive(recvPacket)
-                        val xml = String(recvPacket.data, 0, recvPacket.length, Charsets.UTF_8)
-                        val senderIp = recvPacket.address?.hostAddress.orEmpty()
-                        parseWsDiscoveryResponse(xml, senderIp)?.let { discovered.add(it) }
-                    } catch (_: SocketTimeoutException) {
-                        break
-                    }
-                }
-            }
-        }
-        discovered
-            .distinctBy { it.address.ifBlank { it.url } }
-            .sortedBy { it.address }
-    }
-
-    internal fun parseWsDiscoveryResponse(xml: String, fallbackAddress: String = ""): DiscoveredOnvifCamera? {
-        val xAddrsRegex = Regex("""<(?:\w+:)?XAddrs[^>]*>([^<]+)</(?:\w+:)?XAddrs>""", RegexOption.IGNORE_CASE)
-        val scopesRegex = Regex("""<(?:\w+:)?Scopes[^>]*>([^<]+)</(?:\w+:)?Scopes>""", RegexOption.IGNORE_CASE)
-
-        val xAddrsRaw = xAddrsRegex.find(xml)?.groupValues?.get(1)?.trim() ?: return null
-        val firstUrl = xAddrsRaw.split(Regex("""\s+""")).firstOrNull { it.isNotBlank() } ?: return null
-
-        val scopesRaw = scopesRegex.find(xml)?.groupValues?.get(1).orEmpty()
-        val nameScope = scopesRaw.split(Regex("""\s+"""))
-            .firstOrNull { it.contains("/name/", ignoreCase = true) }
-            ?.substringAfterLast('/')
-            ?.replace("%20", " ")
-            ?.takeIf { it.isNotBlank() }
-            ?: "ONVIF Camera"
-
-        val hostRegex = Regex("""https?://([^/:]+)""", RegexOption.IGNORE_CASE)
-        val extractedHost = hostRegex.find(firstUrl)?.groupValues?.get(1) ?: fallbackAddress
-
-        return DiscoveredOnvifCamera(
-            name = nameScope,
-            url = firstUrl,
-            address = extractedHost
-        )
-    }
-}
-
-/**
  * Online Mosque Finance Synchronizer (Google Sheets CSV / JSON REST endpoint with automatic local fallback).
  * Mirrors `src/hooks/useOnlineFinance.ts`.
  */
 class OnlineFinanceManager(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val httpClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
-        .build()
+    private val httpClient: OkHttpClient = id.algaffar.jwstv.SharedHttpClient.baseClient
 ) {
     private val jsonParser = Json {
         ignoreUnknownKeys = true

@@ -58,4 +58,13 @@ object AppLogger {
             _logsFlow.value = emptyList()
         }
     }
+
+    fun trimTo(maxEntries: Int) {
+        synchronized(lock) {
+            val current = _logsFlow.value
+            if (current.size > maxEntries) {
+                _logsFlow.value = current.takeLast(maxEntries.coerceAtLeast(0))
+            }
+        }
+    }
 }

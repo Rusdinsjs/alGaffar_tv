@@ -551,32 +551,6 @@ class JwsStateMachine(
         settings: AppStateSettings,
         schedule: DailyPrayerSchedule
     ): StateMachineTickResult? {
-        // 4A. Scheduled CCTV
-        if (settings.cctv.enabled && settings.cctv.cameras.any { it.enabled }) {
-            for (trigger in settings.cctv.schedules.filter { it.enabled }) {
-                val prayerId = PrayerId.fromId(trigger.prayerId) ?: continue
-                if (!prayerId.isFiveTimeFardhu) continue
-                val refTime = resolveTriggerReferenceTime(prayerId, trigger.referencePoint, settings, schedule)
-                val startTime = refTime.plusMinutes(trigger.startOffsetMinutes.toLong())
-                val durationSec = trigger.durationMinutes.toLong().coerceAtLeast(1L) * 60L
-                val endTime = startTime.plusSeconds(durationSec)
-
-                if (!now.isBefore(startTime) && now.isBefore(endTime)) {
-                    val rem = ChronoUnit.SECONDS.between(now, endTime)
-                    return StateMachineTickResult(
-                        state = AppState.CCTV,
-                        activePrayerId = prayerId,
-                        countdownSeconds = rem,
-                        totalStageSeconds = durationSec,
-                        secondsUntilAdzan = null,
-                        shouldTriggerBeep = false,
-                        shouldFadeOutAudio = false,
-                        isNoSunnahWarningActive = false
-                    )
-                }
-            }
-        }
-
         // 4B-0. Direct Live On-Demand
         if (settings.live.directLiveEnabled) {
             val durMin = settings.live.directLiveDurationMinutes

@@ -658,9 +658,6 @@ class MainActivity : ComponentActivity() {
                                         onToggleManualRelay = { pin, turnOn ->
                                             viewModel.toggleManualRelay(pin, turnOn)
                                         },
-                                        onDiscoverOnvifCameras = {
-                                            viewModel.discoverOnvifCameras()
-                                        },
                                         onTestOnlineFinance = {
                                             viewModel.testOnlineFinanceConnection()
                                         },

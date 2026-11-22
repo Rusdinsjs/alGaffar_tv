@@ -94,7 +94,6 @@ data class SettingsActions(
     val onCleanOrphanMedia: () -> Unit,
     val onOpenDebugSimulator: () -> Unit,
     val onToggleManualRelay: (Int, Boolean) -> Unit,
-    val onDiscoverOnvifCameras: () -> Unit,
     val onTestOnlineFinance: () -> Unit,
     val onStartDirectLive: (source: String, customId: String, durationMinutes: Int) -> Unit,
     val onStopDirectLive: () -> Unit,

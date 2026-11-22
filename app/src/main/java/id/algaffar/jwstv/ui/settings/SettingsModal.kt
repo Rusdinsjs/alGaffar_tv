@@ -140,7 +140,7 @@ private val SETTINGS_CATEGORIES = listOf(
             SettingsSubTab("idulFitri", "Idul Fitri", Icons.Default.Event),
             SettingsSubTab("idulAdha", "Idul Adha & Qurban", Icons.Default.Event),
             SettingsSubTab("state", "Screensaver & State", Icons.Default.AutoAwesome),
-            SettingsSubTab("live", "Live & CCTV", Icons.Default.LiveTv),
+            SettingsSubTab("live", "Siaran Live", Icons.Default.LiveTv),
             SettingsSubTab("switches", "Hardware Saklar", Icons.Default.PowerSettingsNew)
         )
     ),

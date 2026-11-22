@@ -2,7 +2,6 @@ package id.algaffar.jwstv.data
 
 import id.algaffar.jwstv.data.auth.AuthManager
 import id.algaffar.jwstv.data.cctv.OnlineFinanceManager
-import id.algaffar.jwstv.data.cctv.OnvifDiscoveryManager
 import id.algaffar.jwstv.data.hardware.SwitchController
 import id.algaffar.jwstv.data.server.IpRateLimiter
 import id.algaffar.jwstv.data.server.KtorRemoteServer
@@ -208,29 +207,5 @@ class Phase5ServerAndHardwareTest {
         assertEquals(4_000_000L, parsed.balance)
         assertEquals(3, parsed.recentTransactions.size)
         assertEquals("Infaq QRIS Jamaah", parsed.recentTransactions.first().description)
-    }
-
-    @Test
-    fun `OnvifDiscoveryManager parses WS-Discovery SOAP ProbeMatches XML`() {
-        val sampleProbeMatchXml = """
-            <?xml version="1.0" encoding="UTF-8"?>
-            <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://www.w3.org/2003/05/soap-envelope"
-                               xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery">
-              <SOAP-ENV:Body>
-                <d:ProbeMatches>
-                  <d:ProbeMatch>
-                    <d:Scopes>onvif://www.onvif.org/type/video_encoder onvif://www.onvif.org/name/Hikvision%20Shaf%20Utama</d:Scopes>
-                    <d:XAddrs>http://192.168.1.64/onvif/device_service</d:XAddrs>
-                  </d:ProbeMatch>
-                </d:ProbeMatches>
-              </SOAP-ENV:Body>
-            </SOAP-ENV:Envelope>
-        """.trimIndent()
-
-        val camera = OnvifDiscoveryManager.parseWsDiscoveryResponse(sampleProbeMatchXml, "192.168.1.64")
-        assertNotNull(camera)
-        assertEquals("Hikvision Shaf Utama", camera?.name)
-        assertEquals("http://192.168.1.64/onvif/device_service", camera?.url)
-        assertEquals("192.168.1.64", camera?.address)
     }
 }

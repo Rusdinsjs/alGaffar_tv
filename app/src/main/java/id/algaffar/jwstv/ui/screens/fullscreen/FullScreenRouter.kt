@@ -458,15 +458,21 @@ fun FullScreenRouter(
                 }
 
                 AppState.ONLINE_FINANCE -> {
-                    OnlineFinanceFullscreen(snapshot = snapshot)
+                    OnlineFinanceFullscreen(
+                        snapshot = snapshot,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
+                    )
                 }
 
                 AppState.LIVE -> {
-                    YouTubeLiveFullscreen(snapshot = snapshot)
-                }
-
-                AppState.CCTV -> {
-                    CctvGridFullscreen(snapshot = snapshot)
+                    YouTubeLiveFullscreen(
+                        snapshot = snapshot,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onToggleLogoMenu
+                    )
                 }
             }
         }

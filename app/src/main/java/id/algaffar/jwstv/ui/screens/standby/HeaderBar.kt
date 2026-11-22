@@ -88,6 +88,7 @@ fun HeaderBar(
     isReversed: Boolean = false,
     isLogoMenuOpen: Boolean = false,
     onLogoClick: () -> Unit,
+    showAddress: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
@@ -153,6 +154,7 @@ fun HeaderBar(
                     isReversed = false,
                     isMenuOpen = isLogoMenuOpen,
                     onLogoClick = onLogoClick,
+                    showAddress = showAddress,
                     modifier = Modifier.weight(1.04f)
                 )
                 HeaderDateBlock(
@@ -179,6 +181,7 @@ fun HeaderBar(
                     isReversed = true,
                     isMenuOpen = isLogoMenuOpen,
                     onLogoClick = onLogoClick,
+                    showAddress = showAddress,
                     modifier = Modifier.weight(1.04f)
                 )
             }
@@ -377,6 +380,7 @@ private fun MosqueIdentityBlock(
     isReversed: Boolean,
     isMenuOpen: Boolean,
     onLogoClick: () -> Unit,
+    showAddress: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
@@ -425,20 +429,22 @@ private fun MosqueIdentityBlock(
                     platformStyle = PlatformTextStyle(includeFontPadding = false)
                 )
             )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = addressLine,
-                color = palette.textSecondary,
-                fontSize = addressFontSp.sp,
-                lineHeight = (addressFontSp + 6).sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = if (isReversed) TextAlign.End else TextAlign.Start,
-                style = TextStyle(
-                    platformStyle = PlatformTextStyle(includeFontPadding = false)
+            if (showAddress && addressLine.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = addressLine,
+                    color = palette.textSecondary,
+                    fontSize = addressFontSp.sp,
+                    lineHeight = (addressFontSp + 6).sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = if (isReversed) TextAlign.End else TextAlign.Start,
+                    style = TextStyle(
+                        platformStyle = PlatformTextStyle(includeFontPadding = false)
+                    )
                 )
-            )
+            }
         }
 
         if (isReversed) {

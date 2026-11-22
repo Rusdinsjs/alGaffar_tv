@@ -7,10 +7,8 @@ import androidx.lifecycle.viewModelScope
 import id.algaffar.jwstv.AppContainer
 import id.algaffar.jwstv.data.audio.JwsAudioEngine
 import id.algaffar.jwstv.data.backup.BackupRestoreManager
-import id.algaffar.jwstv.data.cctv.DiscoveredOnvifCamera
 import id.algaffar.jwstv.data.cctv.FinancialSummaryData
 import id.algaffar.jwstv.data.cctv.OnlineFinanceManager
-import id.algaffar.jwstv.data.cctv.OnvifDiscoveryManager
 import id.algaffar.jwstv.data.excel.TakjilExcelManager
 import id.algaffar.jwstv.data.excel.TakjilImportPreviewRow
 import id.algaffar.jwstv.data.hardware.SwitchController
@@ -32,7 +30,6 @@ import id.algaffar.jwstv.domain.engine.StateMachineTickResult
 import android.view.KeyEvent
 import id.algaffar.jwstv.domain.model.AppState
 import id.algaffar.jwstv.domain.model.AppStateSettings
-import id.algaffar.jwstv.domain.model.CctvCameraConfig
 import id.algaffar.jwstv.domain.model.InfoCardItem
 import id.algaffar.jwstv.domain.model.JumatPetugasRecord
 import id.algaffar.jwstv.domain.model.LayoutPosition
@@ -71,7 +68,7 @@ data class JwsRuntimeSnapshot(
 )
 
 class MainViewModel(
-    appContext: Context? = null,
+    private val appContext: Context? = null,
     val assetsRootDir: File,
     val settingsRepository: SettingsRepository,
     private val prayerTimeCalculator: PrayerTimeCalculator,
@@ -125,9 +122,6 @@ class MainViewModel(
 
     val relayPinStatesFlow: StateFlow<Map<Int, Boolean>> = switchController.pinStateFlow
 
-    private val _discoveredOnvifCameras = MutableStateFlow<List<DiscoveredOnvifCamera>>(emptyList())
-    val discoveredOnvifCameras: StateFlow<List<DiscoveredOnvifCamera>> = _discoveredOnvifCameras.asStateFlow()
-
     private val _openSettingsRequestCount = MutableStateFlow(0)
     val openSettingsRequestCount: StateFlow<Int> = _openSettingsRequestCount.asStateFlow()
 
@@ -159,7 +153,7 @@ class MainViewModel(
     }
 
     private fun buildAudioInventoryMap(): Map<String, List<String>> {
-        val slots = listOf("fajr", "dhuhr", "asr", "maghrib", "isha", "default")
+        val slots = listOf("fajr", "dhuhr", "asr", "maghrib", "isha", "jumat", "default")
         val categories = listOf("tartil", "tarhim", "adzan")
         val map = mutableMapOf<String, List<String>>()
         for (cat in categories) {
@@ -202,6 +196,7 @@ class MainViewModel(
                         inputStream = inputStream
                     ).getOrThrow()
                     val title = cleanName.substringBeforeLast('.').replace('_', ' ').ifBlank { "Poster Masjid" }
+                    val modeSet = if (slot.isNotBlank()) slot.split(',').map { it.trim().lowercase() }.toSet() else setOf("main", "slideshow")
                     val newSlide = SlideItem(
                         id = "slide_${System.currentTimeMillis()}",
                         title = title,
@@ -209,8 +204,12 @@ class MainViewModel(
                         imageUrl = saved.relativePath,
                         duration = 12,
                         enabled = true,
-                        showInMain = true,
-                        showInSlideshow = true
+                        showInMain = "main" in modeSet,
+                        showInSlideshow = "slideshow" in modeSet,
+                        showInJumat = "jumat" in modeSet,
+                        showInRamadhan = "ramadhan" in modeSet,
+                        showInIdulFitri = "idul_fitri" in modeSet,
+                        showInIdulAdha = "idul_adha" in modeSet
                     )
                     updateSettings { prev -> prev.copy(slides = prev.slides + newSlide) }
                     val savedInfo = if (saved.wasOptimized) {
@@ -234,6 +233,7 @@ class MainViewModel(
                         maxBytes = MediaStorageManager.MAX_VIDEO_UPLOAD_BYTES
                     ).getOrThrow()
                     val title = base.replace('_', ' ').ifBlank { "Video Masjid" }
+                    val modeSet = if (slot.isNotBlank()) slot.split(',').map { it.trim().lowercase() }.toSet() else setOf("main", "slideshow")
                     val newSlide = SlideItem(
                         id = "slide_vid_${System.currentTimeMillis()}",
                         title = title,
@@ -241,8 +241,12 @@ class MainViewModel(
                         videoUrl = saved.relativePath,
                         duration = 30,
                         enabled = true,
-                        showInMain = true,
-                        showInSlideshow = true
+                        showInMain = "main" in modeSet,
+                        showInSlideshow = "slideshow" in modeSet,
+                        showInJumat = "jumat" in modeSet,
+                        showInRamadhan = "ramadhan" in modeSet,
+                        showInIdulFitri = "idul_fitri" in modeSet,
+                        showInIdulAdha = "idul_adha" in modeSet
                     )
                     updateSettings { prev -> prev.copy(slides = prev.slides + newSlide) }
                     AppLogger.info(
@@ -306,8 +310,86 @@ class MainViewModel(
                     "Gambar $label berhasil diperbarui (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
                 }
 
+                "tartil_image" -> {
+                    val saved = MediaStorageManager.optimizeAndSaveImage(
+                        assetsRootDir = assetsRootDir,
+                        subFolder = "media/tartil",
+                        rawFileName = cleanName,
+                        inputStream = inputStream
+                    ).getOrThrow()
+                    updateSettings { prev ->
+                        prev.copy(
+                            media = prev.media.copy(
+                                tartilMediaType = "image",
+                                tartilImages = prev.media.tartilImages + saved.relativePath
+                            )
+                        )
+                    }
+                    AppLogger.info("REMOTE", "Gambar slide Tartil diunggah: ${saved.relativePath}")
+                    "Gambar slide Tartil berhasil diunggah (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
+                }
+
+                "tartil_video" -> {
+                    val safeName = cleanName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                    val saved = MediaStorageManager.saveStreamWithGuard(
+                        assetsRootDir = assetsRootDir,
+                        targetRelativePath = "media/tartil/${System.currentTimeMillis()}_$safeName",
+                        inputStream = inputStream,
+                        maxBytes = MediaStorageManager.MAX_VIDEO_UPLOAD_BYTES
+                    ).getOrThrow()
+                    updateSettings { prev ->
+                        prev.copy(
+                            media = prev.media.copy(
+                                tartilMediaType = "video",
+                                tartilVideo = saved.relativePath
+                            )
+                        )
+                    }
+                    AppLogger.info("REMOTE", "Video Tartil diunggah: ${saved.relativePath}")
+                    "Video Tartil berhasil diunggah (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
+                }
+
+                "tarhim_image" -> {
+                    val saved = MediaStorageManager.optimizeAndSaveImage(
+                        assetsRootDir = assetsRootDir,
+                        subFolder = "media/tarhim",
+                        rawFileName = cleanName,
+                        inputStream = inputStream
+                    ).getOrThrow()
+                    updateSettings { prev ->
+                        prev.copy(
+                            media = prev.media.copy(
+                                tarhimMediaType = "image",
+                                tarhimImages = prev.media.tarhimImages + saved.relativePath
+                            )
+                        )
+                    }
+                    AppLogger.info("REMOTE", "Gambar slide Tarhim diunggah: ${saved.relativePath}")
+                    "Gambar slide Tarhim berhasil diunggah (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
+                }
+
+                "tarhim_video" -> {
+                    val safeName = cleanName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                    val saved = MediaStorageManager.saveStreamWithGuard(
+                        assetsRootDir = assetsRootDir,
+                        targetRelativePath = "media/tarhim/${System.currentTimeMillis()}_$safeName",
+                        inputStream = inputStream,
+                        maxBytes = MediaStorageManager.MAX_VIDEO_UPLOAD_BYTES
+                    ).getOrThrow()
+                    updateSettings { prev ->
+                        prev.copy(
+                            media = prev.media.copy(
+                                tarhimMediaType = "video",
+                                tarhimVideo = saved.relativePath
+                            )
+                        )
+                    }
+                    AppLogger.info("REMOTE", "Video Tarhim diunggah: ${saved.relativePath}")
+                    "Video Tarhim berhasil diunggah (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
+                }
+
                 "tartil", "tarhim", "adzan" -> {
-                    val safeSlot = slot.takeIf { it in setOf("fajr", "dhuhr", "asr", "maghrib", "isha", "default") }
+                    val safeSlot = slot.takeIf { it in setOf("fajr", "dhuhr", "asr", "maghrib", "isha", "jumat", "default") }
                         ?: "default"
                     val saved = MediaStorageManager.saveStreamWithGuard(
                         assetsRootDir = assetsRootDir,
@@ -386,6 +468,47 @@ class MainViewModel(
                 delay(1_000L)
             }
         }
+
+        // Proactive Memory Watchdog (every 30s): stabilizes RAM if heap or system RAM >= 88-90%
+        viewModelScope.launch(Dispatchers.Default) {
+            while (isActive) {
+                delay(30_000L)
+                checkAndRecoverMemoryIfNeeded()
+            }
+        }
+    }
+
+    private fun checkAndRecoverMemoryIfNeeded() {
+        val runtime = Runtime.getRuntime()
+        val maxMem = runtime.maxMemory().coerceAtLeast(1L)
+        val usedHeap = (runtime.totalMemory() - runtime.freeMemory()).coerceAtLeast(0L)
+        val heapPct = usedHeap.toDouble() / maxMem.toDouble()
+
+        var isSystemLow = false
+        var sysRamPct = 0.0
+        appContext?.let { ctx ->
+            runCatching {
+                val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+                val mi = android.app.ActivityManager.MemoryInfo()
+                am?.getMemoryInfo(mi)
+                if (mi.totalMem > 0L) {
+                    sysRamPct = (mi.totalMem - mi.availMem).coerceAtLeast(0L).toDouble() / mi.totalMem.toDouble()
+                }
+                isSystemLow = mi.lowMemory || sysRamPct >= 0.90
+            }
+        }
+
+        if (heapPct >= 0.85 || isSystemLow) {
+            val aggressive = heapPct >= 0.90 || isSystemLow
+            val reason = "Watchdog(heap=${(heapPct * 100).toInt()}%, sys=${(sysRamPct * 100).toInt()}%)"
+            val app = appContext?.applicationContext as? id.algaffar.jwstv.JwsApplication
+            if (app != null) {
+                app.performMemoryRecovery(reason, aggressive = aggressive)
+            } else if (aggressive) {
+                runCatching { audioEngine.releaseIfIdle() }
+                AppLogger.trimTo(50)
+            }
+        }
     }
 
     fun refreshAudioDurationsAsync() {
@@ -461,6 +584,35 @@ class MainViewModel(
         audioEngine.onTick(snap.now, snap.settings, snap.schedule, snap.tickResult)
     }
 
+    private fun toggleOrSimulate(target: AppState, durationSeconds: Long) {
+        val cur = _snapshotFlow.value?.tickResult
+        if (cur?.state == target && cur.isManualOverride) {
+            stopAllAndReturnToStandby()
+        } else {
+            simulateState(target, durationSeconds)
+        }
+    }
+
+    private fun stopAllAndReturnToStandby() {
+        audioEngine.stopPlayback()
+        updateSettings { prev ->
+            if (!prev.customAudio.isPlayingLive && !prev.live.directLiveEnabled) {
+                prev
+            } else {
+                prev.copy(
+                    customAudio = prev.customAudio.copy(isPlayingLive = false),
+                    live = prev.live.copy(directLiveEnabled = false)
+                )
+            }
+        }
+        clearSimulation()
+        // If automatic schedule currently lands on standby_slideshow or another non-standby idle state
+        // right when user explicitly hits "Kembali ke Standby", ensure immediate STANDBY transition.
+        if (_snapshotFlow.value?.tickResult?.state == AppState.STANDBY_SLIDESHOW) {
+            simulateState(AppState.STANDBY, 10L)
+        }
+    }
+
     fun testPlayBeep1000Hz() {
         audioEngine.beepGenerator.playBeepImmediate()
     }
@@ -484,32 +636,6 @@ class MainViewModel(
         }
     }
 
-    fun discoverOnvifCameras() {
-        viewModelScope.launch {
-            _statusBannerMessage.value = "Memindai kamera ONVIF di jaringan lokal (UDP 239.255.255.250:3702)..."
-            val found = OnvifDiscoveryManager.discoverCameras()
-            _discoveredOnvifCameras.value = found
-            if (found.isEmpty()) {
-                _statusBannerMessage.value = "Tidak ditemukan kamera ONVIF baru pada jaringan lokal."
-            } else {
-                updateSettings { prev ->
-                    val existingUrls = prev.cctv.cameras.map { it.url }.toSet()
-                    val added = found.filter { it.url !in existingUrls }.mapIndexed { idx, cam ->
-                        CctvCameraConfig(
-                            id = "onvif-${System.currentTimeMillis()}-$idx",
-                            name = cam.name,
-                            type = "ip",
-                            url = cam.url,
-                            enabled = true
-                        )
-                    }
-                    prev.copy(cctv = prev.cctv.copy(cameras = prev.cctv.cameras + added))
-                }
-                _statusBannerMessage.value = "Ditemukan ${found.size} kamera ONVIF di jaringan lokal!"
-            }
-        }
-    }
-
     internal fun handleRemoteCommand(payload: RemoteCommandPayload) {
         viewModelScope.launch {
             when (payload.action.lowercase()) {
@@ -521,22 +647,21 @@ class MainViewModel(
                 "nav_enter" -> _remoteNavKeyEvents.tryEmit(KeyEvent.KEYCODE_DPAD_CENTER)
                 "nav_back" -> _remoteNavKeyEvents.tryEmit(KeyEvent.KEYCODE_BACK)
 
-                "screensaver" -> simulateState(AppState.SCREENSAVER, 3600L)
-                "stop", "refresh" -> clearSimulation()
-                "play_slideshow" -> simulateState(AppState.STANDBY_SLIDESHOW, 600L)
+                "screensaver" -> toggleOrSimulate(AppState.SCREENSAVER, 3600L)
+                "stop", "refresh" -> stopAllAndReturnToStandby()
+                "play_slideshow" -> toggleOrSimulate(AppState.STANDBY_SLIDESHOW, 600L)
                 "next_theme" -> cycleTheme()
                 "next_layout" -> cycleLayout()
                 "next_clock_style" -> cycleClockStyle()
                 "open_settings" -> _openSettingsRequestCount.value += 1
-                "play_jumat" -> simulateState(AppState.WAKTU_JUMAT, 600L)
-                "play_ramadhan" -> simulateState(AppState.TARAWIH, 600L)
-                "play_idul_fitri" -> simulateState(AppState.IDUL_FITRI, 600L)
-                "play_idul_adha" -> simulateState(AppState.IDUL_ADHA, 600L)
-                "play_cctv" -> simulateState(AppState.CCTV, 600L)
-                "play_live" -> simulateState(AppState.LIVE, 600L)
-                "play_infaq" -> simulateState(AppState.MASJID_QR, 300L)
-                "play_online_finance" -> simulateState(AppState.ONLINE_FINANCE, 300L)
-                "test_adzan" -> simulateState(AppState.ADZAN, 180L)
+                "play_jumat" -> toggleOrSimulate(AppState.WAKTU_JUMAT, 600L)
+                "play_ramadhan" -> toggleOrSimulate(AppState.TARAWIH, 600L)
+                "play_idul_fitri" -> toggleOrSimulate(AppState.IDUL_FITRI, 600L)
+                "play_idul_adha" -> toggleOrSimulate(AppState.IDUL_ADHA, 600L)
+                "play_live" -> toggleOrSimulate(AppState.LIVE, 600L)
+                "play_infaq" -> toggleOrSimulate(AppState.MASJID_QR, 300L)
+                "play_online_finance" -> toggleOrSimulate(AppState.ONLINE_FINANCE, 300L)
+                "test_adzan" -> toggleOrSimulate(AppState.ADZAN, 180L)
                 "test_beep" -> testPlayBeep1000Hz()
 
                 "set_theme" -> {
@@ -595,23 +720,62 @@ class MainViewModel(
                 }
 
                 "set_live_source" -> {
-                    val videoId = payload.stringArg("videoId").orEmpty()
-                    if (videoId.isNotBlank()) {
-                        val src = when (videoId) {
-                            "Cm1v4bteXbI" -> "makkah"
-                            "9A1S0xAPVIs" -> "madinah"
-                            else -> "custom"
+                    val requestedSource = payload.stringArg("source")?.lowercase()
+                    val videoId = payload.stringArg("videoId").orEmpty().trim()
+                    updateSettings { prev ->
+                        val src = when (requestedSource) {
+                            "makkah", "madinah", "custom" -> requestedSource
+                            else -> when {
+                                videoId == prev.live.makkahVideoId || videoId == "Cm1v4bteXbI" -> "makkah"
+                                videoId == prev.live.madinahVideoId || videoId == "9A1S0xAPVIs" -> "madinah"
+                                else -> "custom"
+                            }
                         }
-                        updateSettings { prev ->
-                            prev.copy(
-                                live = prev.live.copy(
-                                    enabled = true,
-                                    source = src,
-                                    customVideoId = videoId
-                                )
+                        val updatedLive = when (src) {
+                            "makkah" -> prev.live.copy(
+                                enabled = true,
+                                source = "makkah",
+                                makkahVideoId = videoId.ifBlank { prev.live.makkahVideoId }
+                            )
+                            "madinah" -> prev.live.copy(
+                                enabled = true,
+                                source = "madinah",
+                                madinahVideoId = videoId.ifBlank { prev.live.madinahVideoId }
+                            )
+                            else -> prev.live.copy(
+                                enabled = true,
+                                source = "custom",
+                                customVideoId = videoId.ifBlank { prev.live.customVideoId }
                             )
                         }
-                        simulateState(AppState.LIVE, 900L)
+                        prev.copy(live = updatedLive)
+                    }
+                    simulateState(AppState.LIVE, 900L)
+                }
+
+                "save_live_presets" -> {
+                    val makkahId = payload.stringArg("makkahVideoId")?.trim()
+                    val madinahId = payload.stringArg("madinahVideoId")?.trim()
+                    val customId = payload.stringArg("customVideoId")?.trim()
+                    updateSettings { prev ->
+                        prev.copy(
+                            live = prev.live.copy(
+                                makkahVideoId = makkahId?.ifBlank { prev.live.makkahVideoId } ?: prev.live.makkahVideoId,
+                                madinahVideoId = madinahId?.ifBlank { prev.live.madinahVideoId } ?: prev.live.madinahVideoId,
+                                customVideoId = customId ?: prev.live.customVideoId
+                            )
+                        )
+                    }
+                }
+
+                "toggle_live_mute" -> {
+                    val muted = payload.booleanArg("muted")
+                    updateSettings { prev ->
+                        prev.copy(
+                            live = prev.live.copy(
+                                muted = muted ?: !prev.live.muted
+                            )
+                        )
                     }
                 }
 
@@ -866,13 +1030,21 @@ class MainViewModel(
                     val enabled = payload.booleanArg("enabled")
                     val url = payload.rawStringArg("url")
                     val reportUrl = payload.rawStringArg("reportUrl")
+                    val bankName = payload.rawStringArg("bankName")
+                    val nomorRekening = payload.rawStringArg("nomorRekening")
+                    val atasNama = payload.rawStringArg("atasNama")
+                    val refreshInterval = payload.intArg("refreshIntervalMinutes")
                     updateSettings { prev ->
                         val f = prev.onlineFinance
                         prev.copy(
                             onlineFinance = f.copy(
                                 enabled = enabled ?: f.enabled,
                                 sheetUrl = url ?: f.sheetUrl,
-                                reportUrl = reportUrl ?: f.reportUrl
+                                reportUrl = reportUrl ?: f.reportUrl,
+                                bankName = bankName ?: f.bankName,
+                                nomorRekening = nomorRekening ?: f.nomorRekening,
+                                atasNama = atasNama ?: f.atasNama,
+                                refreshIntervalMinutes = refreshInterval?.coerceIn(1, 60) ?: f.refreshIntervalMinutes
                             )
                         )
                     }
@@ -920,12 +1092,96 @@ class MainViewModel(
                                     type = "text",
                                     duration = duration,
                                     enabled = true,
-                                    showInMain = true,
-                                    showInSlideshow = true
+                                    showInMain = payload.booleanArg("showInMain") ?: true,
+                                    showInSlideshow = payload.booleanArg("showInSlideshow") ?: true,
+                                    showInJumat = payload.booleanArg("showInJumat") ?: false,
+                                    showInRamadhan = payload.booleanArg("showInRamadhan") ?: false,
+                                    showInIdulFitri = payload.booleanArg("showInIdulFitri") ?: false,
+                                    showInIdulAdha = payload.booleanArg("showInIdulAdha") ?: false
                                 )
                             )
                         }
                     }
+                }
+
+                "add_system_slide" -> {
+                    val type = payload.stringArg("type").orEmpty().trim()
+                    val title = payload.stringArg("title").orEmpty()
+                    val duration = payload.intArg("duration")?.coerceIn(4, 120) ?: 15
+                    if (type.isNotBlank()) {
+                        val isUniversalDefault = type in setOf("welcome", "analog_clock", "qr_infaq", "qr_finance", "online_finance")
+                        val newSlide = SlideItem(
+                            id = "slide_${type}_${System.currentTimeMillis()}",
+                            type = type,
+                            title = title.ifBlank { type.replace('_', ' ').uppercase() },
+                            duration = duration,
+                            enabled = true,
+                            showInMain = payload.booleanArg("showInMain") ?: true,
+                            showInSlideshow = payload.booleanArg("showInSlideshow") ?: true,
+                            showInJumat = payload.booleanArg("showInJumat") ?: (isUniversalDefault || type in setOf("jumat_petugas", "jumat_keuangan", "qr_jumat")),
+                            showInRamadhan = payload.booleanArg("showInRamadhan") ?: (isUniversalDefault || type.startsWith("ramadhan_")),
+                            showInIdulFitri = payload.booleanArg("showInIdulFitri") ?: (isUniversalDefault || type in setOf("idulfitri_petugas", "ramadhan_laporan_akhir")),
+                            showInIdulAdha = payload.booleanArg("showInIdulAdha") ?: (isUniversalDefault || type in setOf("iduladha_petugas", "iduladha_qurban"))
+                        )
+                        updateSettings { prev ->
+                            prev.copy(slides = prev.slides + newSlide)
+                        }
+                    }
+                }
+
+                "toggle_slide_mode" -> {
+                    val id = payload.stringArg("id").orEmpty()
+                    val mode = payload.stringArg("mode").orEmpty().lowercase()
+                    if (id.isNotBlank() && mode.isNotBlank()) {
+                        updateSettings { prev ->
+                            prev.copy(
+                                slides = prev.slides.map { s ->
+                                    if (s.id != id) s
+                                    else when (mode) {
+                                        "main" -> s.copy(showInMain = !s.showInMain)
+                                        "slideshow" -> s.copy(showInSlideshow = !s.showInSlideshow)
+                                        "jumat" -> s.copy(showInJumat = !s.showInJumat)
+                                        "ramadhan" -> s.copy(showInRamadhan = !s.showInRamadhan)
+                                        "idul_fitri" -> s.copy(showInIdulFitri = !s.showInIdulFitri)
+                                        "idul_adha" -> s.copy(showInIdulAdha = !s.showInIdulAdha)
+                                        else -> s
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                "update_tartil_tarhim_media" -> {
+                    val target = payload.stringArg("target")?.lowercase() ?: "tartil"
+                    val mediaType = payload.stringArg("mediaType")?.lowercase()
+                    val interval = payload.intArg("interval")?.coerceIn(3, 60)
+                    val deleteImageIndex = payload.intArg("deleteImageIndex")
+                    val clearVideo = payload.booleanArg("clearVideo") == true
+                    updateSettings { prev ->
+                        val m = prev.media
+                        val updatedMedia = if (target == "tarhim") {
+                            m.copy(
+                                tarhimMediaType = mediaType?.takeIf { it in setOf("image", "video") } ?: m.tarhimMediaType,
+                                tarhimSlideInterval = interval ?: m.tarhimSlideInterval,
+                                tarhimImages = if (deleteImageIndex != null) {
+                                    m.tarhimImages.filterIndexed { i, _ -> i != deleteImageIndex }
+                                } else m.tarhimImages,
+                                tarhimVideo = if (clearVideo) "" else m.tarhimVideo
+                            )
+                        } else {
+                            m.copy(
+                                tartilMediaType = mediaType?.takeIf { it in setOf("image", "video") } ?: m.tartilMediaType,
+                                tartilSlideInterval = interval ?: m.tartilSlideInterval,
+                                tartilImages = if (deleteImageIndex != null) {
+                                    m.tartilImages.filterIndexed { i, _ -> i != deleteImageIndex }
+                                } else m.tartilImages,
+                                tartilVideo = if (clearVideo) "" else m.tartilVideo
+                            )
+                        }
+                        prev.copy(media = updatedMedia)
+                    }
+                    refreshStorageHealth()
                 }
 
                 "delete_audio" -> {
@@ -940,6 +1196,359 @@ class MainViewModel(
 
                 "cleanup_orphan_media" -> {
                     cleanOrphanMedia()
+                }
+
+                "update_standby_slideshow" -> {
+                    val enabled = payload.booleanArg("enabled")
+                    val slideDuration = payload.intArg("slideDuration")?.coerceIn(5, 120)
+                    updateSettings { prev ->
+                        prev.copy(
+                            standbySlideshow = prev.standbySlideshow.copy(
+                                enabled = enabled ?: prev.standbySlideshow.enabled,
+                                durationMain = slideDuration ?: prev.standbySlideshow.durationMain
+                            )
+                        )
+                    }
+                }
+
+                "update_jumat_keuangan" -> {
+                    val saldoKasLalu = payload.stringArg("saldoKasLalu")?.toLongOrNull() ?: payload.intArg("saldoKasLalu")?.toLong()
+                    val pemasukan = payload.stringArg("pemasukan")?.toLongOrNull() ?: payload.intArg("pemasukan")?.toLong()
+                    val pengeluaran = payload.stringArg("pengeluaran")?.toLongOrNull() ?: payload.intArg("pengeluaran")?.toLong()
+                    updateSettings { prev ->
+                        val today = java.time.LocalDate.now()
+                        val dateKey = prev.jumat.keuangan.selectedDate.ifBlank {
+                            JwsStateMachine.findEffectiveJumatKeuanganDate(prev.jumat.keuangan.records, today)
+                                ?: JwsStateMachine.snapToNearestFriday(today).toString()
+                        }
+                        val existing = prev.jumat.keuangan.records[dateKey] ?: id.algaffar.jwstv.domain.model.JumatKeuanganRecord(
+                            saldoKasLalu = prev.jumat.keuangan.saldoKasLalu
+                        )
+                        val updatedRec = existing.copy(
+                            saldoKasLalu = saldoKasLalu ?: existing.saldoKasLalu,
+                            pemasukan = pemasukan ?: existing.pemasukan,
+                            pengeluaran = pengeluaran ?: existing.pengeluaran
+                        )
+                        val newMap = prev.jumat.keuangan.records.toMutableMap().apply { put(dateKey, updatedRec) }
+                        prev.copy(
+                            jumat = prev.jumat.copy(
+                                keuangan = prev.jumat.keuangan.copy(
+                                    selectedDate = dateKey,
+                                    saldoKasLalu = updatedRec.saldoKasLalu,
+                                    records = newMap
+                                )
+                            )
+                        )
+                    }
+                }
+
+                "update_ramadhan_full" -> {
+                    val isRamadhan = payload.booleanArg("isRamadhan")
+                    val currentNight = payload.intArg("currentNight")?.coerceIn(1, 30)
+                    val hijriYear = payload.stringArg("hijriYear")
+                    val penceramah = payload.rawStringArg("penceramah")
+                    val imamTarawih = payload.rawStringArg("imamTarawih")
+                    val imamWitir = payload.rawStringArg("imamWitir")
+                    val saldoAwal = payload.stringArg("saldoAwal")?.toLongOrNull() ?: payload.intArg("saldoAwal")?.toLong()
+                    val penerimaanPria = payload.stringArg("penerimaanPria")?.toLongOrNull() ?: payload.intArg("penerimaanPria")?.toLong()
+                    val penerimaanWanita = payload.stringArg("penerimaanWanita")?.toLongOrNull() ?: payload.intArg("penerimaanWanita")?.toLong()
+                    val pengeluaran = payload.stringArg("pengeluaran")?.toLongOrNull() ?: payload.intArg("pengeluaran")?.toLong()
+                    val addTakjilDonor = payload.stringArg("addTakjilDonor")?.trim()
+                    val clearTakjilNight = payload.booleanArg("clearTakjilNight") == true
+                    val sirineEnabled = payload.booleanArg("sirineEnabled")
+                    val sirineMaghrib = payload.booleanArg("sirineMaghrib")
+                    val sirineImsak = payload.booleanArg("sirineImsak")
+                    val sirineSahur = payload.booleanArg("sirineSahur")
+                    val sirineSahurTime = payload.stringArg("sirineSahurTime")
+                    val sirineRepeat = payload.intArg("sirineRepeat")?.coerceIn(1, 5)
+
+                    updateSettings { prev ->
+                        val ram = prev.ramadhan
+                        val targetNight = currentNight ?: ram.currentNight
+                        val idx = (targetNight - 1).coerceIn(0, 29)
+
+                        val petugasList = ram.petugas.toMutableList()
+                        val curPet = petugasList.getOrNull(idx) ?: id.algaffar.jwstv.domain.model.RamadhanPetugasItem(malamKe = targetNight)
+                        if (penceramah != null || imamTarawih != null || imamWitir != null) {
+                            while (petugasList.size <= idx) petugasList.add(id.algaffar.jwstv.domain.model.RamadhanPetugasItem(malamKe = petugasList.size + 1))
+                            petugasList[idx] = curPet.copy(
+                                penceramah = penceramah ?: curPet.penceramah,
+                                imamTarawih = imamTarawih ?: curPet.imamTarawih,
+                                imamWitir = imamWitir ?: curPet.imamWitir
+                            )
+                        }
+
+                        val keuList = ram.keuangan.toMutableList()
+                        val curKeu = keuList.getOrNull(idx) ?: id.algaffar.jwstv.domain.model.RamadhanKeuanganItem(malamKe = targetNight)
+                        if (saldoAwal != null || penerimaanPria != null || penerimaanWanita != null || pengeluaran != null) {
+                            while (keuList.size <= idx) keuList.add(id.algaffar.jwstv.domain.model.RamadhanKeuanganItem(malamKe = keuList.size + 1))
+                            keuList[idx] = curKeu.copy(
+                                saldoAwal = saldoAwal ?: curKeu.saldoAwal,
+                                penerimaanPria = penerimaanPria ?: curKeu.penerimaanPria,
+                                penerimaanWanita = penerimaanWanita ?: curKeu.penerimaanWanita,
+                                pengeluaran = pengeluaran ?: curKeu.pengeluaran
+                            )
+                        }
+
+                        val takjilMap = ram.takjil.toMutableMap()
+                        val nightKey = targetNight.toString()
+                        if (clearTakjilNight) {
+                            takjilMap[nightKey] = emptyList()
+                        } else if (!addTakjilDonor.isNullOrBlank()) {
+                            takjilMap[nightKey] = (takjilMap[nightKey].orEmpty() + addTakjilDonor).distinct()
+                        }
+
+                        prev.copy(
+                            ramadhan = ram.copy(
+                                isRamadhan = isRamadhan ?: ram.isRamadhan,
+                                currentNight = targetNight,
+                                hijriYear = hijriYear ?: ram.hijriYear,
+                                petugas = petugasList,
+                                keuangan = keuList,
+                                takjil = takjilMap,
+                                sirine = ram.sirine.copy(
+                                    enabled = sirineEnabled ?: ram.sirine.enabled,
+                                    playAtMaghrib = sirineMaghrib ?: ram.sirine.playAtMaghrib,
+                                    playAtImsak = sirineImsak ?: ram.sirine.playAtImsak,
+                                    playAtSahur = sirineSahur ?: ram.sirine.playAtSahur,
+                                    sahurTime = sirineSahurTime ?: ram.sirine.sahurTime,
+                                    repeatCount = sirineRepeat ?: ram.sirine.repeatCount
+                                )
+                            )
+                        )
+                    }
+                }
+
+                "update_idul_fitri" -> {
+                    val enabled = payload.booleanArg("enabled")
+                    val khotib = payload.rawStringArg("khotib")
+                    val imam = payload.rawStringArg("imam")
+                    val bilal = payload.rawStringArg("bilal")
+                    val sholatDuration = payload.intArg("sholatDuration")?.coerceIn(10, 90)
+                    val khutbahDuration = payload.intArg("khutbahDuration")?.coerceIn(10, 60)
+                    val sholatMessage = payload.rawStringArg("sholatMessage")
+                    val khutbahMessage = payload.rawStringArg("khutbahMessage")
+                    updateSettings { prev ->
+                        val f = prev.idulFitri
+                        prev.copy(
+                            idulFitri = f.copy(
+                                enabled = enabled ?: f.enabled,
+                                sholatDuration = sholatDuration ?: f.sholatDuration,
+                                khutbahDuration = khutbahDuration ?: f.khutbahDuration,
+                                sholatMessage = sholatMessage ?: f.sholatMessage,
+                                khutbahMessage = khutbahMessage ?: f.khutbahMessage,
+                                petugas = f.petugas.copy(
+                                    khotib = khotib ?: f.petugas.khotib,
+                                    imam = imam ?: f.petugas.imam,
+                                    bilal = bilal ?: f.petugas.bilal
+                                )
+                            )
+                        )
+                    }
+                }
+
+                "update_idul_adha" -> {
+                    val enabled = payload.booleanArg("enabled")
+                    val infoQurbanEnabled = payload.booleanArg("infoQurbanEnabled")
+                    val khotib = payload.rawStringArg("khotib")
+                    val imam = payload.rawStringArg("imam")
+                    val bilal = payload.rawStringArg("bilal")
+                    val addGroupName = payload.stringArg("addGroupName")?.trim()
+                    val addAnimalType = payload.stringArg("addAnimalType")?.trim()?.ifBlank { "Sapi" }
+                    val addMembersCsv = payload.stringArg("addMembersCsv").orEmpty()
+                    val deleteGroupId = payload.stringArg("deleteGroupId")
+
+                    updateSettings { prev ->
+                        val a = prev.idulAdha
+                        var groups = a.qurbanGroups
+                        if (!deleteGroupId.isNullOrBlank()) {
+                            groups = groups.filterNot { it.id == deleteGroupId }
+                        }
+                        if (!addGroupName.isNullOrBlank()) {
+                            val members = addMembersCsv.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                            if (members.isNotEmpty()) {
+                                groups = groups + id.algaffar.jwstv.domain.model.QurbanGroup(
+                                    id = System.currentTimeMillis().toString(),
+                                    animalType = addAnimalType ?: "Sapi",
+                                    groupName = addGroupName,
+                                    members = members
+                                )
+                            }
+                        }
+                        prev.copy(
+                            idulAdha = a.copy(
+                                enabled = enabled ?: a.enabled,
+                                petugas = a.petugas.copy(
+                                    khotib = khotib ?: a.petugas.khotib,
+                                    imam = imam ?: a.petugas.imam,
+                                    bilal = bilal ?: a.petugas.bilal
+                                ),
+                                qurbanGroups = groups
+                            ),
+                            infoQurban = prev.infoQurban.copy(
+                                enabled = infoQurbanEnabled ?: prev.infoQurban.enabled
+                            )
+                        )
+                    }
+                }
+
+                "update_screensaver" -> {
+                    val enabled = payload.booleanArg("enabled")
+                    val startTime = payload.stringArg("startTime")
+                    val endTime = payload.stringArg("endTime")
+                    updateSettings { prev ->
+                        val curList = prev.screensaver.schedules.toMutableList()
+                        val first = curList.firstOrNull() ?: id.algaffar.jwstv.domain.model.ScreenSaverSchedule()
+                        val updatedFirst = first.copy(
+                            startTime = startTime ?: first.startTime,
+                            endTime = endTime ?: first.endTime
+                        )
+                        if (curList.isEmpty()) curList.add(updatedFirst) else curList[0] = updatedFirst
+                        prev.copy(
+                            screensaver = prev.screensaver.copy(
+                                enabled = enabled ?: prev.screensaver.enabled,
+                                schedules = curList
+                            )
+                        )
+                    }
+                }
+
+                "simulate_state" -> {
+                    val stateName = payload.stringArg("state").orEmpty()
+                    val durationSec = payload.intArg("durationSeconds")?.toLong()?.coerceIn(10L, 3600L) ?: 300L
+                    val target = AppState.fromSerialName(stateName)
+                    if (target == AppState.STANDBY) {
+                        clearSimulation()
+                    } else {
+                        simulateState(target, durationSec)
+                    }
+                }
+
+                "toggle_switch_master" -> {
+                    val enabled = payload.booleanArg("enabled")
+                    val connectionType = payload.stringArg("connectionType")?.lowercase()
+                    val wifiIp = payload.stringArg("wifiIp")?.trim()
+                    val usbPort = payload.stringArg("usbPort")?.trim()
+                    val baudRate = payload.intArg("baudRate")?.coerceIn(9600, 115200)
+                    updateSettings { prev ->
+                        prev.copy(
+                            switchSettings = prev.switchSettings.copy(
+                                enabled = enabled ?: prev.switchSettings.enabled,
+                                connectionType = connectionType?.takeIf { it in setOf("wifi", "usb") } ?: prev.switchSettings.connectionType,
+                                wifiIp = wifiIp ?: prev.switchSettings.wifiIp,
+                                usbPort = usbPort ?: prev.switchSettings.usbPort,
+                                baudRate = baudRate ?: prev.switchSettings.baudRate
+                            )
+                        )
+                    }
+                }
+
+                "toggle_switch_channel" -> {
+                    val id = payload.stringArg("id").orEmpty()
+                    if (id.isNotBlank()) {
+                        updateSettings { prev ->
+                            prev.copy(
+                                switchSettings = prev.switchSettings.copy(
+                                    switches = prev.switchSettings.switches.map { ch ->
+                                        if (ch.id == id) ch.copy(enabled = !ch.enabled) else ch
+                                    }
+                                )
+                            )
+                        }
+                    }
+                }
+
+                "update_switch_channel" -> {
+                    val channelId = payload.stringArg("id").orEmpty()
+                    if (channelId.isNotBlank()) {
+                        val name = payload.stringArg("name")?.trim()?.uppercase()
+                        val enabled = payload.booleanArg("enabled")
+                        val triggerMode = payload.stringArg("triggerMode")?.lowercase()?.takeIf { it in setOf("prayer", "state") }
+                        val onState = payload.stringArg("onState")?.lowercase()
+                        val onStateOffset = payload.intArg("onStateOffset")?.coerceIn(-30, 60)
+                        val offState = payload.stringArg("offState")?.lowercase()
+                        val offStateOffset = payload.intArg("offStateOffset")?.coerceIn(-30, 60)
+                        val schedObj = payload.rawJson["schedules"] as? kotlinx.serialization.json.JsonObject
+
+                        updateSettings { prev ->
+                            prev.copy(
+                                switchSettings = prev.switchSettings.copy(
+                                    switches = prev.switchSettings.switches.map { ch ->
+                                        if (ch.id != channelId) ch
+                                        else {
+                                            val updatedSchedules = if (schedObj != null) {
+                                                val map = ch.schedules.toMutableMap()
+                                                listOf("fajr", "dhuhr", "asr", "maghrib", "isha").forEach { pid ->
+                                                    val pObj = schedObj[pid] as? kotlinx.serialization.json.JsonObject
+                                                    if (pObj != null) {
+                                                        val onVal = (pObj["onOffset"] as? kotlinx.serialization.json.JsonPrimitive)
+                                                            ?.takeIf { !it.isString || it.content.isNotBlank() }
+                                                            ?.content?.toIntOrNull()
+                                                        val offVal = (pObj["offOffset"] as? kotlinx.serialization.json.JsonPrimitive)
+                                                            ?.takeIf { !it.isString || it.content.isNotBlank() }
+                                                            ?.content?.toIntOrNull()
+                                                        map[pid] = id.algaffar.jwstv.domain.model.PrayerSwitchSchedule(
+                                                            onOffset = onVal,
+                                                            offOffset = offVal
+                                                        )
+                                                    }
+                                                }
+                                                map
+                                            } else {
+                                                ch.schedules
+                                            }
+                                            ch.copy(
+                                                name = name?.ifBlank { ch.name } ?: ch.name,
+                                                enabled = enabled ?: ch.enabled,
+                                                triggerMode = triggerMode ?: ch.triggerMode,
+                                                schedules = updatedSchedules,
+                                                onState = onState ?: ch.onState,
+                                                onStateOffset = onStateOffset ?: ch.onStateOffset,
+                                                offState = offState ?: ch.offState,
+                                                offStateOffset = offStateOffset ?: ch.offStateOffset
+                                            )
+                                        }
+                                    }
+                                )
+                            )
+                        }
+                    }
+                }
+
+                "test_switch_pin" -> {
+                    val pin = payload.intArg("pin") ?: 1
+                    val turnOn = payload.booleanArg("turnOn") ?: true
+                    toggleManualRelay(pin, turnOn)
+                }
+
+                "update_admin_pin" -> {
+                    val roleId = payload.stringArg("role")?.lowercase() ?: "user"
+                    val newPin = payload.stringArg("newPin")?.trim().orEmpty()
+                    if (newPin.length >= 4) {
+                        val newHash = id.algaffar.jwstv.data.auth.AuthManager.sha256Hex(newPin)
+                        updateSettings { prev ->
+                            val existing = prev.users.toMutableList()
+                            val idx = existing.indexOfFirst { it.role.equals(roleId, ignoreCase = true) }
+                            if (idx >= 0) {
+                                existing[idx] = existing[idx].copy(pinHash = newHash)
+                            } else {
+                                existing.add(
+                                    id.algaffar.jwstv.domain.model.UserAccount(
+                                        id = "$roleId-${System.currentTimeMillis()}",
+                                        username = roleId,
+                                        pinHash = newHash,
+                                        role = roleId
+                                    )
+                                )
+                            }
+                            prev.copy(users = existing)
+                        }
+                        AppLogger.info("AUTH", "PIN akun '$roleId' diperbarui melalui Remote PWA")
+                    }
+                }
+
+                "clear_logs" -> {
+                    AppLogger.clear()
                 }
             }
         }

@@ -189,6 +189,24 @@ class KtorRemoteServer(
                         )
                     }
 
+                    get("/api/backup") {
+                        if (!checkRateLimit(call)) return@get
+                        if (!checkAuthorized(call)) return@get
+
+                        val settings = settingsProvider()
+                        val backupJson = Json { prettyPrint = true; encodeDefaults = true }
+                            .encodeToString(id.algaffar.jwstv.domain.model.AppStateSettings.serializer(), settings)
+                        call.response.headers.append(
+                            HttpHeaders.ContentDisposition,
+                            "attachment; filename=\"jws-algaffar-backup.json\""
+                        )
+                        call.respondText(
+                            text = backupJson,
+                            contentType = ContentType.Application.Json,
+                            status = HttpStatusCode.OK
+                        )
+                    }
+
                     post("/api/command") {
                         if (!checkRateLimit(call)) return@post
                         if (!checkAuthorized(call)) return@post
@@ -384,9 +402,20 @@ class KtorRemoteServer(
         val runtime = runtimeStatusProvider()
         val audioInv = runCatching { audioInventoryProvider() }.getOrDefault(emptyMap())
         val runtimeMem = Runtime.getRuntime()
-        val totalMem = runtimeMem.totalMemory().coerceAtLeast(1L)
-        val usedMem = (totalMem - runtimeMem.freeMemory()).coerceAtLeast(0L)
-        val ramPct = ((usedMem.toDouble() / totalMem.toDouble()) * 100.0 * 10.0).toInt() / 10.0
+        val maxMem = runtimeMem.maxMemory().coerceAtLeast(1L)
+        val usedHeap = (runtimeMem.totalMemory() - runtimeMem.freeMemory()).coerceAtLeast(0L)
+        val ramPct = ((usedHeap.toDouble() / maxMem.toDouble()) * 100.0 * 10.0).toInt().coerceIn(0, 1000) / 10.0
+        val sysRamPct: Double? = context?.let { ctx ->
+            runCatching {
+                val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+                val mi = android.app.ActivityManager.MemoryInfo()
+                am?.getMemoryInfo(mi)
+                if (mi.totalMem > 0L) {
+                    val sysUsed = (mi.totalMem - mi.availMem).coerceAtLeast(0L)
+                    ((sysUsed.toDouble() / mi.totalMem.toDouble()) * 100.0 * 10.0).toInt().coerceIn(0, 1000) / 10.0
+                } else null
+            }.getOrNull()
+        }
 
         val uptimeSec = try {
             SystemClock.elapsedRealtime() / 1000L
@@ -422,7 +451,16 @@ class KtorRemoteServer(
             put("idulAdhaEnabled", settings.idulAdha.enabled)
             put("slideshowEnabled", settings.standbySlideshow.enabled)
             put("audioEngine", "backend")
-            put("activeLiveVideoId", settings.live.customVideoId.ifBlank { "Cm1v4bteXbI" })
+            put("activeLiveVideoId", settings.live.activeYoutubeId)
+            put("liveSource", settings.live.source)
+
+            putJsonObject("liveConfig") {
+                put("source", settings.live.source)
+                put("makkahVideoId", settings.live.makkahVideoId)
+                put("madinahVideoId", settings.live.madinahVideoId)
+                put("customVideoId", settings.live.customVideoId)
+                put("muted", settings.live.muted)
+            }
 
             putJsonObject("brand") {
                 put("name", settings.brand.name)
@@ -486,6 +524,10 @@ class KtorRemoteServer(
                         put("enabled", s.enabled)
                         put("showInMain", s.showInMain)
                         put("showInSlideshow", s.showInSlideshow)
+                        put("showInJumat", s.showInJumat)
+                        put("showInRamadhan", s.showInRamadhan)
+                        put("showInIdulFitri", s.showInIdulFitri)
+                        put("showInIdulAdha", s.showInIdulAdha)
                     }
                 }
             }
@@ -495,17 +537,147 @@ class KtorRemoteServer(
                 put("lookaheadDays", settings.infoSettings.lookaheadDays)
             }
 
+            val todayStr = java.time.LocalDate.now().toString()
+            val effKeuDate = settings.jumat.keuangan.selectedDate.ifBlank {
+                id.algaffar.jwstv.domain.engine.JwsStateMachine.findEffectiveJumatKeuanganDate(
+                    settings.jumat.keuangan.records,
+                    java.time.LocalDate.now()
+                ) ?: todayStr
+            }
+            val effJumatKeu = settings.jumat.keuangan.records[effKeuDate]
+
             putJsonObject("jumat") {
                 put("enabled", settings.jumat.enabled)
                 put("khotib", effJumatRec?.khotib.orEmpty())
                 put("imam", effJumatRec?.imam.orEmpty())
                 put("muadzin", effJumatRec?.muadzin.orEmpty())
+                put("keuanganDate", effKeuDate)
+                put("saldoKasLalu", effJumatKeu?.saldoKasLalu ?: settings.jumat.keuangan.saldoKasLalu)
+                put("pemasukan", effJumatKeu?.pemasukan ?: 0L)
+                put("pengeluaran", effJumatKeu?.pengeluaran ?: 0L)
             }
+
+            val nightIdx = (settings.ramadhan.currentNight - 1).coerceIn(0, 29)
+            val ramPetugas = settings.ramadhan.petugas.getOrNull(nightIdx)
+            val ramKeu = settings.ramadhan.keuangan.getOrNull(nightIdx)
+            val ramTakjil = settings.ramadhan.takjil[settings.ramadhan.currentNight.toString()].orEmpty()
 
             putJsonObject("ramadhan") {
                 put("isRamadhan", settings.ramadhan.isRamadhan)
                 put("currentNight", settings.ramadhan.currentNight)
                 put("hijriYear", settings.ramadhan.hijriYear)
+                put("penceramah", ramPetugas?.penceramah.orEmpty())
+                put("imamTarawih", ramPetugas?.imamTarawih.orEmpty())
+                put("imamWitir", ramPetugas?.imamWitir.orEmpty())
+                put("saldoAwal", ramKeu?.saldoAwal ?: 0L)
+                put("penerimaanPria", ramKeu?.penerimaanPria ?: 0L)
+                put("penerimaanWanita", ramKeu?.penerimaanWanita ?: 0L)
+                put("pengeluaran", ramKeu?.pengeluaran ?: 0L)
+                putJsonArray("takjil") { ramTakjil.forEach { add(it) } }
+                put("sirineEnabled", settings.ramadhan.sirine.enabled)
+                put("sirineMaghrib", settings.ramadhan.sirine.playAtMaghrib)
+                put("sirineImsak", settings.ramadhan.sirine.playAtImsak)
+                put("sirineSahur", settings.ramadhan.sirine.playAtSahur)
+                put("sirineSahurTime", settings.ramadhan.sirine.sahurTime)
+                put("sirineRepeat", settings.ramadhan.sirine.repeatCount)
+            }
+
+            putJsonObject("standbySlideshow") {
+                put("enabled", settings.standbySlideshow.enabled)
+                put("slideDuration", settings.standbySlideshow.durationMain)
+            }
+
+            putJsonObject("idulFitri") {
+                put("enabled", settings.idulFitri.enabled)
+                put("khotib", settings.idulFitri.petugas.khotib)
+                put("imam", settings.idulFitri.petugas.imam)
+                put("bilal", settings.idulFitri.petugas.bilal)
+                put("sholatDuration", settings.idulFitri.sholatDuration)
+                put("khutbahDuration", settings.idulFitri.khutbahDuration)
+                put("sholatMessage", settings.idulFitri.sholatMessage)
+                put("khutbahMessage", settings.idulFitri.khutbahMessage)
+            }
+
+            putJsonObject("idulAdha") {
+                put("enabled", settings.idulAdha.enabled)
+                put("infoQurbanEnabled", settings.infoQurban.enabled)
+                put("khotib", settings.idulAdha.petugas.khotib)
+                put("imam", settings.idulAdha.petugas.imam)
+                put("bilal", settings.idulAdha.petugas.bilal)
+                putJsonArray("qurbanGroups") {
+                    settings.idulAdha.qurbanGroups.forEach { g ->
+                        addJsonObject {
+                            put("id", g.id)
+                            put("groupName", g.groupName)
+                            put("animalType", g.animalType)
+                            putJsonArray("members") { g.members.forEach { add(it) } }
+                        }
+                    }
+                }
+            }
+
+            val firstSs = settings.screensaver.schedules.firstOrNull()
+            putJsonObject("screensaver") {
+                put("enabled", settings.screensaver.enabled)
+                put("startTime", firstSs?.startTime ?: "22:00")
+                put("endTime", firstSs?.endTime ?: "03:30")
+            }
+
+            putJsonObject("switchConfig") {
+                put("enabled", settings.switchSettings.enabled)
+                put("connectionType", settings.switchSettings.connectionType)
+                put("wifiIp", settings.switchSettings.wifiIp)
+                put("usbPort", settings.switchSettings.usbPort)
+                put("baudRate", settings.switchSettings.baudRate)
+                putJsonArray("channels") {
+                    settings.switchSettings.switches.forEach { ch ->
+                        addJsonObject {
+                            put("id", ch.id)
+                            put("name", ch.name)
+                            put("pin", ch.pin)
+                            put("enabled", ch.enabled)
+                            put("triggerMode", ch.triggerMode)
+                            put("onState", ch.onState)
+                            put("onStateOffset", ch.onStateOffset)
+                            put("offState", ch.offState)
+                            put("offStateOffset", ch.offStateOffset)
+                            put("manualState", ch.manualState)
+                            putJsonObject("schedules") {
+                                listOf("fajr", "dhuhr", "asr", "maghrib", "isha").forEach { pid ->
+                                    val s = ch.schedules[pid]
+                                    putJsonObject(pid) {
+                                        put("onOffset", s?.onOffset)
+                                        put("offOffset", s?.offOffset)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            putJsonArray("users") {
+                settings.users.forEach { u ->
+                    addJsonObject {
+                        put("id", u.id)
+                        put("username", u.username)
+                        put("role", u.role)
+                    }
+                }
+            }
+
+            putJsonArray("logs") {
+                id.algaffar.jwstv.data.logging.AppLogger.logsFlow.value
+                    .takeLast(25)
+                    .reversed()
+                    .forEach { entry ->
+                        addJsonObject {
+                            put("time", entry.timestamp)
+                            put("level", entry.level.name)
+                            put("tag", entry.tag)
+                            put("message", entry.message)
+                        }
+                    }
             }
 
             putJsonObject("masjidQr") {
@@ -522,6 +694,25 @@ class KtorRemoteServer(
                 put("enabled", settings.onlineFinance.enabled)
                 put("url", settings.onlineFinance.sheetUrl)
                 put("reportUrl", settings.onlineFinance.reportUrl)
+                put("bankName", settings.onlineFinance.bankName)
+                put("nomorRekening", settings.onlineFinance.nomorRekening)
+                put("atasNama", settings.onlineFinance.atasNama)
+                put("refreshIntervalMinutes", settings.onlineFinance.refreshIntervalMinutes)
+            }
+
+            putJsonObject("tartilTarhimMedia") {
+                put("tartilMediaType", settings.media.tartilMediaType)
+                put("tartilVideo", settings.media.tartilVideo)
+                put("tartilSlideInterval", settings.media.tartilSlideInterval)
+                putJsonArray("tartilImages") {
+                    settings.media.tartilImages.forEach { add(it) }
+                }
+                put("tarhimMediaType", settings.media.tarhimMediaType)
+                put("tarhimVideo", settings.media.tarhimVideo)
+                put("tarhimSlideInterval", settings.media.tarhimSlideInterval)
+                putJsonArray("tarhimImages") {
+                    settings.media.tarhimImages.forEach { add(it) }
+                }
             }
 
             putJsonObject("audioSlots") {
@@ -536,6 +727,7 @@ class KtorRemoteServer(
             putJsonObject("system") {
                 put("cpu", 12.5)
                 put("ram", ramPct)
+                sysRamPct?.let { put("systemRam", it) }
                 put("uptime", uptimeStr)
                 putJsonObject("storage") {
                     put("usableBytes", storage.usableInternalBytes)

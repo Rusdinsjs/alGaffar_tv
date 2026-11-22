@@ -10,11 +10,35 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import id.algaffar.jwstv.data.audio.JwsAudioEngine
 import id.algaffar.jwstv.data.hardware.SwitchController
+import id.algaffar.jwstv.data.logging.AppLogger
 import id.algaffar.jwstv.data.repository.SettingsRepository
 import id.algaffar.jwstv.domain.engine.HijriCalculator
 import id.algaffar.jwstv.domain.engine.JwsStateMachine
 import id.algaffar.jwstv.domain.engine.PrayerTimeCalculator
+import okhttp3.OkHttpClient
 import java.io.File
+import java.util.concurrent.TimeUnit
+
+/**
+ * Shared singleton [OkHttpClient] pool to prevent creating duplicate thread pools
+ * and connection pools across [OnlineFinanceManager] and [SwitchController].
+ */
+object SharedHttpClient {
+    val baseClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.SECONDS)
+            .build()
+    }
+
+    val relayClient: OkHttpClient by lazy {
+        baseClient.newBuilder()
+            .connectTimeout(3, TimeUnit.SECONDS)
+            .readTimeout(3, TimeUnit.SECONDS)
+            .writeTimeout(3, TimeUnit.SECONDS)
+            .build()
+    }
+}
 
 class AppContainer(application: Application) {
     val appContext: Context = application.applicationContext
@@ -41,6 +65,9 @@ class AppContainer(application: Application) {
 class JwsApplication : Application(), ImageLoaderFactory {
     lateinit var container: AppContainer
         private set
+
+    @Volatile
+    private var lastGcTrimMs: Long = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -72,12 +99,40 @@ class JwsApplication : Application(), ImageLoaderFactory {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
-            level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE
-        ) {
-            runCatching {
-                Coil.imageLoader(this).memoryCache?.clear()
+        when {
+            level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
+                level == ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
+                performMemoryRecovery("onTrimMemory($level)", aggressive = true)
             }
+            level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
+                level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE ||
+                level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> {
+                performMemoryRecovery("onTrimMemory($level)", aggressive = false)
+            }
+        }
+    }
+
+    /**
+     * Reclaims image caches, idle audio decoder buffers, and stale in-memory logs
+     * so RAM can stabilize back toward baseline after heavy usage spikes.
+     */
+    fun performMemoryRecovery(reason: String, aggressive: Boolean) {
+        runCatching {
+            Coil.imageLoader(this).memoryCache?.clear()
+        }
+        if (aggressive) {
+            if (::container.isInitialized) {
+                runCatching { container.audioEngine.releaseIfIdle() }
+            }
+            AppLogger.trimTo(50)
+            val nowMs = System.currentTimeMillis()
+            if (nowMs - lastGcTrimMs >= 60_000L) {
+                lastGcTrimMs = nowMs
+                AppLogger.warn("MEMORY", "Pemulihan memori agresif dijalankan ($reason)")
+                Runtime.getRuntime().gc()
+            }
+        } else {
+            AppLogger.debug("MEMORY", "Trim cache gambar dijalankan ($reason)")
         }
     }
 }

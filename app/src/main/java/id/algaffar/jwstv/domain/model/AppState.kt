@@ -87,9 +87,6 @@ enum class AppState(val serialName: String, val displayLabel: String) {
     @SerialName("live")
     LIVE("live", "Live Streaming"),
 
-    @SerialName("cctv")
-    CCTV("cctv", "Pantauan Kamera CCTV"),
-
     @SerialName("masjid_qr")
     MASJID_QR("masjid_qr", "QR Code Infaq Masjid"),
 

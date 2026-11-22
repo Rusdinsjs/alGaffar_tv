@@ -877,7 +877,8 @@ fun HolidayAndQurbanFullscreen(
                         IdulFitriKeuanganSlideView(
                             hijriYear = settings.idulFitri.hijriYear,
                             brandName = settings.brand.name,
-                            keuangan = settings.idulFitri.keuangan
+                            ramadhan = settings.ramadhan,
+                            fallbackEidKeuangan = settings.idulFitri.keuangan
                         )
                     }
                     idx == 0 -> {
@@ -1050,9 +1051,50 @@ private fun EidPetugasSlideView(
 private fun IdulFitriKeuanganSlideView(
     hijriYear: String,
     brandName: String,
-    keuangan: id.algaffar.jwstv.domain.model.EidKeuangan
+    ramadhan: id.algaffar.jwstv.domain.model.RamadhanSettings,
+    fallbackEidKeuangan: id.algaffar.jwstv.domain.model.EidKeuangan
 ) {
     val palette = LocalJwsTheme.current
+
+    val hasNightlyData = remember(ramadhan.keuangan) {
+        ramadhan.keuangan.any {
+            it.saldoAwal != 0L || it.penerimaanPria != 0L || it.penerimaanWanita != 0L || it.pengeluaran != 0L
+        }
+    }
+    val hasLaporanAkhir = remember(ramadhan.laporanAkhir) {
+        ramadhan.laporanAkhir.totalPenerimaan != 0L ||
+            ramadhan.laporanAkhir.totalPengeluaran != 0L ||
+            ramadhan.laporanAkhir.saldoAkhir != 0L
+    }
+
+    val (saldoAwal, totalPemasukan, totalPengeluaran, totalSaldoAkhir) = remember(
+        ramadhan.keuangan,
+        ramadhan.laporanAkhir,
+        fallbackEidKeuangan,
+        hasNightlyData,
+        hasLaporanAkhir
+    ) {
+        when {
+            hasNightlyData -> {
+                val awal = ramadhan.keuangan.firstOrNull { it.saldoAwal != 0L }?.saldoAwal ?: 0L
+                val masuk = ramadhan.keuangan.sumOf { it.totalPenerimaan }
+                val keluar = ramadhan.keuangan.sumOf { it.pengeluaran }
+                listOf(awal, masuk, keluar, awal + masuk - keluar)
+            }
+            hasLaporanAkhir -> {
+                val lap = ramadhan.laporanAkhir
+                listOf(0L, lap.totalPenerimaan, lap.totalPengeluaran, lap.saldoAkhir)
+            }
+            else -> {
+                listOf(
+                    fallbackEidKeuangan.saldoAwal,
+                    fallbackEidKeuangan.pemasukan,
+                    fallbackEidKeuangan.pengeluaran,
+                    fallbackEidKeuangan.saldoAkhir
+                )
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -1072,13 +1114,13 @@ private fun IdulFitriKeuanganSlideView(
             )
             Column {
                 Text(
-                    text = "LAPORAN KEUANGAN KAS IDUL FITRI",
+                    text = "LAPORAN KEUANGAN AKHIR RAMADHAN",
                     color = palette.textPrimary,
                     fontSize = 32.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    text = "1 Syawal $hijriYear H • $brandName",
+                    text = "Ramadhan ${ramadhan.hijriYear} H • 1 Syawal $hijriYear H • $brandName",
                     color = palette.textSecondary,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Medium
@@ -1100,15 +1142,15 @@ private fun IdulFitriKeuanganSlideView(
                 horizontalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 FinanceMetricBox(
-                    label = "SALDO AWAL KAS",
-                    amount = keuangan.saldoAwal,
+                    label = "SALDO AWAL RAMADHAN",
+                    amount = saldoAwal,
                     valueColor = palette.textPrimary,
                     isExpanded = true,
                     modifier = Modifier.weight(1f)
                 )
                 FinanceMetricBox(
-                    label = "PENERIMAAN INFAQ IED (+)",
-                    amount = keuangan.pemasukan,
+                    label = "TOTAL PEMASUKAN RAMADHAN (+)",
+                    amount = totalPemasukan,
                     valueColor = Color(0xFF34D399),
                     isExpanded = true,
                     modifier = Modifier.weight(1f)
@@ -1122,15 +1164,15 @@ private fun IdulFitriKeuanganSlideView(
                 horizontalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 FinanceMetricBox(
-                    label = "TOTAL PENGELUARAN (-)",
-                    amount = keuangan.pengeluaran,
+                    label = "TOTAL PENGELUARAN RAMADHAN (-)",
+                    amount = totalPengeluaran,
                     valueColor = Color(0xFFF87171),
                     isExpanded = true,
                     modifier = Modifier.weight(1f)
                 )
                 FinanceMetricBox(
-                    label = "SALDO AKHIR KAS",
-                    amount = keuangan.saldoAkhir,
+                    label = "TOTAL SALDO AKHIR RAMADHAN",
+                    amount = totalSaldoAkhir,
                     valueColor = palette.accentSecondary,
                     isHighlighted = true,
                     isExpanded = true,

@@ -444,38 +444,7 @@ data class ScreenSaverSettings(
     val message: String = "Mode Hemat Daya — Masjid Al-Gaffar"
 )
 
-// ==================== CCTV, LIVE, QR, ONLINE FINANCE, CUSTOM AUDIO ====================
-
-@Serializable
-data class CctvCameraConfig(
-    val id: String = "",
-    val name: String = "Kamera 1",
-    val type: String = "ip", // "ip" | "usb"
-    val url: String = "",    // RTSP / MJPEG / HTTP snapshot URL
-    val deviceId: String = "",
-    val enabled: Boolean = true
-)
-
-@Serializable
-data class CctvScheduleTrigger(
-    val id: String = "",
-    val prayerId: String = "fajr",
-    val referencePoint: String = "tartil", // "tartil" | "sholat"
-    val startOffsetMinutes: Int = -5,
-    val durationMinutes: Int = 10,
-    val enabled: Boolean = false
-)
-
-@Serializable
-data class CctvSettings(
-    val enabled: Boolean = false,
-    val gridLayout: Int = 4, // 1 | 2 | 4 | 8
-    val showInMainSlide: Boolean = false,
-    val showDuringSholat: Boolean = false,
-    val resolutionMode: String = "medium", // "low" | "medium" | "high"
-    val cameras: List<CctvCameraConfig> = emptyList(),
-    val schedules: List<CctvScheduleTrigger> = emptyList()
-)
+// ==================== LIVE, QR, ONLINE FINANCE, CUSTOM AUDIO ====================
 
 @Serializable
 data class LiveScheduleTrigger(
@@ -494,7 +463,7 @@ data class LiveSettings(
     val customVideoId: String = "",
     val makkahVideoId: String = "Cm1v4bteXbI",
     val madinahVideoId: String = "9A1S0xAPVIs",
-    val muted: Boolean = true,
+    val muted: Boolean = false,
     val showInMainSlide: Boolean = false,
     val directLiveEnabled: Boolean = false,
     val directLiveDurationMinutes: Int = 30, // 0 = non-stop / manual stop
@@ -558,55 +527,133 @@ data class CustomAudioSettings(
 // ==================== RELAY / SWITCH CONTROLLER SETTINGS ====================
 
 @Serializable
+data class PrayerSwitchSchedule(
+    val onOffset: Int? = null,  // minutes before prayer (positive)
+    val offOffset: Int? = null  // minutes after prayer (positive)
+)
+
+@Serializable
 data class SwitchChannelConfig(
     val id: String = "",
     val name: String = "",
     val pin: Int = 1,
     val enabled: Boolean = false,
     val triggerMode: String = "prayer", // "prayer" | "state"
-    val onOffset: Int = -15,            // minutes relative to prayer (e.g. -15 = 15m before prayer)
-    val offOffset: Int = 30,            // minutes after prayer
+    val schedules: Map<String, PrayerSwitchSchedule> = emptyMap(),
+    val onOffset: Int = -15,            // legacy fallback minutes relative to prayer
+    val offOffset: Int = 30,            // legacy fallback minutes after prayer
     val activePrayers: List<String> = listOf("fajr", "dhuhr", "asr", "maghrib", "isha"),
     val onState: String = "tartil",
     val onStateOffset: Int = 0,
     val offState: String = "pelaksanaan_sholat",
     val offStateOffset: Int = 0,
     val manualState: Boolean = false
-)
+) {
+    companion object {
+        fun defaultEmptyPrayerSchedules(): Map<String, PrayerSwitchSchedule> = linkedMapOf(
+            "fajr" to PrayerSwitchSchedule(),
+            "dhuhr" to PrayerSwitchSchedule(),
+            "asr" to PrayerSwitchSchedule(),
+            "maghrib" to PrayerSwitchSchedule(),
+            "isha" to PrayerSwitchSchedule()
+        )
+    }
+}
 
 @Serializable
 data class SwitchSettings(
     val enabled: Boolean = false,
     val connectionType: String = "wifi", // "wifi" | "usb"
-    val wifiIp: String = "192.168.1.100",
-    val usbPort: String = "COM3",
+    val wifiIp: String = "192.168.1.50",
+    val usbPort: String = "/dev/ttyUSB0",
     val baudRate: Int = 9600,
     val switches: List<SwitchChannelConfig> = defaultSwitchChannels()
 ) {
     companion object {
+        private fun acSchedules(): Map<String, PrayerSwitchSchedule> = linkedMapOf(
+            "fajr" to PrayerSwitchSchedule(onOffset = 60, offOffset = 30),
+            "dhuhr" to PrayerSwitchSchedule(onOffset = 90, offOffset = 60),
+            "asr" to PrayerSwitchSchedule(onOffset = 60, offOffset = 45),
+            "maghrib" to PrayerSwitchSchedule(onOffset = 60, offOffset = null),
+            "isha" to PrayerSwitchSchedule(onOffset = null, offOffset = 45)
+        )
+
         fun defaultSwitchChannels(): List<SwitchChannelConfig> = listOf(
-            SwitchChannelConfig(id = "lampu_dalam", name = "Lampu Dalam", pin = 1),
-            SwitchChannelConfig(id = "lampu_luar", name = "Lampu Luar", pin = 2),
-            SwitchChannelConfig(id = "ac_1", name = "AC 1", pin = 3),
-            SwitchChannelConfig(id = "ac_2", name = "AC 2", pin = 4),
-            SwitchChannelConfig(id = "ac_3", name = "AC 3", pin = 5),
+            SwitchChannelConfig(
+                id = "lampu_dalam",
+                name = "LAMPU DALAM",
+                pin = 1,
+                enabled = true,
+                schedules = linkedMapOf(
+                    "fajr" to PrayerSwitchSchedule(onOffset = 30, offOffset = 60),
+                    "dhuhr" to PrayerSwitchSchedule(),
+                    "asr" to PrayerSwitchSchedule(),
+                    "maghrib" to PrayerSwitchSchedule(onOffset = 30, offOffset = null),
+                    "isha" to PrayerSwitchSchedule(onOffset = null, offOffset = 60)
+                )
+            ),
+            SwitchChannelConfig(
+                id = "lampu_luar",
+                name = "LAMPU LUAR",
+                pin = 2,
+                enabled = true,
+                schedules = linkedMapOf(
+                    "fajr" to PrayerSwitchSchedule(onOffset = null, offOffset = 60),
+                    "dhuhr" to PrayerSwitchSchedule(),
+                    "asr" to PrayerSwitchSchedule(),
+                    "maghrib" to PrayerSwitchSchedule(onOffset = 30, offOffset = null),
+                    "isha" to PrayerSwitchSchedule()
+                )
+            ),
+            SwitchChannelConfig(
+                id = "ac_1",
+                name = "AC SATU",
+                pin = 3,
+                enabled = true,
+                schedules = acSchedules()
+            ),
+            SwitchChannelConfig(
+                id = "ac_2",
+                name = "AC DUA",
+                pin = 4,
+                enabled = true,
+                schedules = acSchedules()
+            ),
+            SwitchChannelConfig(
+                id = "ac_3",
+                name = "AC TIGA",
+                pin = 5,
+                enabled = true,
+                schedules = acSchedules()
+            ),
             SwitchChannelConfig(
                 id = "audio_luar",
-                name = "Audio Luar (Toa)",
+                name = "AUDIO LUAR",
                 pin = 6,
+                enabled = true,
                 triggerMode = "state",
                 onState = "tartil",
-                offState = "pelaksanaan_sholat"
+                onStateOffset = -1,
+                offState = "pelaksanaan_sholat",
+                offStateOffset = 5
             ),
             SwitchChannelConfig(
                 id = "audio_dalam",
-                name = "Audio Dalam",
+                name = "AUDIO DALAM",
                 pin = 7,
+                enabled = true,
                 triggerMode = "state",
                 onState = "pelaksanaan_sholat",
-                offState = "standby"
+                onStateOffset = -1,
+                offState = "pelaksanaan_sholat",
+                offStateOffset = 5
             ),
-            SwitchChannelConfig(id = "saklar_8", name = "Saklar 8", pin = 8)
+            SwitchChannelConfig(
+                id = "saklar_8",
+                name = "SAKLAR 8",
+                pin = 8,
+                enabled = false
+            )
         )
     }
 }
@@ -756,7 +803,6 @@ data class AppStateSettings(
     val slides: List<SlideItem> = SlideItem.defaultSystemSlides(),
     val standbySlideshow: StandbySlideshowSettings = StandbySlideshowSettings(),
     val screensaver: ScreenSaverSettings = ScreenSaverSettings(),
-    val cctv: CctvSettings = CctvSettings(),
     val live: LiveSettings = LiveSettings(),
     val masjidQr: MasjidQrSettings = MasjidQrSettings(),
     val onlineFinance: OnlineFinanceSettings = OnlineFinanceSettings(),

@@ -36,11 +36,7 @@ import java.util.concurrent.TimeUnit
 class SwitchController(
     private val context: Context? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val httpClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(3, TimeUnit.SECONDS)
-        .readTimeout(3, TimeUnit.SECONDS)
-        .writeTimeout(3, TimeUnit.SECONDS)
-        .build()
+    private val httpClient: OkHttpClient = id.algaffar.jwstv.SharedHttpClient.relayClient
 ) {
     private val activePinStates = ConcurrentHashMap<Int, Boolean>()
     private val _pinStateFlow = MutableStateFlow<Map<Int, Boolean>>(emptyMap())
@@ -108,8 +104,41 @@ class SwitchController(
         zoneId: ZoneId,
         schedule: DailyPrayerSchedule
     ): Boolean {
-        // Interpret onOffset: negative or positive both represent "minutes before prayer"
-        // (e.g. -15 or 15 means 15 minutes before prayer time).
+        if (channel.schedules.isNotEmpty()) {
+            data class SwitchEvent(val timeSec: Long, val turnOn: Boolean)
+            val events = mutableListOf<SwitchEvent>()
+            val daySec = 86_400L
+
+            for (dayOffset in -1L..1L) {
+                for ((prayerSerial, sched) in channel.schedules) {
+                    val prayerId = PrayerId.fromId(prayerSerial) ?: continue
+                    val baseEpochSec = schedule.timeFor(prayerId).toEpochSecond() + (dayOffset * daySec)
+
+                    sched.onOffset?.let { onMin ->
+                        events.add(SwitchEvent(baseEpochSec - (onMin.toLong() * 60L), true))
+                    }
+                    sched.offOffset?.let { offMin ->
+                        events.add(SwitchEvent(baseEpochSec + (offMin.toLong() * 60L), false))
+                    }
+                }
+            }
+
+            if (events.isEmpty()) return false
+            // Sort ascending by timestamp; if tied, OFF takes precedence over ON for safety
+            events.sortWith(compareBy<SwitchEvent> { it.timeSec }.thenBy { it.turnOn })
+
+            var latestState = false
+            for (ev in events) {
+                if (ev.timeSec <= nowEpochSec) {
+                    latestState = ev.turnOn
+                } else {
+                    break
+                }
+            }
+            return latestState
+        }
+
+        // Legacy single-offset fallback when schedules map is empty
         val minutesBefore = kotlin.math.abs(channel.onOffset).toLong()
         val minutesAfter = kotlin.math.abs(channel.offOffset).toLong()
 

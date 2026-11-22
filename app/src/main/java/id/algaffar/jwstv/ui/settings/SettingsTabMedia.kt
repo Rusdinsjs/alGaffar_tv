@@ -65,7 +65,17 @@ internal fun resolveMediaPreview(rawPath: String?, assetsRootDir: File?): Resolv
         val b64 = trimmed.substringAfter("base64,")
         val bmp = runCatching {
             val bytes = Base64.decode(b64, Base64.DEFAULT)
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            var sampleSize = 1
+            while ((bounds.outWidth / sampleSize) > 1920 || (bounds.outHeight / sampleSize) > 1080) {
+                sampleSize *= 2
+            }
+            val opts = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+            }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)?.asImageBitmap()
         }.getOrNull()
         return bmp?.let { ResolvedMediaPreview.DecodedBitmap(it) }
     }

@@ -6,7 +6,6 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -24,18 +23,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,296 +41,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
-import coil.compose.AsyncImage
 import id.algaffar.jwstv.data.cctv.FinancialSummaryData
 import id.algaffar.jwstv.data.cctv.OnlineFinanceManager
-import id.algaffar.jwstv.domain.model.CctvCameraConfig
 import id.algaffar.jwstv.ui.JwsRuntimeSnapshot
+import id.algaffar.jwstv.ui.screens.standby.HeaderBar
+import id.algaffar.jwstv.ui.screens.standby.HeaderClockCard
+import id.algaffar.jwstv.ui.screens.standby.PrayerTimesCarousel
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
-import id.algaffar.jwstv.ui.theme.LocalPerformanceMode
-import kotlinx.coroutines.delay
+import java.io.File
 import java.text.NumberFormat
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val TIME_FMT_HHMMSS: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
-
-/**
- * Multi-Camera CCTV Grid Fullscreen (`1`, `2`, `4`, or `8` cells).
- * Supports RTSP/HLS streams via Media3 [ExoPlayer] and HTTP Snapshot/MJPEG URLs via Coil.
- * Mirrors `src/components/Screens/FullScreen/CctvFullScreen.tsx` & `CctvSlide.tsx`.
- */
-@Composable
-fun CctvGridFullscreen(
-    snapshot: JwsRuntimeSnapshot,
-    modifier: Modifier = Modifier
-) {
-    val palette = LocalJwsTheme.current
-    val cctvSettings = snapshot.settings.cctv
-    val enabledCameras = remember(cctvSettings.cameras, cctvSettings.gridLayout) {
-        val active = cctvSettings.cameras.filter { it.enabled }
-        val targetCount = cctvSettings.gridLayout.coerceIn(1, 8)
-        if (active.size >= targetCount) {
-            active.take(targetCount)
-        } else {
-            // Pad up to targetCount with placeholder slots so the grid layout stays balanced
-            active + List(targetCount - active.size) { idx ->
-                CctvCameraConfig(
-                    id = "placeholder-$idx",
-                    name = "Kamera ${active.size + idx + 1} (Belum Dikonfigurasi)",
-                    url = "",
-                    enabled = true
-                )
-            }
-        }
-    }
-
-    val columns = when {
-        enabledCameras.size <= 1 -> 1
-        enabledCameras.size <= 4 -> 2
-        else -> 4
-    }
-    val rows = ((enabledCameras.size + columns - 1) / columns).coerceAtLeast(1)
-
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color(0xFF05080F))
-            .padding(20.dp)
-    ) {
-        // Top Header Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .background(palette.bgCard)
-                .border(1.dp, palette.border, RoundedCornerShape(18.dp))
-                .padding(horizontal = 24.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Videocam,
-                    contentDescription = null,
-                    tint = Color(0xFFEF4444),
-                    modifier = Modifier.size(30.dp)
-                )
-                Column {
-                    Text(
-                        text = "MONITORING CCTV — ${snapshot.settings.brand.name}",
-                        color = palette.textPrimary,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = "Tata Letak Grid ${cctvSettings.gridLayout} Kamera • RTSP / ONVIF / HTTP Snapshot",
-                        color = palette.textSecondary,
-                        fontSize = 14.sp
-                    )
-                }
-            }
-
-            Text(
-                text = snapshot.now.format(TIME_FMT_HHMMSS),
-                color = palette.accent,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Black,
-                fontFamily = FontFamily.Monospace
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Camera Grid
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            for (rowIdx in 0 until rows) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    for (colIdx in 0 until columns) {
-                        val camIdx = rowIdx * columns + colIdx
-                        val camera = enabledCameras.getOrNull(camIdx)
-                        if (camera != null) {
-                            CctvCameraCell(
-                                camera = camera,
-                                index = camIdx + 1,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                            )
-                        } else {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(UnstableApi::class)
-@Composable
-private fun CctvCameraCell(
-    camera: CctvCameraConfig,
-    index: Int,
-    modifier: Modifier = Modifier
-) {
-    val palette = LocalJwsTheme.current
-    val context = LocalContext.current
-    val url = camera.url.trim()
-    val isRtspOrHls = url.startsWith("rtsp://", ignoreCase = true) ||
-        url.endsWith(".m3u8", ignoreCase = true) ||
-        url.endsWith(".mp4", ignoreCase = true)
-
-    var snapshotTick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(url, isRtspOrHls) {
-        if (url.isNotEmpty() && !isRtspOrHls) {
-            while (true) {
-                delay(1500L)
-                snapshotTick++
-            }
-        }
-    }
-
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(Color(0xFF0B111E))
-            .border(1.5.dp, palette.border, RoundedCornerShape(18.dp))
-    ) {
-        when {
-            url.isEmpty() -> {
-                Column(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Videocam,
-                        contentDescription = null,
-                        tint = palette.textSecondary.copy(alpha = 0.4f),
-                        modifier = Modifier.size(48.dp)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = camera.name,
-                        color = palette.textSecondary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "URL RTSP / Snapshot belum diisi di Pengaturan",
-                        color = palette.textSecondary.copy(alpha = 0.6f),
-                        fontSize = 13.sp
-                    )
-                }
-            }
-
-            isRtspOrHls -> {
-                val isPerformanceMode = LocalPerformanceMode.current
-                val exoPlayer = remember(url, isPerformanceMode) {
-                    val builder = ExoPlayer.Builder(context)
-                    if (isPerformanceMode) {
-                        val trackSelector = DefaultTrackSelector(context).apply {
-                            setParameters(
-                                buildUponParameters()
-                                    .setMaxVideoSize(1280, 720)
-                                    .setForceLowestBitrate(false)
-                            )
-                        }
-                        builder.setTrackSelector(trackSelector)
-                    }
-                    builder.build().apply {
-                        setMediaItem(MediaItem.fromUri(url))
-                        volume = 0f
-                        repeatMode = Player.REPEAT_MODE_ALL
-                        prepare()
-                        playWhenReady = true
-                    }
-                }
-                DisposableEffect(exoPlayer) {
-                    onDispose {
-                        exoPlayer.release()
-                    }
-                }
-                AndroidView(
-                    factory = { ctx ->
-                        PlayerView(ctx).apply {
-                            useController = false
-                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                            player = exoPlayer
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-
-            else -> {
-                val separator = if (url.contains("?")) "&" else "?"
-                val bustedUrl = "$url${separator}_t=$snapshotTick"
-                AsyncImage(
-                    model = bustedUrl,
-                    contentDescription = camera.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
-
-        // Camera Badge Overlay (Top-Left)
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(12.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Color.Black.copy(alpha = 0.72f))
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(9.dp)
-                    .clip(CircleShape)
-                    .background(if (url.isNotEmpty()) Color(0xFF10B981) else Color(0xFFF59E0B))
-            )
-            Text(
-                text = "CAM $index • ${camera.name}",
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
 
 /**
  * YouTube Live Streaming Fullscreen (Makkah `Cm1v4bteXbI`, Madinah `9A1S0xAPVIs`, or Custom Video ID).
@@ -343,23 +70,34 @@ private fun CctvCameraCell(
 @Composable
 fun YouTubeLiveFullscreen(
     snapshot: JwsRuntimeSnapshot,
+    assetsRootDir: File? = null,
+    isLogoMenuOpen: Boolean = false,
+    onLogoClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
-    val liveSettings = snapshot.settings.live
+    val settings = snapshot.settings
+    val liveSettings = settings.live
 
-    val resolvedVideoId = remember(liveSettings.source, liveSettings.customVideoId) {
+    val resolvedVideoId = remember(
+        liveSettings.source,
+        liveSettings.makkahVideoId,
+        liveSettings.madinahVideoId,
+        liveSettings.customVideoId
+    ) {
         when (liveSettings.source.lowercase()) {
-            "makkah" -> "Cm1v4bteXbI"
-            "madinah" -> "9A1S0xAPVIs"
-            else -> extractYouTubeVideoId(liveSettings.customVideoId).ifBlank { "Cm1v4bteXbI" }
+            "makkah" -> extractYouTubeVideoId(liveSettings.makkahVideoId).ifBlank { "Cm1v4bteXbI" }
+            "madinah" -> extractYouTubeVideoId(liveSettings.madinahVideoId).ifBlank { "9A1S0xAPVIs" }
+            else -> extractYouTubeVideoId(liveSettings.customVideoId).ifBlank {
+                extractYouTubeVideoId(liveSettings.makkahVideoId).ifBlank { "Cm1v4bteXbI" }
+            }
         }
     }
 
     val sourceTitle = when (liveSettings.source.lowercase()) {
         "makkah" -> "SIARAN LANGSUNG MASJIDIL HARAM — MAKKAH AL-MUKARRAMAH"
         "madinah" -> "SIARAN LANGSUNG MASJID NABAWI — MADINAH AL-MUNAWWARAH"
-        else -> "SIARAN LANGSUNG — ${snapshot.settings.brand.name}"
+        else -> "SIARAN LANGSUNG — ${settings.brand.name}"
     }
 
     Box(
@@ -367,6 +105,7 @@ fun YouTubeLiveFullscreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
+        // 1. Fullscreen Live Video Layer (1920 x 1080)
         AndroidView(
             factory = { ctx ->
                 WebView(ctx).apply {
@@ -374,87 +113,171 @@ fun YouTubeLiveFullscreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.mediaPlaybackRequiresUserGesture = false
-                    settings.cacheMode = WebSettings.LOAD_DEFAULT
+                    this.settings.javaScriptEnabled = true
+                    this.settings.domStorageEnabled = true
+                    this.settings.mediaPlaybackRequiresUserGesture = false
+                    this.settings.cacheMode = WebSettings.LOAD_DEFAULT
+                    this.settings.loadWithOverviewMode = true
+                    this.settings.useWideViewPort = true
                     webChromeClient = WebChromeClient()
                     webViewClient = WebViewClient()
                 }
             },
             update = { webView ->
-                val targetUrl = "https://www.youtube-nocookie.com/embed/$resolvedVideoId?autoplay=1&mute=0&controls=0&rel=0&modestbranding=1&playsinline=1"
-                if (webView.url != targetUrl) {
-                    webView.loadUrl(targetUrl)
+                val muteParam = if (liveSettings.muted) 1 else 0
+                val desiredKey = "$resolvedVideoId|$muteParam"
+                if (webView.tag != desiredKey) {
+                    webView.tag = desiredKey
+                    val embedSrc = "https://www.youtube-nocookie.com/embed/$resolvedVideoId" +
+                        "?autoplay=1&mute=$muteParam&controls=0&rel=0&modestbranding=1&playsinline=1" +
+                        "&enablejsapi=1&origin=https://www.youtube-nocookie.com"
+                    val html = """
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                            <style>
+                                * { margin: 0; padding: 0; box-sizing: border-box; }
+                                html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+                                iframe { width: 100%; height: 100%; border: 0; display: block; }
+                            </style>
+                        </head>
+                        <body>
+                            <iframe
+                                src="$embedSrc"
+                                allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                                referrerpolicy="strict-origin-when-cross-origin"
+                                allowfullscreen>
+                            </iframe>
+                        </body>
+                        </html>
+                    """.trimIndent()
+                    webView.loadDataWithBaseURL(
+                        "https://www.youtube-nocookie.com",
+                        html,
+                        "text/html",
+                        "utf-8",
+                        null
+                    )
+                }
+            },
+            onRelease = { webView ->
+                runCatching {
+                    webView.stopLoading()
+                    webView.loadUrl("about:blank")
+                    webView.clearHistory()
+                    webView.removeAllViews()
+                    webView.onPause()
+                    webView.destroy()
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        // Bottom Glassmorphic Info Overlay
-        Row(
+        // 2. Top Overlay: Logo + Nama Masjid (Tanpa Alamat & Tanpa Tanggal) di kiri, Card Jam di kanan
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent)
+                    )
+                )
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(18.dp)
+                ) {
+                    id.algaffar.jwstv.ui.screens.standby.MosqueLogoBadge(
+                        logoPath = settings.brand.logo,
+                        assetsRootDir = assetsRootDir,
+                        isMenuOpen = isLogoMenuOpen,
+                        onClick = onLogoClick
+                    )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = settings.brand.name.ifBlank { "MASJID AL-GAFFAR" },
+                            color = Color.White,
+                            fontSize = 38.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(Color(0xFFDC2626))
+                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.LiveTv,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "LIVE",
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
+                            Text(
+                                text = sourceTitle,
+                                color = palette.accentSecondary,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(20.dp))
+
+                HeaderClockCard(
+                    now = snapshot.now,
+                    clockStyle = settings.brand.clockStyle,
+                    modifier = Modifier.size(width = 440.dp, height = 160.dp)
+                )
+            }
+        }
+
+        // 3. Bottom Overlay: Horizontal Prayer Times Carousel (full 1920 x 225 dp so all 4 cards render unclipped)
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.88f))
+                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f))
                     )
                 )
-                .padding(horizontal = 36.dp, vertical = 22.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFDC2626))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.LiveTv,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = "LIVE",
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-                }
-                Column {
-                    Text(
-                        text = sourceTitle,
-                        color = Color.White,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = "${snapshot.settings.brand.name} • ${snapshot.hijriDate.formatted}",
-                        color = palette.accent,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            Text(
-                text = snapshot.now.format(TIME_FMT_HHMMSS),
-                color = Color.White,
-                fontSize = 36.sp,
-                fontWeight = FontWeight.Black,
-                fontFamily = FontFamily.Monospace
+            PrayerTimesCarousel(
+                schedule = snapshot.schedule,
+                scrollIntervalSeconds = settings.prayerSettings.prayerTimeScrollInterval,
+                isVertical = false,
+                modifier = Modifier.size(width = 1920.dp, height = 225.dp)
             )
         }
     }
@@ -467,27 +290,31 @@ fun YouTubeLiveFullscreen(
 @Composable
 fun OnlineFinanceFullscreen(
     snapshot: JwsRuntimeSnapshot,
+    assetsRootDir: File? = null,
+    isLogoMenuOpen: Boolean = false,
+    onLogoClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
+    val settings = snapshot.settings
     val financeManager = remember { OnlineFinanceManager() }
     var financialData by remember {
         mutableStateOf(
             OnlineFinanceManager.buildLocalFallback(
-                keuangan = snapshot.settings.jumat.keuangan,
+                keuangan = settings.jumat.keuangan,
                 fallbackDateStr = snapshot.schedule.date.toString()
             )
         )
     }
 
     LaunchedEffect(
-        snapshot.settings.onlineFinance.enabled,
-        snapshot.settings.onlineFinance.sheetUrl,
-        snapshot.settings.jumat.keuangan
+        settings.onlineFinance.enabled,
+        settings.onlineFinance.sheetUrl,
+        settings.jumat.keuangan
     ) {
         financialData = financeManager.fetchFinancialData(
-            onlineFinance = snapshot.settings.onlineFinance,
-            localJumatKeuangan = snapshot.settings.jumat.keuangan
+            onlineFinance = settings.onlineFinance,
+            localJumatKeuangan = settings.jumat.keuangan
         )
     }
 
@@ -497,6 +324,13 @@ fun OnlineFinanceFullscreen(
         }
     }
 
+    val finCfg = settings.onlineFinance
+    val qrCfg = settings.masjidQr
+    val bankName = finCfg.bankName.ifBlank { qrCfg.bankName }
+    val nomorRekening = finCfg.nomorRekening.ifBlank { qrCfg.nomorRekening }
+    val atasNama = finCfg.atasNama.ifBlank { qrCfg.atasNama }
+    val hasBankInfo = bankName.isNotBlank() || nomorRekening.isNotBlank() || atasNama.isNotBlank()
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -505,161 +339,286 @@ fun OnlineFinanceFullscreen(
                     listOf(palette.bgPrimary, palette.bgSecondary)
                 )
             )
-            .padding(36.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp)
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
+        // 1. Top Header: Standby HeaderBar + Standby-sized HeaderClockCard (480x180dp)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
-                .background(palette.bgCard)
-                .border(1.5.dp, palette.border, RoundedCornerShape(22.dp))
-                .padding(horizontal = 28.dp, vertical = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .height(180.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            HeaderBar(
+                now = snapshot.now,
+                brand = settings.brand,
+                hijriDate = snapshot.hijriDate,
+                assetsRootDir = assetsRootDir,
+                isReversed = false,
+                isLogoMenuOpen = isLogoMenuOpen,
+                onLogoClick = onLogoClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(180.dp)
+            )
+
+            HeaderClockCard(
+                now = snapshot.now,
+                clockStyle = settings.brand.clockStyle
+            )
+        }
+
+        // 2. Main Finance Content Card (Matching Holiday/WaktuJumat/Tarawih card style)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .clip(RoundedCornerShape(24.dp))
+                .background(palette.bgCard)
+                .border(1.5.dp, palette.border, RoundedCornerShape(24.dp))
+                .padding(horizontal = 32.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            // Title & Sync Status Header
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    imageVector = Icons.Filled.AccountBalanceWallet,
-                    contentDescription = null,
-                    tint = palette.accent,
-                    modifier = Modifier.size(40.dp)
-                )
-                Column {
-                    Text(
-                        text = "LAPORAN KEUANGAN MASJID",
-                        color = palette.textPrimary,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Black
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.AccountBalanceWallet,
+                        contentDescription = null,
+                        tint = palette.accentSecondary,
+                        modifier = Modifier.size(40.dp)
                     )
+                    Column {
+                        Text(
+                            text = "LAPORAN KEUANGAN KAS MASJID",
+                            color = palette.textPrimary,
+                            fontSize = 30.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = "Pembaruan: ${financialData.lastUpdated} • ${settings.brand.name}",
+                            color = palette.textSecondary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            if (financialData.isLocalFallback) Color(0xFFF59E0B).copy(alpha = 0.16f)
+                            else Color(0xFF10B981).copy(alpha = 0.18f)
+                        )
+                        .border(
+                            1.dp,
+                            if (financialData.isLocalFallback) Color(0xFFF59E0B).copy(alpha = 0.5f)
+                            else Color(0xFF10B981).copy(alpha = 0.55f),
+                            RoundedCornerShape(50)
+                        )
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
                     Text(
-                        text = buildString {
-                            append(snapshot.settings.brand.name)
-                            append(" • Pembaruan: ${financialData.lastUpdated}")
-                            append(if (financialData.isLocalFallback) " (Data Buku Kas Lokal)" else " (Sinkronisasi Spreadsheet Online)")
-                        },
-                        color = palette.textSecondary,
-                        fontSize = 15.sp
+                        text = if (financialData.isLocalFallback) "DATA BUKU KAS LOKAL" else "SINKRONISASI SPREADSHEET ONLINE",
+                        color = if (financialData.isLocalFallback) Color(0xFFFBBF24) else Color(0xFF34D399),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.sp
                     )
                 }
             }
 
-            Text(
-                text = snapshot.now.format(TIME_FMT_HHMMSS),
-                color = palette.accent,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Black,
-                fontFamily = FontFamily.Monospace
-            )
-        }
+            // 3 Summary Cards (Pemasukan, Pengeluaran, Saldo Akhir)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                FinanceSummaryStatCard(
+                    label = "TOTAL PEMASUKAN (+)",
+                    amountFormatted = idrFormatter.format(financialData.income),
+                    accentColor = Color(0xFF10B981),
+                    modifier = Modifier.weight(1f)
+                )
+                FinanceSummaryStatCard(
+                    label = "TOTAL PENGELUARAN (-)",
+                    amountFormatted = idrFormatter.format(financialData.expense),
+                    accentColor = Color(0xFFF43F5E),
+                    modifier = Modifier.weight(1f)
+                )
+                FinanceSummaryStatCard(
+                    label = "SALDO AKHIR KAS MASJID",
+                    amountFormatted = idrFormatter.format(financialData.balance),
+                    accentColor = palette.accentSecondary,
+                    modifier = Modifier.weight(1.2f)
+                )
+            }
 
-        // 3 Summary Cards (Pemasukan, Pengeluaran, Saldo Akhir)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            FinanceSummaryStatCard(
-                label = "TOTAL PEMASUKAN",
-                amountFormatted = idrFormatter.format(financialData.income),
-                accentColor = Color(0xFF10B981),
-                modifier = Modifier.weight(1f)
-            )
-            FinanceSummaryStatCard(
-                label = "TOTAL PENGELUARAN",
-                amountFormatted = idrFormatter.format(financialData.expense),
-                accentColor = Color(0xFFF43F5E),
-                modifier = Modifier.weight(1f)
-            )
-            FinanceSummaryStatCard(
-                label = "SALDO KAS MASJID",
-                amountFormatted = idrFormatter.format(financialData.balance),
-                accentColor = palette.accent,
-                modifier = Modifier.weight(1.2f)
-            )
-        }
+            // Recent Transactions Table
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(palette.bgPrimary.copy(alpha = 0.45f))
+                    .border(1.dp, palette.border.copy(alpha = 0.6f), RoundedCornerShape(18.dp))
+                    .padding(horizontal = 22.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "RINCIAN TRANSAKSI TERAKHIR",
+                    color = palette.accentSecondary,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp
+                )
 
-        // Recent Transactions Table
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
-                .background(palette.bgCard)
-                .border(1.dp, palette.border, RoundedCornerShape(22.dp))
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = "RINCIAN TRANSAKSI TERAKHIR",
-                color = palette.accent,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
-
-            if (financialData.recentTransactions.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Belum ada rincian jurnal transaksi yang tercatat pada periode ini.",
-                        color = palette.textSecondary,
-                        fontSize = 18.sp
-                    )
-                }
-            } else {
-                financialData.recentTransactions.forEach { tx ->
-                    val isIncome = tx.type.equals("in", ignoreCase = true)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color.White.copy(alpha = 0.04f))
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                if (financialData.recentTransactions.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = if (isIncome) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
-                                contentDescription = null,
-                                tint = if (isIncome) Color(0xFF10B981) else Color(0xFFF43F5E),
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Column {
-                                Text(
-                                    text = tx.description.ifBlank { "Transaksi Kas Masjid" },
-                                    color = palette.textPrimary,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                if (tx.date.isNotBlank()) {
-                                    Text(
-                                        text = tx.date,
-                                        color = palette.textSecondary,
-                                        fontSize = 13.sp
-                                    )
-                                }
-                            }
-                        }
-
                         Text(
-                            text = (if (isIncome) "+ " else "- ") + idrFormatter.format(tx.amount),
-                            color = if (isIncome) Color(0xFF34D399) else Color(0xFFFB7185),
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = FontFamily.Monospace
+                            text = "Belum ada rincian jurnal transaksi yang tercatat pada periode ini.",
+                            color = palette.textSecondary,
+                            fontSize = 18.sp
                         )
                     }
+                } else {
+                    financialData.recentTransactions.take(5).forEach { tx ->
+                        val isIncome = tx.type.equals("in", ignoreCase = true)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White.copy(alpha = 0.04f))
+                                .padding(horizontal = 18.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = if (isIncome) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                                    contentDescription = null,
+                                    tint = if (isIncome) Color(0xFF10B981) else Color(0xFFF43F5E),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = tx.description.ifBlank { "Transaksi Kas Masjid" },
+                                        color = palette.textPrimary,
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (tx.date.isNotBlank()) {
+                                        Text(
+                                            text = tx.date,
+                                            color = palette.textSecondary,
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                }
+                            }
+
+                            Text(
+                                text = (if (isIncome) "+ " else "- ") + idrFormatter.format(tx.amount),
+                                color = if (isIncome) Color(0xFF34D399) else Color(0xFFFB7185),
+                                fontSize = 19.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
                 }
+            }
+        }
+
+        // 3. Bottom Row: Left = Rekening / Transparansi Badge, Right = Quoted Guidance Text
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(96.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(0.45f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(palette.bgCard)
+                    .border(1.5.dp, palette.accentSecondary.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.AccountBalance,
+                    contentDescription = null,
+                    tint = palette.accentSecondary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Column {
+                    Text(
+                        text = if (hasBankInfo) "REKENING INFAQ • ${bankName.ifBlank { "MASJID" }.uppercase()}" else "TRANSPARANSI KAS ONLINE",
+                        color = palette.accentSecondary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (hasBankInfo) {
+                            listOf(nomorRekening, atasNama.takeIf { it.isNotBlank() }?.let { "a.n. $it" })
+                                .filterNotNull()
+                                .filter { it.isNotBlank() }
+                                .joinToString(" • ")
+                                .ifBlank { settings.brand.name }
+                        } else {
+                            "Laporan Keuangan ${settings.brand.name}"
+                        },
+                        color = palette.textPrimary,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(0.55f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(palette.bgCard)
+                    .border(1.5.dp, palette.border, RoundedCornerShape(20.dp))
+                    .padding(horizontal = 24.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Text(
+                    text = "“Transparansi & akuntabilitas pengelolaan infaq jamaah ${settings.brand.name}. Semoga Allah membalas kebaikan para muhsinin.”",
+                    color = palette.textSecondary,
+                    fontSize = 18.sp,
+                    fontStyle = FontStyle.Italic,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }

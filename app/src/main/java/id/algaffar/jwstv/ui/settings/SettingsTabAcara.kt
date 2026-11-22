@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.algaffar.jwstv.domain.engine.JwsStateMachine
 import id.algaffar.jwstv.domain.model.AppStateSettings
-import id.algaffar.jwstv.domain.model.CctvCameraConfig
 import id.algaffar.jwstv.domain.model.JumatJournalEntry
 import id.algaffar.jwstv.domain.model.JumatKeuanganRecord
 import id.algaffar.jwstv.domain.model.JumatPetugasRecord
@@ -768,9 +767,6 @@ fun LiveAndCctvSettingsTab(
 ) {
     val palette = LocalJwsTheme.current
     val live = settings.live
-    val cctv = settings.cctv
-    var newCamName by remember { mutableStateOf("Kamera Utama") }
-    var newCamUrl by remember { mutableStateOf("") }
 
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         // 1. Live YouTube On-Demand & Presets
@@ -843,75 +839,6 @@ fun LiveAndCctvSettingsTab(
                 )
             }
         }
-
-        // 2. Native Android CCTV RTSP / ONVIF
-        HybridSectionCard(
-            title = "Monitoring Kamera CCTV Native (RTSP / ONVIF — ${cctv.cameras.size} Kamera)",
-            subtitle = "Mendukung pemindaian ONVIF otomatis LAN, Grid 1/2/4/8 kamera, dan overlay saat sholat",
-            headerAction = {
-                HybridButton(
-                    label = "Pindai ONVIF LAN",
-                    icon = Icons.Default.Search,
-                    isPrimary = true,
-                    onClick = actions.onDiscoverOnvifCameras
-                )
-            }
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HybridToggleRow("Aktifkan Modul CCTV", cctv.enabled, { v -> actions.onUpdateSettings { it.copy(cctv = cctv.copy(enabled = v)) } }, modifier = Modifier.weight(1f))
-                HybridToggleRow("Tampilkan Overlay Saat Sholat", cctv.showDuringSholat, { v -> actions.onUpdateSettings { it.copy(cctv = cctv.copy(showDuringSholat = v)) } }, modifier = Modifier.weight(1f))
-            }
-
-            HybridSegmentedRow(
-                options = listOf("1" to "Grid 1 Kamera", "2" to "Grid 2 Kamera", "4" to "Grid 4 Kamera", "8" to "Grid 8 Kamera"),
-                selectedId = cctv.gridLayout.toString(),
-                onSelect = { g -> g.toIntOrNull()?.let { count -> actions.onUpdateSettings { it.copy(cctv = cctv.copy(gridLayout = count)) } } }
-            )
-
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HybridTextInput("Nama Kamera", newCamName, { newCamName = it }, modifier = Modifier.weight(0.8f))
-                HybridTextInput("URL RTSP / HTTP Snapshot", newCamUrl, { newCamUrl = it }, "rtsp://admin:pass@192.168.1.50:554/stream1", modifier = Modifier.weight(1.4f))
-                HybridButton(
-                    label = "+ Tambah",
-                    icon = Icons.Default.Add,
-                    isPrimary = true,
-                    onClick = {
-                        if (newCamUrl.isNotBlank()) {
-                            val cam = CctvCameraConfig("cam-${System.currentTimeMillis()}", newCamName.ifBlank { "Kamera" }, "ip", newCamUrl.trim(), enabled = true)
-                            actions.onUpdateSettings { prev -> prev.copy(cctv = prev.cctv.copy(cameras = prev.cctv.cameras + cam)) }
-                            newCamUrl = ""
-                        }
-                    }
-                )
-            }
-
-            cctv.cameras.forEach { cam ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(palette.bgPrimary.copy(alpha = 0.8f))
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(cam.name, color = palette.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                        Text(cam.url, color = palette.textSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                    }
-                    HybridButton(
-                        label = "Hapus",
-                        icon = Icons.Default.Delete,
-                        isDanger = true,
-                        onClick = {
-                            actions.onUpdateSettings { prev ->
-                                prev.copy(cctv = prev.cctv.copy(cameras = prev.cctv.cameras.filterNot { it.id == cam.id }))
-                            }
-                        }
-                    )
-                }
-            }
-        }
     }
 }
 
@@ -923,145 +850,266 @@ fun SwitchHardwareSettingsTab(
 ) {
     val palette = LocalJwsTheme.current
     val sw = settings.switchSettings
+    var selectedId by remember { mutableStateOf(sw.switches.firstOrNull()?.id ?: "hardware") }
+    val selectedIdx = sw.switches.indexOfFirst { it.id == selectedId }
+    val selectedChannel = sw.switches.getOrNull(selectedIdx)
+
+    val prayerLabels = remember {
+        listOf(
+            "fajr" to "Subuh",
+            "dhuhr" to "Dzuhur",
+            "asr" to "Ashar",
+            "maghrib" to "Maghrib",
+            "isha" to "Isya"
+        )
+    }
+
+    val statePresets = remember {
+        listOf(
+            "tartil" to "Tartil",
+            "tarhim" to "Tarhim",
+            "adzan" to "Adzan",
+            "menunggu_iqomah" to "Iqomah",
+            "pelaksanaan_sholat" to "Sholat",
+            "standby" to "Standby"
+        )
+    }
+
+    fun updateChannel(idx: Int, transform: (id.algaffar.jwstv.domain.model.SwitchChannelConfig) -> id.algaffar.jwstv.domain.model.SwitchChannelConfig) {
+        actions.onUpdateSettings { prev ->
+            val list = prev.switchSettings.switches.toMutableList()
+            val cur = list.getOrNull(idx) ?: return@onUpdateSettings prev
+            list[idx] = transform(cur)
+            prev.copy(switchSettings = prev.switchSettings.copy(switches = list))
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         HybridSectionCard(
-            title = "Hardware Saklar Relay 8 Channel (WiFi HTTP & USB Serial OTG)",
-            subtitle = "Otomasi lampu masjid, AC 1–3, dan amplifier Toa Luar/Dalam berdasarkan waktu sholat atau transisi state"
+            title = "Pilih Konfigurasi / Channel Saklar (8 Pin)",
+            subtitle = "Mengacu pada JWS TV Al-Gaffar: pilih channel untuk mengatur jadwal tiap waktu sholat atau status aplikasi"
         ) {
-            HybridToggleRow(
-                label = "Aktifkan Otomasi Saklar Relay 8 Channel",
-                checked = sw.enabled,
-                onCheckedChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(enabled = v)) } }
-            )
-            HybridSegmentedRow(
-                options = listOf("wifi" to "Mode Koneksi: WiFi HTTP Relay", "usb" to "Mode Koneksi: USB OTG Serial"),
-                selectedId = sw.connectionType,
-                onSelect = { ct -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(connectionType = ct)) } }
-            )
-            if (sw.connectionType == "wifi") {
-                HybridTextInput(
-                    label = "IP Address Modul WiFi Relay (LAN Privat)",
-                    value = sw.wifiIp,
-                    placeholder = "192.168.1.100",
-                    onValueChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(wifiIp = v)) } }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                HybridButton(
+                    label = "⚙ Konfigurasi Hardware",
+                    isPrimary = selectedId == "hardware",
+                    onClick = { selectedId = "hardware" }
                 )
-            } else {
-                HybridTextInput(
-                    label = "Port USB Serial / Baud Rate",
-                    value = sw.usbPort,
-                    onValueChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(usbPort = v)) } }
-                )
+                sw.switches.forEach { ch ->
+                    val isPinOn = actions.relayPinStates[ch.pin] == true
+                    val activeTag = if (ch.enabled) "•" else ""
+                    HybridButton(
+                        label = "PIN ${ch.pin}: ${ch.name} $activeTag".trim(),
+                        isPrimary = selectedId == ch.id || isPinOn,
+                        onClick = { selectedId = ch.id }
+                    )
+                }
             }
         }
 
-        HybridSectionCard(
-            title = "Konfigurasi & Uji Manual 8 Channel Saklar",
-            subtitle = "Klik tombol ON/OFF untuk menguji relay secara langsung atau atur jadwal tiap pin"
-        ) {
-            sw.switches.forEachIndexed { idx, ch ->
-                val isPinOn = actions.relayPinStates[ch.pin] == true
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(palette.bgPrimary.copy(alpha = 0.8f))
-                        .border(1.dp, if (isPinOn) Color(0xFF10B981) else palette.border, RoundedCornerShape(14.dp))
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "PIN ${ch.pin} — ${ch.name.uppercase()} [${ch.triggerMode.uppercase()}]",
-                            color = if (isPinOn) Color(0xFF34D399) else palette.textPrimary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.ExtraBold
+        if (selectedId == "hardware" || selectedChannel == null) {
+            HybridSectionCard(
+                title = "Konfigurasi Hardware Relay (WiFi HTTP & USB Serial OTG)",
+                subtitle = "Atur mode koneksi ke modul relay 8 channel dan aktifkan otomasi saklar"
+            ) {
+                HybridToggleRow(
+                    label = "Aktifkan Otomasi Saklar Relay 8 Channel",
+                    checked = sw.enabled,
+                    onCheckedChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(enabled = v)) } }
+                )
+                HybridSegmentedRow(
+                    options = listOf("wifi" to "Mode Koneksi: WiFi HTTP Relay", "usb" to "Mode Koneksi: USB OTG Serial"),
+                    selectedId = sw.connectionType,
+                    onSelect = { ct -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(connectionType = ct)) } }
+                )
+                if (sw.connectionType == "wifi") {
+                    HybridTextInput(
+                        label = "IP Address Modul WiFi Relay (LAN Privat)",
+                        value = sw.wifiIp,
+                        placeholder = "192.168.1.50",
+                        onValueChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(wifiIp = v)) } }
+                    )
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        HybridTextInput(
+                            label = "Port USB Serial",
+                            value = sw.usbPort,
+                            placeholder = "/dev/ttyUSB0",
+                            onValueChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(usbPort = v)) } },
+                            modifier = Modifier.weight(1f)
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            HybridButton(
-                                label = if (ch.enabled) "AUTO: AKTIF" else "AUTO: OFF",
-                                isPrimary = ch.enabled,
-                                onClick = {
-                                    actions.onUpdateSettings { prev ->
-                                        val list = prev.switchSettings.switches.toMutableList()
-                                        list[idx] = ch.copy(enabled = !ch.enabled)
-                                        prev.copy(switchSettings = prev.switchSettings.copy(switches = list))
-                                    }
-                                }
+                        HybridNumberStepper(
+                            label = "Baud Rate",
+                            value = sw.baudRate,
+                            min = 9600,
+                            max = 115200,
+                            unit = "bps",
+                            onValueChange = { b -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(baudRate = b)) } },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        } else {
+            val isPinOn = actions.relayPinStates[selectedChannel.pin] == true
+            HybridSectionCard(
+                title = "Saklar PIN ${selectedChannel.pin}: ${selectedChannel.name}",
+                subtitle = "Atur nama, status aktif, uji manual, dan jadwal ON/OFF per waktu sholat atau status aplikasi"
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    HybridTextInput(
+                        label = "Nama Saklar",
+                        value = selectedChannel.name,
+                        onValueChange = { v -> updateChannel(selectedIdx) { it.copy(name = v.uppercase()) } },
+                        modifier = Modifier.weight(1f)
+                    )
+                    HybridButton(
+                        label = if (selectedChannel.enabled) "Aktif: ON" else "Aktif: OFF",
+                        isPrimary = selectedChannel.enabled,
+                        onClick = { updateChannel(selectedIdx) { it.copy(enabled = !it.enabled) } }
+                    )
+                    HybridButton(
+                        label = if (isPinOn) "Test Relay: ON" else "Test Relay: OFF",
+                        isPrimary = isPinOn,
+                        onClick = { actions.onToggleManualRelay(selectedChannel.pin, !isPinOn) }
+                    )
+                }
+
+                HybridSegmentedRow(
+                    options = listOf(
+                        "prayer" to "Berdasarkan Waktu Sholat",
+                        "state" to "Berdasarkan Status Aplikasi"
+                    ),
+                    selectedId = selectedChannel.triggerMode,
+                    onSelect = { mode -> updateChannel(selectedIdx) { it.copy(triggerMode = mode) } }
+                )
+
+                if (selectedChannel.triggerMode == "prayer") {
+                    Text(
+                        text = "Kosongkan kolom jika tidak dipakai (contoh: Maghrib ON 30, OFF kosong; Isya ON kosong, OFF 60).",
+                        color = palette.textSecondary,
+                        fontSize = 13.sp
+                    )
+                    prayerLabels.forEach { (prayerId, label) ->
+                        val curSched = selectedChannel.schedules[prayerId] ?: id.algaffar.jwstv.domain.model.PrayerSwitchSchedule()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(palette.bgPrimary.copy(alpha = 0.78f))
+                                .border(1.dp, palette.border, RoundedCornerShape(14.dp))
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = label.uppercase(),
+                                color = palette.accentSecondary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.weight(0.35f)
                             )
-                            HybridButton(
-                                label = "Mode: ${ch.triggerMode.uppercase()}",
-                                onClick = {
-                                    val nextMode = if (ch.triggerMode == "prayer") "state" else "prayer"
-                                    actions.onUpdateSettings { prev ->
-                                        val list = prev.switchSettings.switches.toMutableList()
-                                        list[idx] = ch.copy(triggerMode = nextMode)
-                                        prev.copy(switchSettings = prev.switchSettings.copy(switches = list))
+                            HybridTextInput(
+                                label = "Menyala Sebelum (Menit)",
+                                value = curSched.onOffset?.toString().orEmpty(),
+                                placeholder = "Kosong = tidak dipakai",
+                                onValueChange = { raw ->
+                                    val digits = raw.filter { it.isDigit() }
+                                    val parsed = digits.toIntOrNull()
+                                    updateChannel(selectedIdx) { ch ->
+                                        val nextMap = ch.schedules.toMutableMap()
+                                        nextMap[prayerId] = curSched.copy(onOffset = parsed)
+                                        ch.copy(schedules = nextMap)
                                     }
-                                }
+                                },
+                                modifier = Modifier.weight(1f)
                             )
-                            HybridButton(
-                                label = if (isPinOn) "TEST: ON" else "TEST: OFF",
-                                isPrimary = isPinOn,
-                                onClick = { actions.onToggleManualRelay(ch.pin, !isPinOn) }
+                            HybridTextInput(
+                                label = "Mati Sesudah (Menit)",
+                                value = curSched.offOffset?.toString().orEmpty(),
+                                placeholder = "Kosong = tidak dipakai",
+                                onValueChange = { raw ->
+                                    val digits = raw.filter { it.isDigit() }
+                                    val parsed = digits.toIntOrNull()
+                                    updateChannel(selectedIdx) { ch ->
+                                        val nextMap = ch.schedules.toMutableMap()
+                                        nextMap[prayerId] = curSched.copy(offOffset = parsed)
+                                        ch.copy(schedules = nextMap)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }
+                } else {
+                    Text(
+                        text = "Saklar Otomatis ON/OFF berdasarkan transisi status layar TV (misal Audio Luar / Dalam).",
+                        color = palette.textSecondary,
+                        fontSize = 13.sp
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(palette.bgPrimary.copy(alpha = 0.78f))
+                            .border(1.dp, palette.border, RoundedCornerShape(14.dp))
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("KONDISI MENYALA (ON)", color = Color(0xFF34D399), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            statePresets.forEach { (stId, stLabel) ->
+                                HybridButton(
+                                    label = stLabel,
+                                    isPrimary = selectedChannel.onState == stId,
+                                    onClick = { updateChannel(selectedIdx) { it.copy(onState = stId) } }
+                                )
+                            }
+                        }
+                        HybridNumberStepper(
+                            label = "Offset Waktu ON (Menit)",
+                            value = selectedChannel.onStateOffset,
+                            min = -30,
+                            max = 60,
+                            unit = "mnt",
+                            onValueChange = { v -> updateChannel(selectedIdx) { it.copy(onStateOffset = v) } }
+                        )
+                    }
 
-                    if (ch.triggerMode == "prayer") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            HybridNumberStepper(
-                                label = "Offset Nyala (mnt sblm)",
-                                value = ch.onOffset,
-                                min = -120,
-                                max = 60,
-                                unit = "mnt",
-                                onValueChange = { v ->
-                                    actions.onUpdateSettings { prev ->
-                                        val list = prev.switchSettings.switches.toMutableList()
-                                        list[idx] = ch.copy(onOffset = v)
-                                        prev.copy(switchSettings = prev.switchSettings.copy(switches = list))
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                            HybridNumberStepper(
-                                label = "Offset Mati (mnt ssdh)",
-                                value = ch.offOffset,
-                                min = -30,
-                                max = 180,
-                                unit = "mnt",
-                                onValueChange = { v ->
-                                    actions.onUpdateSettings { prev ->
-                                        val list = prev.switchSettings.switches.toMutableList()
-                                        list[idx] = ch.copy(offOffset = v)
-                                        prev.copy(switchSettings = prev.switchSettings.copy(switches = list))
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(palette.bgPrimary.copy(alpha = 0.78f))
+                            .border(1.dp, palette.border, RoundedCornerShape(14.dp))
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("KONDISI MATI (OFF)", color = Color(0xFFF87171), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            statePresets.forEach { (stId, stLabel) ->
+                                HybridButton(
+                                    label = stLabel,
+                                    isPrimary = selectedChannel.offState == stId,
+                                    onClick = { updateChannel(selectedIdx) { it.copy(offState = stId) } }
+                                )
+                            }
                         }
-                    } else {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            HybridTextInput("ON pada State", ch.onState, { v ->
-                                actions.onUpdateSettings { prev ->
-                                    val list = prev.switchSettings.switches.toMutableList()
-                                    list[idx] = ch.copy(onState = v)
-                                    prev.copy(switchSettings = prev.switchSettings.copy(switches = list))
-                                }
-                            }, modifier = Modifier.weight(1f))
-                            HybridTextInput("OFF pada State", ch.offState, { v ->
-                                actions.onUpdateSettings { prev ->
-                                    val list = prev.switchSettings.switches.toMutableList()
-                                    list[idx] = ch.copy(offState = v)
-                                    prev.copy(switchSettings = prev.switchSettings.copy(switches = list))
-                                }
-                            }, modifier = Modifier.weight(1f))
-                        }
+                        HybridNumberStepper(
+                            label = "Offset Waktu OFF (Menit)",
+                            value = selectedChannel.offStateOffset,
+                            min = -30,
+                            max = 60,
+                            unit = "mnt",
+                            onValueChange = { v -> updateChannel(selectedIdx) { it.copy(offStateOffset = v) } }
+                        )
                     }
                 }
             }

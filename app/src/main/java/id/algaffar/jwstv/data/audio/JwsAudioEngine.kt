@@ -311,6 +311,20 @@ class JwsAudioEngine(
         }
     }
 
+    /**
+     * Releases the underlying [ExoPlayer] if nothing is actively playing,
+     * allowing native decoder/buffer memory to be reclaimed during memory pressure.
+     */
+    fun releaseIfIdle(): Boolean {
+        val player = exoPlayer ?: return false
+        val isPlaying = runCatching { player.isPlaying }.getOrDefault(false)
+        if (activePlaybackKey == null && !isPlaying) {
+            release()
+            return true
+        }
+        return false
+    }
+
     private fun resolveSingleAssetFile(path: String): File? {
         if (path.isBlank()) return null
         val clean = path.removePrefix("jws-assets/").removePrefix("/")
