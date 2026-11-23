@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Upload
@@ -29,10 +30,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import id.algaffar.jwstv.data.location.IndonesiaCityRepository
 import id.algaffar.jwstv.domain.model.AppStateSettings
 import id.algaffar.jwstv.domain.model.PrayerId
 import id.algaffar.jwstv.domain.model.PrayerStageConfig
@@ -93,7 +96,67 @@ fun PrayerAndStagesSettingsTab(
         }
     }
 
+    val context = LocalContext.current
+    val allCities = remember(context) { IndonesiaCityRepository.loadCities(context) }
+    val provinces = remember(allCities) { IndonesiaCityRepository.getProvinces(allCities) }
+    var selectedProvince by remember(p.provinceName) {
+        mutableStateOf(p.provinceName.ifBlank { provinces.firstOrNull() ?: "DKI Jakarta" })
+    }
+    val citiesInProvince = remember(allCities, selectedProvince) {
+        IndonesiaCityRepository.getCitiesInProvince(allCities, selectedProvince)
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        // 0. Pemilih Cepat 38 Provinsi & Kota/Kabupaten Indonesia (Offline)
+        HybridSectionCard(
+            title = "Pemilih Cepat Kota / Kabupaten Indonesia (Offline)",
+            subtitle = if (p.cityName.isNotBlank()) {
+                "Kota aktif: ${p.cityName}, ${p.provinceName} (${p.timezone})"
+            } else {
+                "Pilih provinsi & kota untuk mengisi otomatis Latitude, Longitude, dan Zona Waktu tanpa mengetik manual"
+            }
+        ) {
+            Text("PILIH PROVINSI", color = palette.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                provinces.forEach { prov ->
+                    HybridButton(
+                        label = prov,
+                        isPrimary = (selectedProvince == prov),
+                        onClick = { selectedProvince = prov }
+                    )
+                }
+            }
+
+            Text("PILIH KABUPATEN / KOTA ($selectedProvince)", color = palette.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                citiesInProvince.forEach { city ->
+                    HybridButton(
+                        label = city.city,
+                        isPrimary = (p.cityName == city.city),
+                        onClick = {
+                            actions.onUpdateSettings { prev ->
+                                prev.copy(
+                                    prayerSettings = prev.prayerSettings.copy(
+                                        provinceName = city.province,
+                                        cityName = city.city,
+                                        latitude = city.latitude,
+                                        longitude = city.longitude,
+                                        timezone = city.timezone
+                                    )
+                                )
+                            }
+                        }
+                    )
+                }
+            }
+        }
+
         // 1. Lokasi, Metode, Mazhab, Zona Waktu
         HybridSectionCard(
             title = "Lokasi, Metode Hisab, Mazhab & Koreksi Global",
@@ -372,6 +435,19 @@ fun AudioSholatSettingsTab(
                 text = "Aplikasi menggunakan ExoPlayer Media3 Native Android. File audio disimpan di jws-assets/audio/{tartil|tarhim|adzan}/ dan durasi MP3 otomatis tersinkron dengan hitung mundur Tarhim & Adzan.",
                 accentColor = Color(0xFF38BDF8)
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HybridButton(
+                    label = "Unduh Paket Audio Standar (1-Klik)",
+                    icon = Icons.Default.Download,
+                    isPrimary = true,
+                    onClick = { actions.onDownloadAudioPack("standard_pack") }
+                )
+                HybridButton(
+                    label = "Unduh Paket Adzan Makkah & Madinah",
+                    icon = Icons.Default.Download,
+                    onClick = { actions.onDownloadAudioPack("haramain_pack") }
+                )
+            }
         }
 
         HybridSectionCard(

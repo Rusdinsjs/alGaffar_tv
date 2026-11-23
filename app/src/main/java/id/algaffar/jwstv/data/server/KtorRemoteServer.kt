@@ -3,6 +3,8 @@ package id.algaffar.jwstv.data.server
 import android.content.Context
 import android.os.SystemClock
 import id.algaffar.jwstv.data.auth.AuthManager
+import id.algaffar.jwstv.data.auth.UserRole
+import id.algaffar.jwstv.data.hardware.SwitchController
 import id.algaffar.jwstv.data.media.MediaStorageManager
 import id.algaffar.jwstv.data.media.StorageHealthSnapshot
 import id.algaffar.jwstv.domain.model.AppState
@@ -12,21 +14,27 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
-import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.embeddedServer
-import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.request.header
+import io.ktor.server.request.httpMethod
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveStream
 import io.ktor.server.request.receiveText
+import io.ktor.server.response.header
+import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
+import io.ktor.server.routing.options
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import java.io.File
+import java.net.URI
+import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -110,11 +118,16 @@ class IpRateLimiter(
 class KtorRemoteServer(
     private val context: Context? = null,
     val port: Int = DEFAULT_PORT,
-    val authToken: String = generateSecureToken(),
+    authToken: String? = null,
+    private val tokenStore: RemoteTokenStore? = null,
     private val settingsProvider: () -> AppStateSettings = { AppStateSettings() },
     private val runtimeStatusProvider: () -> RuntimeServerSnapshot = { RuntimeServerSnapshot() },
     private val audioInventoryProvider: () -> Map<String, List<String>> = { emptyMap() },
     private val storageHealthProvider: () -> StorageHealthSnapshot = { StorageHealthSnapshot() },
+    private val clockStatusProvider: () -> ClockStatusSnapshot = { ClockStatusSnapshot() },
+    private val onSyncTimeReceived: (epochMs: Long) -> Result<String> = {
+        Result.failure(UnsupportedOperationException("Sync waktu belum aktif"))
+    },
     private val onCommandReceived: (RemoteCommandPayload) -> Unit = {},
     private val onUploadReceived: (category: String, slot: String, fileName: String, bytes: ByteArray) -> Result<String> = { _, _, _, _ ->
         Result.failure(UnsupportedOperationException("Upload belum aktif"))
@@ -126,6 +139,26 @@ class KtorRemoteServer(
         val isAudioPlaying: Boolean = false,
         val isCustomAudioPlaying: Boolean = false
     )
+
+    data class ClockStatusSnapshot(
+        val isClockSuspect: Boolean = false,
+        val clockOffsetMs: Long = 0L,
+        val deviceTimeIso: String = ""
+    )
+
+    @Volatile
+    private var activeAuthToken: String = authToken?.takeIf { it.isNotBlank() }
+        ?: tokenStore?.getOrCreateRemoteToken()
+        ?: generateSecureToken(DEFAULT_TOKEN_LENGTH)
+
+    val authToken: String
+        get() = activeAuthToken
+
+    fun regenerateAuthToken(): String {
+        val next = tokenStore?.regenerateRemoteToken() ?: generateSecureToken(DEFAULT_TOKEN_LENGTH)
+        activeAuthToken = next
+        return next
+    }
 
     private var engine: CIOApplicationEngine? = null
     private val rateLimiter = IpRateLimiter(maxRequests = 180, windowMillis = 60_000L)
@@ -139,16 +172,34 @@ class KtorRemoteServer(
         if (engine != null) return true
         return try {
             val server = embeddedServer(CIO, host = "0.0.0.0", port = port) {
-                install(CORS) {
-                    anyHost()
-                    allowMethod(HttpMethod.Get)
-                    allowMethod(HttpMethod.Post)
-                    allowMethod(HttpMethod.Options)
-                    allowHeader(HttpHeaders.Authorization)
-                    allowHeader(HttpHeaders.ContentType)
+                intercept(ApplicationCallPipeline.Plugins) {
+                    val origin = call.request.header(HttpHeaders.Origin)
+                    if (!origin.isNullOrBlank()) {
+                        if (!isAllowedLanOrigin(origin)) {
+                            call.respondText(
+                                text = """{"error":"Origin tidak diizinkan (hanya jaringan lokal LAN)"}""",
+                                contentType = ContentType.Application.Json,
+                                status = HttpStatusCode.Forbidden
+                            )
+                            finish()
+                            return@intercept
+                        }
+                        call.response.header(HttpHeaders.AccessControlAllowOrigin, origin)
+                        call.response.header(HttpHeaders.Vary, HttpHeaders.Origin)
+                        call.response.header(HttpHeaders.AccessControlAllowMethods, "GET, POST, OPTIONS")
+                        call.response.header(HttpHeaders.AccessControlAllowHeaders, "Authorization, Content-Type")
+                        if (call.request.httpMethod == HttpMethod.Options) {
+                            call.respond(HttpStatusCode.NoContent)
+                            finish()
+                            return@intercept
+                        }
+                    }
                 }
 
                 routing {
+                    options("{...}") {
+                        call.respond(HttpStatusCode.NoContent)
+                    }
                     get("/") { handleHtmlIndex(call) }
                     get("/remote") { handleHtmlIndex(call) }
                     get("/remote/") { handleHtmlIndex(call) }
@@ -177,9 +228,17 @@ class KtorRemoteServer(
                         )
                     }
 
+                    get("/app-icon.png") {
+                        if (!checkRateLimit(call)) return@get
+                        call.respondBytes(
+                            bytes = MINIMAL_PNG_ICON,
+                            contentType = ContentType.Image.PNG
+                        )
+                    }
+
                     get("/api/status") {
                         if (!checkRateLimit(call)) return@get
-                        if (!checkAuthorized(call)) return@get
+                        if (checkAuthorizedRole(call) == null) return@get
 
                         val statusJson = buildStatusJson()
                         call.respondText(
@@ -191,14 +250,15 @@ class KtorRemoteServer(
 
                     get("/api/backup") {
                         if (!checkRateLimit(call)) return@get
-                        if (!checkAuthorized(call)) return@get
+                        if (checkAuthorizedRole(call) == null) return@get
 
                         val settings = settingsProvider()
                         val backupJson = Json { prettyPrint = true; encodeDefaults = true }
                             .encodeToString(id.algaffar.jwstv.domain.model.AppStateSettings.serializer(), settings)
+                        val slug = sanitizeFileSlug(settings.brand.name)
                         call.response.headers.append(
                             HttpHeaders.ContentDisposition,
-                            "attachment; filename=\"jws-algaffar-backup.json\""
+                            "attachment; filename=\"algaffar-tv-backup-$slug.json\""
                         )
                         call.respondText(
                             text = backupJson,
@@ -207,9 +267,39 @@ class KtorRemoteServer(
                         )
                     }
 
+                    post("/api/sync_time") {
+                        if (!checkRateLimit(call)) return@post
+                        if (checkAuthorizedRole(call) == null) return@post
+
+                        val body = call.receiveText()
+                        val parsedObj = runCatching { Json.parseToJsonElement(body) as? JsonObject }.getOrNull()
+                        val epochMs = (parsedObj?.get("epochMs") as? JsonPrimitive)?.contentOrNull?.toLongOrNull()
+                        if (epochMs == null || epochMs < 1_704_067_200_000L) {
+                            call.respondText(
+                                text = """{"error":"Timestamp epochMs tidak valid"}""",
+                                contentType = ContentType.Application.Json,
+                                status = HttpStatusCode.BadRequest
+                            )
+                            return@post
+                        }
+                        val res = onSyncTimeReceived(epochMs)
+                        res.onSuccess { msg ->
+                            val resp = buildJsonObject {
+                                put("status", "ok")
+                                put("message", msg)
+                            }
+                            call.respondText(resp.toString(), ContentType.Application.Json, HttpStatusCode.OK)
+                        }.onFailure { err ->
+                            val resp = buildJsonObject {
+                                put("error", err.message ?: "Gagal menyinkronkan waktu")
+                            }
+                            call.respondText(resp.toString(), ContentType.Application.Json, HttpStatusCode.BadRequest)
+                        }
+                    }
+
                     post("/api/command") {
                         if (!checkRateLimit(call)) return@post
-                        if (!checkAuthorized(call)) return@post
+                        val callerRole = checkAuthorizedRole(call) ?: return@post
 
                         val body = call.receiveText()
                         if (body.length > MAX_CONTENT_LENGTH) {
@@ -237,9 +327,19 @@ class KtorRemoteServer(
                             return@post
                         }
 
+                        val sanitizedAction = sanitizeInput(action, 64)
+                        if (!isActionAllowedForRole(sanitizedAction, callerRole)) {
+                            call.respondText(
+                                text = """{"error":"Akses ditolak: aksi '$sanitizedAction' hanya untuk Super Admin"}""",
+                                contentType = ContentType.Application.Json,
+                                status = HttpStatusCode.Forbidden
+                            )
+                            return@post
+                        }
+
                         onCommandReceived(
                             RemoteCommandPayload(
-                                action = sanitizeInput(action, 64),
+                                action = sanitizedAction,
                                 rawJson = parsedObj
                             )
                         )
@@ -253,9 +353,17 @@ class KtorRemoteServer(
 
                     post("/api/upload") {
                         if (!checkRateLimit(call)) return@post
-                        if (!checkAuthorized(call)) return@post
+                        val callerRole = checkAuthorizedRole(call) ?: return@post
 
                         val category = sanitizeInput(call.request.queryParameters["category"].orEmpty(), 32).lowercase()
+                        if (category == "ota_apk" && callerRole != UserRole.SUPERADMIN) {
+                            call.respondText(
+                                text = """{"error":"Akses ditolak: pembaruan APK hanya untuk Super Admin"}""",
+                                contentType = ContentType.Application.Json,
+                                status = HttpStatusCode.Forbidden
+                            )
+                            return@post
+                        }
                         val slot = sanitizeInput(call.request.queryParameters["slot"].orEmpty(), 32).lowercase()
                         val fileName = sanitizeInput(
                             call.request.queryParameters["filename"].orEmpty().ifBlank { "upload.bin" },
@@ -383,18 +491,19 @@ class KtorRemoteServer(
         return true
     }
 
-    private suspend fun checkAuthorized(call: ApplicationCall): Boolean {
+    private suspend fun checkAuthorizedRole(call: ApplicationCall): UserRole? {
         val authHeader = call.request.header(HttpHeaders.Authorization)
         val settings = settingsProvider()
-        if (!isAuthorizedHeader(authHeader, authToken, settings)) {
+        val role = resolveAuthorizedRole(authHeader, authToken, settings)
+        if (role == null) {
             call.respondText(
                 text = """{"error":"Unauthorized"}""",
                 contentType = ContentType.Application.Json,
                 status = HttpStatusCode.Unauthorized
             )
-            return false
+            return null
         }
-        return true
+        return role
     }
 
     internal fun buildStatusJson(): JsonObject {
@@ -724,11 +833,21 @@ class KtorRemoteServer(
             }
 
             val storage = storageHealthProvider()
+            val clockStatus = runCatching { clockStatusProvider() }.getOrDefault(ClockStatusSnapshot())
+            val thermalC = readDeviceThermalTempC()
             putJsonObject("system") {
-                put("cpu", 12.5)
+                if (thermalC != null) {
+                    put("thermalTempC", thermalC)
+                }
                 put("ram", ramPct)
                 sysRamPct?.let { put("systemRam", it) }
                 put("uptime", uptimeStr)
+                put("clockSuspect", clockStatus.isClockSuspect)
+                put("clockOffsetMs", clockStatus.clockOffsetMs)
+                if (clockStatus.deviceTimeIso.isNotBlank()) {
+                    put("deviceTimeIso", clockStatus.deviceTimeIso)
+                }
+                put("onboardingCompleted", settings.onboardingCompleted)
                 putJsonObject("storage") {
                     put("usableBytes", storage.usableInternalBytes)
                     put("totalBytes", storage.totalInternalBytes)
@@ -747,6 +866,25 @@ class KtorRemoteServer(
                 }
             }
         }
+    }
+
+    private fun readDeviceThermalTempC(): Double? {
+        val zonePaths = listOf(
+            "/sys/class/thermal/thermal_zone0/temp",
+            "/sys/class/thermal/thermal_zone1/temp",
+            "/sys/devices/virtual/thermal/thermal_zone0/temp"
+        )
+        for (path in zonePaths) {
+            val raw = runCatching {
+                val f = File(path)
+                if (f.exists() && f.canRead()) f.readText().trim().toDoubleOrNull() else null
+            }.getOrNull() ?: continue
+            val celsius = if (raw > 1000.0) raw / 1000.0 else raw
+            if (celsius in 10.0..120.0) {
+                return (celsius * 10.0).toInt() / 10.0
+            }
+        }
+        return null
     }
 
     private fun loadRemoteHtml(): String {
@@ -776,23 +914,27 @@ class KtorRemoteServer(
 
     companion object {
         const val DEFAULT_PORT = 1421
+        const val DEFAULT_TOKEN_LENGTH = RemoteTokenStore.DEFAULT_TOKEN_LENGTH
         private const val MAX_CONTENT_LENGTH = 65_536
+        private const val MAX_APK_UPLOAD_BYTES = 180L * 1024L * 1024L
+
+        private val SUPERADMIN_ONLY_ACTIONS = setOf(
+            "update_admin_pin",
+            "regenerate_remote_token",
+            "clear_logs",
+            "factory_reset",
+            "ota_install"
+        )
 
         fun maxUploadBytesForCategory(category: String): Long = when (category.lowercase()) {
+            "ota_apk" -> MAX_APK_UPLOAD_BYTES
             "slide_video", "video" -> MediaStorageManager.MAX_VIDEO_UPLOAD_BYTES
             "tartil", "tarhim", "adzan", "custom" -> MediaStorageManager.MAX_AUDIO_UPLOAD_BYTES
             else -> MediaStorageManager.MAX_IMAGE_UPLOAD_BYTES
         }
 
-        fun generateSecureToken(length: Int = 8): String {
-            val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-            val random = SecureRandom()
-            return buildString(length) {
-                repeat(length) {
-                    append(chars[random.nextInt(chars.length)])
-                }
-            }
-        }
+        fun generateSecureToken(length: Int = DEFAULT_TOKEN_LENGTH): String =
+            RemoteTokenStore.generateSecureToken(length)
 
         fun sanitizeInput(input: String, maxLength: Int = 256): String {
             return input
@@ -802,32 +944,73 @@ class KtorRemoteServer(
                 .take(maxLength)
         }
 
+        fun sanitizeFileSlug(raw: String): String {
+            return raw.lowercase()
+                .replace(Regex("[^a-z0-9]+"), "-")
+                .trim('-')
+                .ifBlank { "masjid" }
+                .take(40)
+        }
+
         /**
-         * Validates `Authorization: Bearer <token>` against:
-         * 1. The server's generated [serverToken]
-         * 2. Any valid `superadmin` or `admin` PIN in [settings] (including default `732911`).
+         * Restricts CORS origins strictly to localhost or private LAN IP ranges
+         * so external websites opened in a caretaker's phone browser cannot trigger cross-site commands.
          */
-        fun isAuthorizedHeader(
+        fun isAllowedLanOrigin(origin: String?): Boolean {
+            if (origin.isNullOrBlank()) return true
+            val host = runCatching { URI(origin.trim()).host }.getOrNull()?.lowercase()?.trim() ?: return false
+            if (host.isEmpty()) return false
+            if (host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]") return true
+            return SwitchController.isPrivateOrLocalIp(host)
+        }
+
+        fun isActionAllowedForRole(action: String, role: UserRole): Boolean {
+            val normalized = action.trim().lowercase()
+            if (normalized in SUPERADMIN_ONLY_ACTIONS) {
+                return role == UserRole.SUPERADMIN
+            }
+            return role == UserRole.SUPERADMIN || role == UserRole.ADMIN
+        }
+
+        /**
+         * Resolves the authorized [UserRole] from `Authorization: Bearer <token>` against:
+         * 1. The server's persistent random [serverToken] (grants [UserRole.SUPERADMIN] for QR-paired devices)
+         * 2. Any configured `superadmin` or `admin` account PIN in [settings] (no hardcoded backdoor!).
+         */
+        fun resolveAuthorizedRole(
             authHeader: String?,
             serverToken: String,
             settings: AppStateSettings
-        ): Boolean {
-            if (authHeader.isNullOrBlank()) return false
+        ): UserRole? {
+            if (authHeader.isNullOrBlank()) return null
             val prefix = "Bearer "
-            if (!authHeader.startsWith(prefix, ignoreCase = true)) return false
+            if (!authHeader.startsWith(prefix, ignoreCase = true)) return null
             val provided = authHeader.substring(prefix.length).trim()
-            if (provided.isEmpty()) return false
+            if (provided.isEmpty()) return null
 
-            if (provided.equals(serverToken, ignoreCase = true)) return true
-            if (provided == AuthManager.DEFAULT_SUPERADMIN_PIN) return true
+            if (serverToken.isNotBlank() && MessageDigest.isEqual(
+                    provided.toByteArray(Charsets.UTF_8),
+                    serverToken.toByteArray(Charsets.UTF_8)
+                )
+            ) {
+                return UserRole.SUPERADMIN
+            }
 
             val matchedUser = AuthManager.authenticate(
                 username = "",
                 rawPin = provided,
                 users = settings.users
-            )
-            return matchedUser != null && matchedUser.role.lowercase() in setOf("superadmin", "admin")
+            ) ?: return null
+
+            val role = UserRole.fromId(matchedUser.role)
+            return if (role == UserRole.SUPERADMIN || role == UserRole.ADMIN) role else null
         }
+
+        fun isAuthorizedHeader(
+            authHeader: String?,
+            serverToken: String,
+            settings: AppStateSettings
+        ): Boolean = resolveAuthorizedRole(authHeader, serverToken, settings) != null
 
         /**
          * Finds the device's LAN IPv4 address, prioritizing `192.168.x.x` > `10.x.x.x` > `172.x.x.x`.
@@ -867,9 +1050,9 @@ class KtorRemoteServer(
         }
 
         private const val REMOTE_MANIFEST_JSON = """{
-            "name": "JWS Remote Control",
-            "short_name": "JWS Remote",
-            "description": "Premium Control Center for JWS Al-Gaffar",
+            "name": "Al-Gaffar TV Remote",
+            "short_name": "Al-Gaffar TV",
+            "description": "Remote Control Center for Al-Gaffar TV JWS Masjid",
             "start_url": "/remote",
             "scope": "/",
             "display": "standalone",
@@ -878,7 +1061,7 @@ class KtorRemoteServer(
             "theme_color": "#0a0a0c",
             "icons": [
                 {
-                    "src": "alGaffar.png",
+                    "src": "app-icon.png",
                     "sizes": "192x192",
                     "type": "image/png",
                     "purpose": "any maskable"

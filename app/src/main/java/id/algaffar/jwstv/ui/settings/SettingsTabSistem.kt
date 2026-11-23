@@ -116,16 +116,40 @@ fun RemoteNetworkSettingsTab(actions: SettingsActions) {
                         .clip(RoundedCornerShape(14.dp))
                         .background(palette.bgPrimary.copy(alpha = 0.85f))
                         .border(1.dp, palette.border, RoundedCornerShape(14.dp))
-                        .padding(16.dp)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("TOKEN AKSES / PIN ADMIN", color = palette.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        text = actions.remoteAuthToken.ifBlank { "732911" },
-                        color = palette.accentSecondary,
-                        fontSize = 20.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Black
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("TOKEN AKSES PERSISTEN (32 KARAKTER)", color = palette.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = actions.remoteAuthToken.ifBlank { "(Belum tersedia)" },
+                                color = palette.accentSecondary,
+                                fontSize = 15.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                        HybridButton(
+                            label = "Regenerate Token",
+                            icon = Icons.Default.Refresh,
+                            isDanger = true,
+                            onClick = actions.onRegenerateRemoteToken
+                        )
+                    }
+                    if (actions.deviceCode.isNotBlank()) {
+                        Text(
+                            text = "Device ID STB (Pemulihan CS): ${actions.deviceCode}",
+                            color = palette.textSecondary,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
                 Row(
@@ -165,7 +189,7 @@ fun UserManagementSettingsTab(
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         HybridSectionCard(
             title = "Daftar Akun Pengurus DKM (${settings.users.size} Akun)",
-            subtitle = "Sistem autentikasi PIN SHA-256 dengan 3 tingkat hak akses (Super Admin, Admin DKM, Operator)"
+            subtitle = "Sistem autentikasi PIN PBKDF2-SHA256 (salted) dengan 3 tingkat hak akses (Super Admin, Admin DKM, Operator)"
         ) {
             settings.users.forEach { acc ->
                 val isSuperadmin = acc.role.equals("superadmin", ignoreCase = true)
@@ -257,7 +281,7 @@ fun UserManagementSettingsTab(
                         val acc = UserAccount(
                             id = "user-${System.currentTimeMillis()}",
                             username = newUsername.trim(),
-                            pinHash = AuthManager.sha256Hex(newPin),
+                            pinHash = AuthManager.hashPinPbkdf2(newPin),
                             role = newRole.id
                         )
                         actions.onUpdateSettings { prev ->
@@ -418,6 +442,35 @@ fun BackupRestoreSettingsTab(actions: SettingsActions) {
             HybridInfoBanner(
                 text = "Direktori aset aktif: ${actions.assetsRootDir?.absolutePath ?: "jws-assets/"}. Restore otomatis memigrasikan path asset.localhost dari aplikasi Tauri versi desktop/lama.",
                 accentColor = Color(0xFF14B8A6)
+            )
+        }
+
+        // 4. Pembaruan Aplikasi (OTA Online & Offline USB) + Onboarding Wizard
+        HybridSectionCard(
+            title = "Pembaruan Al-Gaffar TV (OTA) & Setup Perdana",
+            subtitle = "Perbarui aplikasi via internet (verifikasi SHA-256) atau offline dari file APK di Flashdisk USB / Remote HP"
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HybridButton(
+                    label = "Cek Pembaruan Online (OTA)",
+                    icon = Icons.Default.Download,
+                    isPrimary = true,
+                    onClick = actions.onCheckOtaUpdate
+                )
+                HybridButton(
+                    label = "Update APK dari Flashdisk USB",
+                    icon = Icons.Default.Upload,
+                    onClick = actions.onInstallOtaApkFromUsb
+                )
+                HybridButton(
+                    label = "Buka Ulang Wizard Setup Perdana",
+                    icon = Icons.Default.Refresh,
+                    onClick = actions.onReopenOnboarding
+                )
+            }
+            HybridInfoBanner(
+                text = "Versi terpasang: Al-Gaffar TV v${id.algaffar.jwstv.BuildConfig.VERSION_NAME} (Build ${id.algaffar.jwstv.BuildConfig.VERSION_CODE}) • Device ID: ${actions.deviceCode.ifBlank { "-" }}. Untuk STB tanpa internet, Anda juga dapat mengunggah file .apk melalui Remote PWA di HP.",
+                accentColor = Color(0xFF38BDF8)
             )
         }
     }
@@ -704,7 +757,7 @@ fun RemoteHelpSettingsTab() {
         "Back / ESC" to "Kembali atau Tutup Modal Pengaturan",
         "Bar Kategori Bawah" to "5 Kategori Utama: Masjid, Sholat, Tampilan, Acara, Sistem",
         "Bar Sub-Menu" to "Sub-menu horizontal untuk setiap kategori dengan highlight fokus kuning",
-        "Panel Simulasi" to "Uji langsung seluruh 31 State (Adzan, Doa Adzan, Jum'at, Tarawih, CCTV, Live)"
+        "Panel Simulasi" to "Uji langsung seluruh 30 State (Adzan, Doa Adzan, Jum'at, Tarawih, Hari Raya, Qurban, Live, QR)"
     )
 
     HybridSectionCard(

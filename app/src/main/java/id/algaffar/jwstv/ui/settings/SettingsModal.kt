@@ -185,7 +185,10 @@ fun SettingsModal(
     if (currentUser == null) {
         PinLoginGuardScreen(
             users = settings.users,
+            deviceCode = actions.deviceCode,
             onAuthenticated = { authenticatedUser = it },
+            onUpgradePinHash = actions.onUpgradeUserPinHash,
+            onResetSuperadminPin = actions.onResetSuperadminPin,
             onCancel = onClose
         )
         return
@@ -286,7 +289,7 @@ fun SettingsModal(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     HybridButton(
-                        label = "Simulasi 31-State",
+                        label = "Simulasi 30-State",
                         icon = Icons.Default.PlayArrow,
                         onClick = actions.onOpenDebugSimulator
                     )

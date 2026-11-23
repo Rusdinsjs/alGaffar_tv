@@ -34,6 +34,8 @@ data class PrayerCorrections(
 
 @Serializable
 data class PrayerSettings(
+    val provinceName: String = "",
+    val cityName: String = "",
     val latitude: Double = -1.2379,
     val longitude: Double = 116.8529,
     val timezone: String = "Asia/Makassar",
@@ -47,9 +49,9 @@ data class PrayerSettings(
 
 @Serializable
 data class BrandSettings(
-    val name: String = "MASJID AL-GAFFAR",
-    val address: String = "Jl. Perjuangan, Balikpapan, Kalimantan Timur",
-    val phone: String = "0812-3456-7890",
+    val name: String = "MASJID ANDA",
+    val address: String = "Atur Alamat Masjid melalui Pengaturan atau Wizard",
+    val phone: String = "",
     val logo: String = "",
     val titleFontSize: Int = 36,
     val addressFontSize: Int = 18,
@@ -252,6 +254,7 @@ data class SirineSettings(
 data class RamadhanSettings(
     val isRamadhan: Boolean = false,
     val currentNight: Int = 1,
+    val autoSyncNightFromHijri: Boolean = true,
     val hijriYear: String = "1447",
     val tarawihDuration: Int = 15,        // minutes for kultum/info before sholat tarawih
     val ceramahDuration: Int = 0,         // optional dedicated ceramah tarawih phase (minutes)
@@ -441,7 +444,7 @@ data class ScreenSaverSchedule(
 data class ScreenSaverSettings(
     val enabled: Boolean = false,
     val schedules: List<ScreenSaverSchedule> = listOf(ScreenSaverSchedule()),
-    val message: String = "Mode Hemat Daya — Masjid Al-Gaffar"
+    val message: String = "Mode Hemat Daya — Al-Gaffar TV"
 )
 
 // ==================== LIVE, QR, ONLINE FINANCE, CUSTOM AUDIO ====================
@@ -463,6 +466,10 @@ data class LiveSettings(
     val customVideoId: String = "",
     val makkahVideoId: String = "Cm1v4bteXbI",
     val madinahVideoId: String = "9A1S0xAPVIs",
+    val makkahHlsUrl: String = "",
+    val madinahHlsUrl: String = "",
+    val customStreamUrl: String = "",
+    val preferNativeHls: Boolean = true,
     val muted: Boolean = false,
     val showInMainSlide: Boolean = false,
     val directLiveEnabled: Boolean = false,
@@ -476,13 +483,24 @@ data class LiveSettings(
             "madinah" -> madinahVideoId
             else -> customVideoId.ifBlank { makkahVideoId }
         }
+
+    val activeHlsUrl: String
+        get() = when (source) {
+            "makkah" -> makkahHlsUrl.trim()
+            "madinah" -> madinahHlsUrl.trim()
+            else -> customStreamUrl.trim().takeIf {
+                it.startsWith("http://", true) || it.startsWith("https://", true)
+            }?.takeIf {
+                it.contains(".m3u8", true) || it.contains("/hls/", true)
+            }.orEmpty()
+        }
 }
 
 @Serializable
 data class MasjidQrSettings(
     val enabled: Boolean = false,
-    val label: String = "Infaq & Sedekah Digital Masjid Al-Gaffar",
-    val link: String = "https://masjidalgaffar.id/infaq",
+    val label: String = "Infaq & Sedekah Digital Masjid",
+    val link: String = "",
     val customQrImage: String = "",
     val showFloatingOnMain: Boolean = true,
     val bankName: String = "",
@@ -789,7 +807,8 @@ data class MediaDisplaySettings(
 
 @Serializable
 data class AppStateSettings(
-    val schemaVersion: Int = 3,
+    val schemaVersion: Int = 4,
+    val onboardingCompleted: Boolean = false,
     val currentState: AppState = AppState.STANDBY,
     val brand: BrandSettings = BrandSettings(),
     val prayerSettings: PrayerSettings = PrayerSettings(),
@@ -816,8 +835,8 @@ data class AppStateSettings(
     val performanceMode: Boolean = true,
     val virtualKeyboardMode: String = "auto", // "auto" | "enabled" | "disabled"
     val overlayTextList: List<String> = listOf(
-        "Selamat datang di Masjid Al-Gaffar — Mohon luruskan dan rapatkan shaf serta nonaktifkan dering HP saat sholat berlangsung.",
-        "Mari makmurkan masjid dengan sholat berjamaah tepat waktu dan infaq terbaik melalui QRIS Masjid Al-Gaffar."
+        "Selamat datang — Mohon luruskan dan rapatkan shaf serta nonaktifkan dering HP saat sholat berlangsung.",
+        "Mari makmurkan masjid dengan sholat berjamaah tepat waktu dan infaq terbaik."
     ),
     val overlayVisibleDuration: Int = 45, // seconds visible
     val overlayHiddenDuration: Int = 10,  // seconds hidden
@@ -833,7 +852,7 @@ data class AppStateSettings(
             id = "info-2",
             title = "INFAQ & SEDEKAH",
             content = "Salurkan Infaq Terbaik Anda",
-            subtitle = "Via QRIS Masjid Al-Gaffar"
+            subtitle = "Melalui Kotak Amal / QRIS Masjid"
         )
     ),
     val users: List<UserAccount> = listOf(UserAccount())

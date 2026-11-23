@@ -140,8 +140,8 @@ class Phase5ServerAndHardwareTest {
 
         // 1. Server generated token
         assertTrue(KtorRemoteServer.isAuthorizedHeader("Bearer SECRET99", "SECRET99", settings))
-        // 2. Default superadmin PIN
-        assertTrue(KtorRemoteServer.isAuthorizedHeader("Bearer 732911", "SECRET99", settings))
+        // 2. Hardcoded default PIN 732911 must be REJECTED once custom accounts are configured (no backdoor!)
+        assertFalse(KtorRemoteServer.isAuthorizedHeader("Bearer 732911", "SECRET99", settings))
         // 3. Configured admin PIN
         assertTrue(KtorRemoteServer.isAuthorizedHeader("Bearer 654321", "SECRET99", settings))
         // 4. Reject invalid token

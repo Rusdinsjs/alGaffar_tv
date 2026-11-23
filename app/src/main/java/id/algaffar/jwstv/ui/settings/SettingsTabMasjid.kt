@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import id.algaffar.jwstv.config.AppEndpoints
 import id.algaffar.jwstv.domain.model.AppStateSettings
 import id.algaffar.jwstv.ui.screens.standby.generateQrBitmap
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
@@ -386,7 +387,8 @@ fun OnlineFinanceSettingsTab(
                         val dataUrl = URLEncoder.encode(fin.sheetUrl.trim(), "UTF-8")
                         val rek = URLEncoder.encode("${fin.bankName} ${fin.nomorRekening}".trim(), "UTF-8")
                         val an = URLEncoder.encode(fin.atasNama.ifBlank { "DKM Masjid" }, "UTF-8")
-                        val generated = "https://charming-lily-4e4270.netlify.app/?data=$dataUrl&nama=$nama&rek=$rek&an=$an"
+                        val base = AppEndpoints.FINANCE_VIEWER_BASE_URL.trimEnd('/')
+                        val generated = "$base/?data=$dataUrl&nama=$nama&rek=$rek&an=$an"
                         actions.onUpdateSettings { it.copy(onlineFinance = it.onlineFinance.copy(reportUrl = generated)) }
                     }
                 )

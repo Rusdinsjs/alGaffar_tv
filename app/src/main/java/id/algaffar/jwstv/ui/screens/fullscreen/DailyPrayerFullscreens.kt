@@ -378,7 +378,7 @@ internal fun FullscreenBrandHeader(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = brand.name.ifBlank { "MASJID AL-GAFFAR" },
+                text = brand.name.ifBlank { "MASJID ANDA" },
                 color = Color.White,
                 fontSize = titleFontSp.sp,
                 lineHeight = (titleFontSp + 4).sp,

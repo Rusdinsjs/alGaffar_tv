@@ -1,5 +1,6 @@
 package id.algaffar.jwstv.data.repository
 
+import id.algaffar.jwstv.data.logging.AppLogger
 import id.algaffar.jwstv.domain.model.AppStateSettings
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -12,9 +13,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.FileOutputStream
 
 /**
- * Atomic JSON-backed repository for [AppStateSettings].
+ * Atomic JSON-backed repository for [AppStateSettings] with dual-file `.bak` power-loss resilience.
  * Directly supports importing/restoring legacy Tauri `settings.json` files.
  */
 class SettingsRepository(
@@ -22,6 +24,7 @@ class SettingsRepository(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     private val mutex = Mutex()
+    private val backupFile: File = File(storageFile.parentFile, "${storageFile.name}.bak")
 
     val jsonSerializer: Json = Json {
         ignoreUnknownKeys = true
@@ -38,31 +41,66 @@ class SettingsRepository(
         get() = _settingsFlow.value
 
     private fun loadInitialFromDisk(): AppStateSettings {
-        return try {
-            if (storageFile.exists() && storageFile.length() > 0L) {
-                val raw = storageFile.readText(Charsets.UTF_8)
-                val parsed = jsonSerializer.decodeFromString<AppStateSettings>(migrateLegacyJsonPaths(raw))
-                migrateSettingsSchema(parsed)
-            } else {
-                AppStateSettings()
+        val primary = tryReadSettingsFile(storageFile)
+        if (primary != null) return primary
+
+        // Preserve corrupted primary file for diagnostics before falling back to `.bak`
+        if (storageFile.exists() && storageFile.length() > 0L) {
+            runCatching {
+                val quarantine = File(
+                    storageFile.parentFile,
+                    "${storageFile.name}.corrupt.${System.currentTimeMillis()}.json"
+                )
+                storageFile.copyTo(quarantine, overwrite = true)
             }
-        } catch (_: Exception) {
-            AppStateSettings()
+            AppLogger.error("STORAGE", "jws_settings.json rusak saat boot — mencoba pemulihan otomatis dari .bak")
         }
+
+        val recovered = tryReadSettingsFile(backupFile)
+        if (recovered != null) {
+            AppLogger.warn("STORAGE", "Pengaturan masjid berhasil dipulihkan dari salinan cadangan (.bak)!")
+            runCatching { writeAtomicWithSync(storageFile, jsonSerializer.encodeToString(recovered)) }
+            return recovered
+        }
+
+        return AppStateSettings()
     }
 
-    private fun migrateSettingsSchema(settings: AppStateSettings): AppStateSettings {
-        if (settings.schemaVersion >= 3) return settings
-        val hasSystemSlides = settings.slides.any { it.type == "welcome" || it.type == "analog_clock" }
-        val migratedSlides = if (hasSystemSlides) {
-            settings.slides
-        } else {
-            id.algaffar.jwstv.domain.model.SlideItem.defaultSystemSlides() + settings.slides
+    private fun tryReadSettingsFile(file: File): AppStateSettings? {
+        if (!file.exists() || file.length() == 0L) return null
+        return runCatching {
+            val raw = file.readText(Charsets.UTF_8)
+            val parsed = jsonSerializer.decodeFromString<AppStateSettings>(migrateLegacyJsonPaths(raw))
+            migrateSettingsSchema(parsed, fromExistingDisk = true)
+        }.getOrNull()
+    }
+
+    private fun migrateSettingsSchema(
+        settings: AppStateSettings,
+        fromExistingDisk: Boolean = true
+    ): AppStateSettings {
+        var current = settings
+        if (current.schemaVersion < 3) {
+            val hasSystemSlides = current.slides.any { it.type == "welcome" || it.type == "analog_clock" }
+            val migratedSlides = if (hasSystemSlides) {
+                current.slides
+            } else {
+                id.algaffar.jwstv.domain.model.SlideItem.defaultSystemSlides() + current.slides
+            }
+            current = current.copy(
+                schemaVersion = 3,
+                slides = migratedSlides
+            )
         }
-        return settings.copy(
-            schemaVersion = 3,
-            slides = migratedSlides
-        )
+        if (current.schemaVersion < 4) {
+            // Existing installations upgraded from v<=3 already configured their mosque;
+            // mark onboardingCompleted = true so they don't get interrupted on upgrade.
+            current = current.copy(
+                schemaVersion = 4,
+                onboardingCompleted = if (fromExistingDisk) true else current.onboardingCompleted
+            )
+        }
+        return current
     }
 
     suspend fun updateSettings(transform: (AppStateSettings) -> AppStateSettings): AppStateSettings {
@@ -88,7 +126,10 @@ class SettingsRepository(
     suspend fun importBackupJson(rawJson: String): Result<AppStateSettings> {
         return runCatching {
             val normalizedJson = migrateLegacyJsonPaths(rawJson)
-            val parsed = migrateSettingsSchema(jsonSerializer.decodeFromString<AppStateSettings>(normalizedJson))
+            val parsed = migrateSettingsSchema(
+                jsonSerializer.decodeFromString<AppStateSettings>(normalizedJson),
+                fromExistingDisk = true
+            )
             replaceSettings(parsed)
             parsed
         }
@@ -99,12 +140,26 @@ class SettingsRepository(
     }
 
     private suspend fun persistToDisk(settings: AppStateSettings) = withContext(ioDispatcher) {
-        storageFile.parentFile?.mkdirs()
-        val tempFile = File(storageFile.parentFile, "${storageFile.name}.tmp")
         val content = jsonSerializer.encodeToString(settings)
-        tempFile.writeText(content, Charsets.UTF_8)
-        if (!tempFile.renameTo(storageFile)) {
-            storageFile.writeText(content, Charsets.UTF_8)
+        writeAtomicWithSync(storageFile, content)
+        // Maintain verified `.bak` mirror for automatic recovery after sudden power loss
+        runCatching { writeAtomicWithSync(backupFile, content) }
+    }
+
+    private fun writeAtomicWithSync(targetFile: File, content: String) {
+        targetFile.parentFile?.mkdirs()
+        val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
+        FileOutputStream(tempFile).use { fos ->
+            fos.write(content.toByteArray(Charsets.UTF_8))
+            fos.flush()
+            runCatching { fos.fd.sync() }
+        }
+        if (!tempFile.renameTo(targetFile)) {
+            FileOutputStream(targetFile).use { fos ->
+                fos.write(content.toByteArray(Charsets.UTF_8))
+                fos.flush()
+                runCatching { fos.fd.sync() }
+            }
             tempFile.delete()
         }
     }

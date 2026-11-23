@@ -11,13 +11,14 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import id.algaffar.jwstv.JwsApplication
 import id.algaffar.jwstv.MainActivity
 
 /**
- * 24/7 Kiosk Foreground Service for Android TV / STB / Mini PC.
- * Prevents the OS from reclaiming the JWS TV process during long idle periods,
- * keeping the 1Hz prayer state engine, Media3 audio engine, Ktor port 1421 server,
- * and 8-channel relay controller active continuously.
+ * 24/7 Kiosk Foreground Service for Al-Gaffar TV on Android TV / STB.
+ * Ensures [id.algaffar.jwstv.runtime.JwsRuntimeEngine] (1Hz prayer state engine,
+ * Media3 audio engine, Ktor port 1421 server, and 8-channel relay controller)
+ * stays alive continuously even if [MainActivity] is recreated or paused.
  */
 class JwsForegroundService : Service() {
 
@@ -38,9 +39,11 @@ class JwsForegroundService : Service() {
         } catch (_: Exception) {
             // Graceful fallback if started while background restrictions apply
         }
+        (application as? JwsApplication)?.container?.runtimeEngine?.ensureStarted()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        (application as? JwsApplication)?.container?.runtimeEngine?.ensureStarted()
         return START_STICKY
     }
 
@@ -50,7 +53,7 @@ class JwsForegroundService : Service() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Layanan JWS TV Masjid Al-Gaffar 24/7",
+            "Layanan Al-Gaffar TV 24/7",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
             description = "Menjaga jadwal sholat, adzan otomatis, saklar relay, dan remote server tetap aktif 24/7."
@@ -72,8 +75,8 @@ class JwsForegroundService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("JWS TV Masjid Al-Gaffar Aktif")
-            .setContentText("Mesin Waktu Sholat, Audio Adzan & Remote Server (Port 1421) Berjalan")
+            .setContentTitle("Al-Gaffar TV Aktif 24/7")
+            .setContentText("Mesin Waktu Sholat, Audio Adzan, Saklar Relay & Remote Server (Port 1421) Berjalan")
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(pendingIntent)

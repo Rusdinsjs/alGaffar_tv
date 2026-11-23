@@ -175,7 +175,8 @@ class Phase4ManagersTest {
             val settingsFile = tempDir.resolve("jws_settings.json")
             settingsFile.writeText("""{"schemaVersion":2,"slides":[]}""", Charsets.UTF_8)
             val repo = SettingsRepository(storageFile = settingsFile)
-            assertEquals(3, repo.currentSettings.schemaVersion)
+            assertEquals(4, repo.currentSettings.schemaVersion)
+            assertTrue(repo.currentSettings.onboardingCompleted)
             assertTrue(repo.currentSettings.slides.any { it.type == "welcome" })
             assertTrue(repo.currentSettings.slides.any { it.type == "analog_clock" })
         } finally {

@@ -110,9 +110,9 @@ fun WaktuJumatFullscreen(
             ?: JwsStateMachine.snapToNearestFriday(today).toString()
     }
     val petugasRec = jumat.petugas.records[effPetugasDate] ?: JumatPetugasRecord(
-        khotib = "Ust. H. Ahmad Fauzi, Lc., M.Ag.",
-        imam = "Ust. Muhammad Ridwan, Al-Hafizh",
-        muadzin = "Sdr. Abdullah Al-Gaffar"
+        khotib = "Ust. Khotib (Atur di Pengaturan)",
+        imam = "Ust. Imam (Atur di Pengaturan)",
+        muadzin = "Sdr. Muadzin"
     )
 
     val effKeuDate = remember(jumat.keuangan.records, today) {
@@ -1540,9 +1540,9 @@ fun MasjidQrFullscreen(
         snapshot = snapshot,
         badgeLabel = "INFAQ & QRIS MASJID",
         badgeIcon = Icons.Default.QrCode2,
-        title = qrCfg.label.ifBlank { "Infaq & Sedekah Digital Masjid Al-Gaffar" },
+        title = qrCfg.label.ifBlank { "Infaq & Sedekah Digital ${snapshot.settings.brand.name}" },
         guidance = "Pindai QR Code di samping menggunakan aplikasi Mobile Banking atau E-Wallet (QRIS) Anda untuk menyalurkan infaq & sedekah terbaik.",
-        qrPayload = qrCfg.link.ifBlank { "https://masjidalgaffar.id/infaq" },
+        qrPayload = qrCfg.link.ifBlank { "Infaq Digital ${snapshot.settings.brand.name}" },
         customQrImage = qrCfg.customQrImage,
         bankName = qrCfg.bankName.ifBlank { finance.bankName },
         nomorRekening = qrCfg.nomorRekening.ifBlank { finance.nomorRekening },

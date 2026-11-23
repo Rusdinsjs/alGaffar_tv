@@ -64,11 +64,13 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import kotlinx.coroutines.delay
 import kotlin.math.abs
+import id.algaffar.jwstv.data.server.KtorRemoteServer
 import id.algaffar.jwstv.domain.model.AppState
 import id.algaffar.jwstv.domain.model.LayoutPosition
 import id.algaffar.jwstv.service.JwsForegroundService
 import id.algaffar.jwstv.ui.MainViewModel
 import id.algaffar.jwstv.ui.components.Responsive1080pCanvas
+import id.algaffar.jwstv.ui.onboarding.FirstRunOnboardingWizard
 import id.algaffar.jwstv.ui.screens.fullscreen.FullScreenRouter
 import id.algaffar.jwstv.ui.screens.standby.LogoQuickMenuCard
 import id.algaffar.jwstv.ui.settings.LocalVirtualKeyboardPolicy
@@ -516,6 +518,13 @@ class MainActivity : ComponentActivity() {
                         }
                     ) {
                         IslamicAmbientBackground(palette = activePalette) {
+                            if (!snapshot.settings.onboardingCompleted) {
+                                FirstRunOnboardingWizard(
+                                    snapshot = snapshot,
+                                    onTestBeep = { viewModel.testPlayBeep1000Hz() },
+                                    onCompleteOnboarding = { transform -> viewModel.updateSettings(transform) }
+                                )
+                            } else {
                             FullScreenRouter(
                                 snapshot = snapshot,
                                 assetsRootDir = viewModel.assetsRootDir,
@@ -524,6 +533,26 @@ class MainActivity : ComponentActivity() {
                                 onOpenDebugModal = { isDebugModalOpen = true },
                                 onExitManualSimulation = { viewModel.clearSimulation() }
                             )
+
+                            // No-RTC STB Clock Integrity Warning Banner
+                            if (snapshot.isClockSuspect && !isSettingsModalOpen) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .padding(top = 12.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0xFF991B1B).copy(alpha = 0.94f))
+                                        .border(2.dp, Color(0xFFFBBF24), RoundedCornerShape(14.dp))
+                                        .padding(horizontal = 24.dp, vertical = 10.dp)
+                                ) {
+                                    Text(
+                                        text = "⚠ JAM STB BELUM SINKRON (TANPA BATERAI RTC) — Sambungkan WiFi atau buka Remote HP (${snapshot.remoteServerUrl}) untuk menyamakan jam!",
+                                        color = Color.White,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                            }
 
                             // Floating Quick Action Menu (triggered by clicking the Mosque Logo OR pressing D-Pad UP)
                             if (isLogoMenuOpen && !isSettingsModalOpen && !isDebugModalOpen && activeFilePickerRequest == null) {
@@ -564,7 +593,8 @@ class MainActivity : ComponentActivity() {
                                     actions = SettingsActions(
                                         onUpdateSettings = { viewModel.updateSettings(it) },
                                         onExportTakjilTemplate = {
-                                            val fileName = "Template_Takjil_Ramadhan_AlGaffar.xlsx"
+                                            val slug = KtorRemoteServer.sanitizeFileSlug(snapshot.settings.brand.name)
+                                            val fileName = "Template_Takjil_Ramadhan_$slug.xlsx"
                                             val mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                             if (canHandleCreateDocument(mime)) {
                                                 runCatching { exportTakjilExcelLauncher.launch(fileName) }.onFailure {
@@ -597,7 +627,8 @@ class MainActivity : ComponentActivity() {
                                             )
                                         },
                                         onExportBackupZip = {
-                                            val fileName = "Backup_JWS_Masjid_AlGaffar.zip"
+                                            val slug = KtorRemoteServer.sanitizeFileSlug(snapshot.settings.brand.name)
+                                            val fileName = "Backup_AlGaffarTV_$slug.zip"
                                             val mime = "application/zip"
                                             if (canHandleCreateDocument(mime)) {
                                                 runCatching { exportBackupZipLauncher.launch(fileName) }.onFailure {
@@ -766,17 +797,45 @@ class MainActivity : ComponentActivity() {
                                         remoteServerUrl = snapshot.remoteServerUrl,
                                         remoteQrPairingUrl = snapshot.remoteQrPairingUrl,
                                         remoteAuthToken = snapshot.remoteAuthToken,
+                                        deviceCode = snapshot.deviceCode,
                                         relayPinStates = relayPinStates,
                                         onlineFinanceTestResult = onlineFinanceTestResult,
                                         audioInventoryTick = audioInventoryTick,
                                         previewingAudioKey = previewingAudioKey,
-                                        isLiveActiveNow = snapshot.tickResult.state == AppState.LIVE
+                                        isLiveActiveNow = snapshot.tickResult.state == AppState.LIVE,
+                                        onRegenerateRemoteToken = { viewModel.regenerateRemoteToken() },
+                                        onResetSuperadminPin = { viewModel.resetSuperadminPin(it) },
+                                        onUpgradeUserPinHash = { id, pin -> viewModel.upgradeUserPinHash(id, pin) },
+                                        onRequestUsbPermission = { viewModel.requestUsbRelayPermission() },
+                                        onReopenOnboarding = {
+                                            isSettingsModalOpen = false
+                                            viewModel.updateSettings { it.copy(onboardingCompleted = false) }
+                                        },
+                                        onCheckOtaUpdate = { viewModel.checkOtaUpdate() },
+                                        onInstallOtaApkFromUsb = {
+                                            openInAppOrSystemFilePicker(
+                                                title = "Pilih File Pembaruan Al-Gaffar TV (.apk)",
+                                                subtitle = "Pilih file .apk dari Flashdisk USB OTG atau Memori Internal STB",
+                                                allowedExtensions = setOf("apk"),
+                                                mimeTypes = arrayOf("application/vnd.android.package-archive", "application/octet-stream"),
+                                                onFileSelected = { file ->
+                                                    runCatching {
+                                                        viewModel.installOfflineApk(FileInputStream(file))
+                                                    }.onFailure { err ->
+                                                        viewModel.postStatusMessage("Gagal membuka file APK: ${err.message}")
+                                                    }
+                                                },
+                                                systemLauncherInvoke = {}
+                                            )
+                                        },
+                                        onDownloadAudioPack = { packId -> viewModel.downloadAudioPack(packId) }
                                     ),
                                     onClose = {
                                         viewModel.stopAudioPreview()
                                         isSettingsModalOpen = false
                                     }
                                 )
+                            }
                             }
 
                             if (isDebugModalOpen) {

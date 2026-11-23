@@ -68,6 +68,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.algaffar.jwstv.data.auth.AuthManager
+import id.algaffar.jwstv.data.auth.OfflinePinRecoveryEngine
+import id.algaffar.jwstv.data.auth.PinLockoutTracker
 import id.algaffar.jwstv.data.cctv.FinancialSummaryData
 import id.algaffar.jwstv.data.media.StorageHealthSnapshot
 import id.algaffar.jwstv.domain.model.AppStateSettings
@@ -75,6 +77,7 @@ import id.algaffar.jwstv.domain.model.UserAccount
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
 import kotlinx.coroutines.delay
 import java.io.File
+import java.time.LocalDate
 import java.util.Locale
 
 /** High-contrast Amber focus ring color modeled after `MobileSettingsLayout.tsx` for TV D-Pad visibility. */
@@ -112,11 +115,20 @@ data class SettingsActions(
     val remoteServerUrl: String,
     val remoteQrPairingUrl: String,
     val remoteAuthToken: String,
+    val deviceCode: String = "",
     val relayPinStates: Map<Int, Boolean>,
     val onlineFinanceTestResult: FinancialSummaryData?,
     val audioInventoryTick: Int,
     val previewingAudioKey: String?,
-    val isLiveActiveNow: Boolean
+    val isLiveActiveNow: Boolean,
+    val onRegenerateRemoteToken: () -> Unit = {},
+    val onResetSuperadminPin: (newPin: String) -> Unit = {},
+    val onUpgradeUserPinHash: (userId: String, rawPin: String) -> Unit = { _, _ -> },
+    val onRequestUsbPermission: () -> Unit = {},
+    val onReopenOnboarding: () -> Unit = {},
+    val onCheckOtaUpdate: () -> Unit = {},
+    val onInstallOtaApkFromUsb: () -> Unit = {},
+    val onDownloadAudioPack: (packId: String) -> Unit = {}
 )
 
 @Composable
@@ -832,42 +844,108 @@ fun HybridTextInput(
 
 /**
  * Multi-Role PIN Login Guard with On-Screen TV D-Pad, Touch & Physical PC Keyboard Numeric Input.
- * Default Superadmin: username `admin`, PIN `732911`.
+ * Hardened with:
+ * - Zero hardcoded quick-login backdoor button
+ * - Brute-force lockout (5 wrong attempts -> 60s cooldown)
+ * - Automatic one-way PBKDF2 hash upgrade on login
+ * - Offline Challenge-Response PIN Recovery via CS Al-Gaffar TV
  */
 @Composable
 fun PinLoginGuardScreen(
     users: List<UserAccount>,
+    deviceCode: String = "STB00001",
     onAuthenticated: (UserAccount) -> Unit,
+    onUpgradePinHash: (userId: String, rawPin: String) -> Unit = { _, _ -> },
+    onResetSuperadminPin: (newPin: String) -> Unit = {},
     onCancel: () -> Unit
 ) {
     val palette = LocalJwsTheme.current
     var pinInput by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf("") }
+    val lockoutTracker = remember { PinLockoutTracker() }
+    var lockoutRemainingSec by remember { mutableStateOf(0L) }
+    var showRecoveryMode by remember { mutableStateOf(false) }
     val firstKeyFocus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
         runCatching { firstKeyFocus.requestFocus() }
     }
 
+    LaunchedEffect(lockoutRemainingSec) {
+        if (lockoutRemainingSec > 0L) {
+            delay(1_000L)
+            lockoutRemainingSec = lockoutTracker.remainingLockoutSeconds()
+            if (lockoutRemainingSec == 0L) {
+                errorMessage = ""
+            }
+        }
+    }
+
+    if (showRecoveryMode) {
+        OfflinePinRecoveryScreen(
+            deviceCode = deviceCode.ifBlank { "STB00001" },
+            onPinResetCompleted = { newPin ->
+                onResetSuperadminPin(newPin)
+                showRecoveryMode = false
+                pinInput = ""
+                errorMessage = "PIN Superadmin berhasil direset! Silakan masuk dengan PIN baru Anda."
+            },
+            onBack = {
+                showRecoveryMode = false
+                pinInput = ""
+            }
+        )
+        return
+    }
+
     fun attemptLogin(candidatePin: String) {
+        val lockedSec = lockoutTracker.remainingLockoutSeconds()
+        if (lockedSec > 0L) {
+            lockoutRemainingSec = lockedSec
+            errorMessage = "Terlalu banyak percobaan salah. Coba lagi dalam ${lockedSec} detik."
+            return
+        }
         val matched = AuthManager.authenticate(
             username = "",
             rawPin = candidatePin,
             users = users
         )
         if (matched != null) {
+            lockoutTracker.recordSuccess()
+            if (AuthManager.needsHashUpgrade(matched.pinHash)) {
+                onUpgradePinHash(matched.id, candidatePin)
+            }
             onAuthenticated(matched)
         } else {
-            errorMessage = "PIN tidak sesuai (Default Superadmin: 732911)"
+            val remainingAttempts = lockoutTracker.recordFailure()
+            pinInput = ""
+            if (remainingAttempts <= 0) {
+                lockoutRemainingSec = lockoutTracker.remainingLockoutSeconds()
+                errorMessage = "Akses dikunci sementara (${lockoutRemainingSec} detik) karena 5x gagal."
+            } else {
+                errorMessage = "PIN tidak sesuai. Sisa percobaan: $remainingAttempts kali."
+            }
         }
     }
 
     fun appendDigit(digit: String) {
+        if (lockoutTracker.isLocked()) {
+            lockoutRemainingSec = lockoutTracker.remainingLockoutSeconds()
+            errorMessage = "Akses dikunci sementara (${lockoutRemainingSec} detik)."
+            return
+        }
         errorMessage = ""
         if (pinInput.length < 8) {
             pinInput += digit
             if (pinInput.length == 6) {
-                AuthManager.authenticate("", pinInput, users)?.let(onAuthenticated)
+                val matched = AuthManager.authenticate("", pinInput, users)
+                if (matched != null) {
+                    lockoutTracker.recordSuccess()
+                    if (AuthManager.needsHashUpgrade(matched.pinHash)) {
+                        onUpgradePinHash(matched.id, pinInput)
+                    }
+                    onAuthenticated(matched)
+                }
             }
         }
     }
@@ -909,7 +987,7 @@ fun PinLoginGuardScreen(
     ) {
         Column(
             modifier = Modifier
-                .width(540.dp)
+                .width(560.dp)
                 .clip(RoundedCornerShape(26.dp))
                 .background(palette.bgPrimary)
                 .border(2.dp, palette.accent, RoundedCornerShape(26.dp))
@@ -930,7 +1008,7 @@ fun PinLoginGuardScreen(
                 fontWeight = FontWeight.ExtraBold
             )
             Text(
-                text = "Masukkan 6 digit PIN lewat Remote TV (D-Pad), Keyboard PC, atau sentuh tombol angka",
+                text = "Masukkan PIN pengurus lewat Remote TV (D-Pad), Keyboard, atau sentuh layar",
                 color = palette.textSecondary,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center
@@ -941,14 +1019,24 @@ fun PinLoginGuardScreen(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
                     .background(palette.bgSecondary)
-                    .border(1.5.dp, palette.accent, RoundedCornerShape(14.dp))
+                    .border(
+                        1.5.dp,
+                        if (lockoutRemainingSec > 0L) Color(0xFFEF4444) else palette.accent,
+                        RoundedCornerShape(14.dp)
+                    )
                     .padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (pinInput.isEmpty()) "• • • • • •" else "• ".repeat(pinInput.length).trim(),
-                    color = palette.accentSecondary,
-                    fontSize = 30.sp,
+                    text = if (lockoutRemainingSec > 0L) {
+                        "TERKUNCI (${lockoutRemainingSec}s)"
+                    } else if (pinInput.isEmpty()) {
+                        "• • • • • •"
+                    } else {
+                        "• ".repeat(pinInput.length).trim()
+                    },
+                    color = if (lockoutRemainingSec > 0L) Color(0xFFF87171) else palette.accentSecondary,
+                    fontSize = 28.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.ExtraBold
                 )
@@ -957,9 +1045,10 @@ fun PinLoginGuardScreen(
             if (errorMessage.isNotBlank()) {
                 Text(
                     text = errorMessage,
-                    color = Color(0xFFF87171),
+                    color = if (errorMessage.startsWith("PIN Superadmin berhasil")) Color(0xFF34D399) else Color(0xFFF87171),
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
                 )
             }
 
@@ -991,6 +1080,7 @@ fun PinLoginGuardScreen(
                                 label = key,
                                 isPrimary = (key == "MASUK"),
                                 isDanger = (key == "HAPUS"),
+                                enabled = (lockoutRemainingSec == 0L),
                                 onClick = {
                                     errorMessage = ""
                                     when (key) {
@@ -1013,8 +1103,8 @@ fun PinLoginGuardScreen(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 HybridButton(
-                    label = "Login Cepat Default (732911)",
-                    onClick = { attemptLogin(AuthManager.DEFAULT_SUPERADMIN_PIN) }
+                    label = "Lupa PIN? (Pemulihan CS)",
+                    onClick = { showRecoveryMode = true }
                 )
                 HybridButton(
                     label = "Batal / Tutup",
@@ -1022,5 +1112,176 @@ fun PinLoginGuardScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun OfflinePinRecoveryScreen(
+    deviceCode: String,
+    onPinResetCompleted: (newPin: String) -> Unit,
+    onBack: () -> Unit
+) {
+    val palette = LocalJwsTheme.current
+    val challengeCode = remember { OfflinePinRecoveryEngine.generateChallengeCode() }
+    val today = remember { LocalDate.now() }
+    var recoveryInput by remember { mutableStateOf("") }
+    var isVerified by remember { mutableStateOf(false) }
+    var newPin by remember { mutableStateOf("") }
+    var confirmPin by remember { mutableStateOf("") }
+    var statusError by remember { mutableStateOf("") }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.90f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .width(640.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(palette.bgPrimary)
+                .border(2.dp, TvFocusAmber, RoundedCornerShape(26.dp))
+                .padding(32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "Pemulihan PIN Offline — CS Al-Gaffar TV",
+                color = TvFocusAmber,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Black
+            )
+
+            if (!isVerified) {
+                Text(
+                    text = "Kirimkan Device ID, Kode Tantangan, dan Tanggal berikut ke WhatsApp CS Al-Gaffar TV untuk mendapatkan 6 digit Kode Pemulihan harian (100% offline):",
+                    color = palette.textSecondary,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    RecoveryInfoTile("DEVICE ID STB", deviceCode, palette.accent, Modifier.weight(1f))
+                    RecoveryInfoTile("KODE TANTANGAN", challengeCode, TvFocusAmber, Modifier.weight(1f))
+                    RecoveryInfoTile("TANGGAL TV", today.toString(), palette.accentSecondary, Modifier.weight(1f))
+                }
+
+                HybridTextInput(
+                    label = "Masukkan 6 Digit Kode Pemulihan dari CS",
+                    value = recoveryInput,
+                    placeholder = "Contoh: 482910",
+                    onValueChange = {
+                        statusError = ""
+                        recoveryInput = it.filter { c -> c.isDigit() }.take(6)
+                    },
+                    keyboardType = KeyboardType.Number
+                )
+
+                if (statusError.isNotBlank()) {
+                    Text(statusError, color = Color(0xFFF87171), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    HybridButton(label = "Kembali ke Login PIN", onClick = onBack)
+                    HybridButton(
+                        label = "Verifikasi Kode Pemulihan",
+                        isPrimary = true,
+                        enabled = recoveryInput.length == 6,
+                        onClick = {
+                            if (OfflinePinRecoveryEngine.verifyRecoveryCode(deviceCode, challengeCode, recoveryInput, today)) {
+                                isVerified = true
+                                statusError = ""
+                            } else {
+                                statusError = "Kode Pemulihan tidak cocok. Pastikan Device ID, Kode Tantangan & Tanggal sesuai."
+                            }
+                        }
+                    )
+                }
+            } else {
+                Text(
+                    text = "Kode Pemulihan Terverifikasi! Buat PIN Superadmin baru (6 digit angka):",
+                    color = Color(0xFF34D399),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                HybridTextInput(
+                    label = "PIN Superadmin Baru (6 Digit)",
+                    value = newPin,
+                    placeholder = "Minimal 6 digit angka",
+                    onValueChange = {
+                        statusError = ""
+                        newPin = it.filter { c -> c.isDigit() }.take(8)
+                    },
+                    keyboardType = KeyboardType.Number
+                )
+                HybridTextInput(
+                    label = "Ulangi PIN Superadmin Baru",
+                    value = confirmPin,
+                    placeholder = "Ketik ulang PIN baru",
+                    onValueChange = {
+                        statusError = ""
+                        confirmPin = it.filter { c -> c.isDigit() }.take(8)
+                    },
+                    keyboardType = KeyboardType.Number
+                )
+                if (statusError.isNotBlank()) {
+                    Text(statusError, color = Color(0xFFF87171), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    HybridButton(label = "Batal", onClick = onBack)
+                    HybridButton(
+                        label = "Simpan PIN Superadmin Baru",
+                        isPrimary = true,
+                        enabled = newPin.length >= 6 && confirmPin.length >= 6,
+                        onClick = {
+                            if (newPin != confirmPin) {
+                                statusError = "Konfirmasi PIN tidak sama."
+                            } else if (newPin == AuthManager.DEFAULT_SUPERADMIN_PIN) {
+                                statusError = "Gunakan PIN baru yang berbeda dari PIN bawaan pabrik."
+                            } else {
+                                onPinResetCompleted(newPin)
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecoveryInfoTile(
+    label: String,
+    value: String,
+    valueColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalJwsTheme.current
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(palette.bgSecondary)
+            .border(1.dp, palette.border, RoundedCornerShape(14.dp))
+            .padding(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(label, color = palette.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text(
+            text = value,
+            color = valueColor,
+            fontSize = 20.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Black
+        )
     }
 }

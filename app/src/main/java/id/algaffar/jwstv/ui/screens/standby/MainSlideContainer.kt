@@ -738,7 +738,7 @@ fun RenderSystemDataSlideIfApplicable(
                 title = qr.label.ifBlank { "Infaq Digital ${settings.brand.name}" },
                 subtitle = listOf(qr.bankName, qr.nomorRekening, qr.atasNama).filter { it.isNotBlank() }.joinToString(" • ")
                     .ifBlank { "Pindai QR Code menggunakan aplikasi pembayaran / m-banking Anda" },
-                qrPayload = qr.link.ifBlank { "https://masjidalgaffar.id/infaq" },
+                qrPayload = qr.link.ifBlank { "Infaq Digital ${settings.brand.name}" },
                 modifier = modifier
             )
             return true
@@ -750,7 +750,7 @@ fun RenderSystemDataSlideIfApplicable(
                 badge = "QR LAPORAN KAS ONLINE",
                 title = "TRANSPARANSI KEUANGAN ${settings.brand.name.uppercase()}",
                 subtitle = "Pindai QR Code untuk melihat rincian mutasi kas masjid secara real-time",
-                qrPayload = payload.ifBlank { "https://masjidalgaffar.id/laporan" },
+                qrPayload = payload.ifBlank { "Laporan Kas ${settings.brand.name}" },
                 modifier = modifier
             )
             return true

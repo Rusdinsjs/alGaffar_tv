@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow local LAN HTTP solely for mosque WiFi Relay modules (192.168.x.x / 10.x.x.x) & Ktor port 1421 -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Enforce strict HTTPS on all external cloud, OTA, Audio CDN, and Google endpoints -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">algaffartv.id</domain>
+        <domain includeSubdomains="true">github.com</domain>
+        <domain includeSubdomains="true">githubusercontent.com</domain>
+        <domain includeSubdomains="true">google.com</domain>
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <domain includeSubdomains="true">youtube-nocookie.com</domain>
+        <domain includeSubdomains="true">youtube.com</domain>
+    </domain-config>
+</network-security-config>

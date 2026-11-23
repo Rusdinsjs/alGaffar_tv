@@ -251,7 +251,7 @@ fun QrSplitOverlayFullscreen(
     }
     val qrBitmap = remember(qrPayload, resolvedCustomQr) {
         if (resolvedCustomQr != null) null
-        else generateQrBitmap(qrPayload.ifBlank { "https://masjidalgaffar.id/infaq" }, 800)
+        else generateQrBitmap(qrPayload.ifBlank { "Infaq Digital Masjid" }, 800)
     }
 
     val pulseAlpha: Float = if (isPerformanceMode) {

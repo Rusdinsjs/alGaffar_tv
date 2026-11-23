@@ -1,7 +1,10 @@
 package id.algaffar.jwstv.data.hardware
 
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.hardware.usb.UsbManager
+import android.os.Build
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
 import id.algaffar.jwstv.domain.engine.DailyPrayerSchedule
@@ -266,6 +269,37 @@ class SwitchController(
         }
     }
 
+    /**
+     * Checks if a supported USB Serial Relay adapter (CH340/CP210x/FTDI/PL2303) is attached
+     * and requests Android USB Host permission if not yet granted.
+     */
+    fun requestUsbRelayPermission(): Result<String> = runCatching {
+        val appContext = context ?: throw IllegalStateException("Android Context tidak tersedia")
+        val usbManager = appContext.getSystemService(Context.USB_SERVICE) as? UsbManager
+            ?: throw IllegalStateException("UsbManager tidak tersedia pada perangkat ini")
+
+        val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
+        if (drivers.isEmpty()) {
+            throw IllegalStateException("Tidak ada modul USB Serial (CH340/CP210x/FTDI/PL2303) yang terdeteksi di port USB OTG")
+        }
+
+        val device = drivers.first().device
+        val deviceLabel = "${device.productName ?: "USB Serial"} (${device.deviceName})"
+        if (usbManager.hasPermission(device)) {
+            return@runCatching "Izin USB OTG sudah aktif untuk $deviceLabel"
+        }
+
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val intent = Intent(ACTION_USB_PERMISSION).setPackage(appContext.packageName)
+        val pendingIntent = PendingIntent.getBroadcast(appContext, 0, intent, flags)
+        usbManager.requestPermission(device, pendingIntent)
+        "Permintaan izin USB OTG dikirim untuk $deviceLabel. Tekan OK pada dialog izin di layar TV."
+    }
+
     private fun sendUsbSerialRelayCommand(
         pin: Int,
         turnOn: Boolean,
@@ -281,6 +315,14 @@ class SwitchController(
         }
 
         val driver = availableDrivers.first()
+        if (!usbManager.hasPermission(driver.device)) {
+            requestUsbRelayPermission()
+            throw SecurityException(
+                "Izin USB OTG diminta untuk ${driver.device.productName ?: driver.device.deviceName}. " +
+                    "Setujui dialog izin di layar TV lalu coba lagi."
+            )
+        }
+
         val connection = usbManager.openDevice(driver.device)
             ?: throw SecurityException("Izin akses USB OTG belum diberikan untuk perangkat ${driver.device.deviceName}")
 
@@ -303,6 +345,7 @@ class SwitchController(
     }
 
     companion object {
+        const val ACTION_USB_PERMISSION = "id.algaffar.jwstv.USB_RELAY_PERMISSION"
         fun buildWifiRelayUrl(ip: String, pin: Int, turnOn: Boolean): String {
             val stateSegment = if (turnOn) "on" else "off"
             return "http://${ip.trim()}/relay/$pin/$stateSegment"

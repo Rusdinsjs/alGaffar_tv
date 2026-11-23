@@ -3,16 +3,14 @@ package id.algaffar.jwstv.data.audio
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import kotlin.math.PI
 import kotlin.math.sin
 
 /**
- * Zero-latency synthesized 1000Hz sine-wave beep generator using Android [AudioTrack].
- * Used for:
- * - 3x Beep before Adzan (`TARHIM` at 3s, 2s, 1s remaining)
- * - 5x Beep before Iqomah (`MENUNGGU_IQOMAH` at 5s, 4s, 3s, 2s, 1s remaining)
- * - Synthesized dual-tone siren fallback when no custom Ramadhan siren MP3 file is provided.
- * Mirrors `play_beep` in `src-tauri/src/audio.rs`.
+ * Zero-latency synthesized 1000Hz sine-wave beep generator using Android [AudioTrack]
+ * backed by a single-thread executor and respecting global volume settings.
  */
 class BeepGenerator {
 
@@ -22,36 +20,42 @@ class BeepGenerator {
         durationMs = 280
     )
 
+    private val audioExecutor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "AlGaffarTv-BeepAudio").apply { isDaemon = true }
+    }
+
+    @Volatile
     private var lastBeepEpochSecond: Long = -1L
 
     /**
      * Triggers a single 1000Hz 280ms beep, guarded so it fires at most once per epoch second.
      */
-    fun triggerCountdownBeepOncePerSecond(epochSecond: Long) {
+    fun triggerCountdownBeepOncePerSecond(epochSecond: Long, volume: Float = 1.0f) {
         if (epochSecond == lastBeepEpochSecond) return
         lastBeepEpochSecond = epochSecond
-        playPcmAsync(beepPcm1000Hz)
+        playPcmAsync(beepPcm1000Hz, volume)
     }
 
     /**
-     * Plays a single 1000Hz beep immediately (e.g. from Debug Menu test button).
+     * Plays a single 1000Hz beep immediately (e.g. from Debug Menu / Onboarding test button).
      */
-    fun playBeepImmediate() {
-        playPcmAsync(beepPcm1000Hz)
+    fun playBeepImmediate(volume: Float = 1.0f) {
+        playPcmAsync(beepPcm1000Hz, volume)
     }
 
     /**
      * Plays a synthesized Ramadhan Siren sweep if user hasn't uploaded an external siren MP3 yet.
      */
-    fun playSynthesizedSirenSweep() {
-        Thread {
+    fun playSynthesizedSirenSweep(volume: Float = 1.0f) {
+        val clampedVol = volume.coerceIn(0f, 1f)
+        if (clampedVol <= 0.01f) return
+        audioExecutor.execute {
             runCatching {
                 val totalSamples = sampleRate * 3 // 3 seconds sweep
                 val pcm = ShortArray(totalSamples)
                 var phase = 0.0
                 for (i in 0 until totalSamples) {
                     val progress = i.toDouble() / totalSamples.toDouble()
-                    // Sweep 440Hz -> 880Hz -> 440Hz
                     val freq = if (progress < 0.5) {
                         440.0 + (progress * 2.0) * 440.0
                     } else {
@@ -65,20 +69,22 @@ class BeepGenerator {
                     }
                     pcm[i] = (sin(phase) * Short.MAX_VALUE * 0.75 * env).toInt().toShort()
                 }
-                playPcmBlocking(pcm)
+                playPcmBlocking(pcm, clampedVol)
             }
-        }.start()
+        }
     }
 
-    private fun playPcmAsync(pcmData: ShortArray) {
-        Thread {
+    private fun playPcmAsync(pcmData: ShortArray, volume: Float) {
+        val clampedVol = volume.coerceIn(0f, 1f)
+        if (clampedVol <= 0.01f) return
+        audioExecutor.execute {
             runCatching {
-                playPcmBlocking(pcmData)
+                playPcmBlocking(pcmData, clampedVol)
             }
-        }.start()
+        }
     }
 
-    private fun playPcmBlocking(pcmData: ShortArray) {
+    private fun playPcmBlocking(pcmData: ShortArray, volume: Float) {
         val byteCount = pcmData.size * 2
         val track = AudioTrack.Builder()
             .setAudioAttributes(
@@ -99,6 +105,7 @@ class BeepGenerator {
             .build()
 
         try {
+            track.setVolume(volume.coerceIn(0f, 1f))
             track.write(pcmData, 0, pcmData.size)
             track.play()
             val durationMs = (pcmData.size * 1000L) / sampleRate + 60L

@@ -1,16 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="320dp"
     android:height="180dp"
     android:viewportWidth="320"
     android:viewportHeight="180">
+
+    <!-- Deep Emerald-Navy Gradient Background -->
+    <path android:pathData="M0,0h320v180h-320z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="0"
+                android:startY="0"
+                android:endX="320"
+                android:endY="180"
+                android:type="linear">
+                <item android:color="#062922" android:offset="0.0" />
+                <item android:color="#0A192F" android:offset="0.6" />
+                <item android:color="#04151F" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Subtle Gold Frame Border -->
     <path
-        android:fillColor="#064E3B"
-        android:pathData="M0,0h320v180h-320z" />
+        android:pathData="M10,10h300v160h-300z"
+        android:strokeWidth="2"
+        android:strokeColor="#40F59E0B" />
+
+    <!-- Soft Emerald Glow Circle behind Mosque Emblem -->
+    <path
+        android:fillColor="#2210B981"
+        android:pathData="M90,90m-56,0a56,56 0,1 1,112 0a56,56 0,1 1,-112 0" />
+
+    <!-- Crescent Spire -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M88,36h4v14h-4z" />
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M90,26c-4.5,0 -8,3.5 -8,8c0,4.5 3.5,8 8,8c2.2,0 4.2,-0.9 5.6,-2.3c-1.1,0.5 -2.3,0.8 -3.6,0.8c-3.9,0 -7,-3.1 -7,-7c0,-3.9 3.1,-7 7,-7c1.3,0 2.5,0.3 3.6,0.8C94.2,26.9 92.2,26 90,26z" />
+
+    <!-- Mosque Dome & Silhouette -->
     <path
         android:fillColor="#10B981"
-        android:pathData="M160,35 C135,35 115,55 115,80 L115,130 L205,130 L205,80 C205,55 185,35 160,35 Z" />
+        android:pathData="M90,50 C68,50 54,66 54,88 L54,132 L126,132 L126,88 C126,66 112,50 90,50 Z" />
+    <!-- Minarets -->
     <path
-        android:fillColor="#F59E0B"
-        android:pathData="M155,20h10v15h-10z" />
+        android:fillColor="#059669"
+        android:pathData="M42,72h8v60h-8zM130,72h8v60h-8z" />
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M46,60l-4,12h8zM134,60l-4,12h8z" />
+    <!-- Arched Entrance -->
+    <path
+        android:fillColor="#062922"
+        android:pathData="M90,96 C82,96 77,102 77,111 L77,132 L103,132 L103,111 C103,102 98,96 90,96 Z" />
+
+    <!-- Right-side Accent Bars representing Digital Signage Brand Identity -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M162,58h118v4h-118z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M162,74h110v10h-110z" />
+    <path
+        android:fillColor="#34D399"
+        android:pathData="M162,92h88v7h-88z" />
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M162,108h104v5h-104z" />
+    <path
+        android:fillColor="#64748B"
+        android:pathData="M162,120h72v5h-72z" />
 </vector>

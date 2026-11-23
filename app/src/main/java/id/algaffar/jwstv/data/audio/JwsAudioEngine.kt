@@ -86,9 +86,11 @@ class JwsAudioEngine(
         schedule: DailyPrayerSchedule,
         tickResult: StateMachineTickResult
     ) {
+        val baseVolume = settings.globalVolume.coerceIn(0f, 1.0f)
+
         // 1. Trigger 1000Hz Beep if requested by StateMachine (3x before Adzan, 5x before Iqomah)
         if (tickResult.shouldTriggerBeep) {
-            beepGenerator.triggerCountdownBeepOncePerSecond(now.toEpochSecond())
+            beepGenerator.triggerCountdownBeepOncePerSecond(now.toEpochSecond(), baseVolume)
         }
 
         // 2. Check Ramadhan Sirine triggers (Maghrib, Sahur, Imsak)
@@ -114,8 +116,6 @@ class JwsAudioEngine(
             }
             else -> null
         }
-
-        val baseVolume = settings.globalVolume.coerceIn(0f, 1.0f)
 
         if (desiredCategory != null) {
             val key = "$desiredCategory:${prayerId.id}"
@@ -204,11 +204,12 @@ class JwsAudioEngine(
         if (shouldFire && now.second in 0..5) {
             lastSirineTriggerMinuteKey = minuteKey
             val sirineFile = resolveSingleAssetFile(sirine.audioFile)
+            val vol = settings.globalVolume.coerceIn(0f, 1.0f)
             if (sirineFile != null) {
                 val repeatedFiles = List(sirine.repeatCount.coerceIn(1, 5)) { sirineFile }
-                startPlaylist("sirine:$minuteKey", repeatedFiles, loop = false)
+                startPlaylist("sirine:$minuteKey", repeatedFiles, loop = false, volume = vol)
             } else {
-                beepGenerator.playSynthesizedSirenSweep()
+                beepGenerator.playSynthesizedSirenSweep(vol)
             }
         }
     }

@@ -314,6 +314,11 @@ fun RamadhanSettingsTab(
                 checked = ramadhan.isRamadhan,
                 onCheckedChange = { v -> actions.onUpdateSettings { it.copy(ramadhan = it.ramadhan.copy(isRamadhan = v)) } }
             )
+            HybridToggleRow(
+                label = "Sinkronkan Otomatis Malam Ramadhan dari Kalender Hijriah",
+                checked = ramadhan.autoSyncNightFromHijri,
+                onCheckedChange = { v -> actions.onUpdateSettings { it.copy(ramadhan = it.ramadhan.copy(autoSyncNightFromHijri = v)) } }
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HybridNumberStepper(
                     label = "Malam / Hari Ramadhan Aktif",
@@ -791,16 +796,48 @@ fun LiveAndCctvSettingsTab(
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 HybridTextInput(
-                    label = "Preset ID Makkah Live",
+                    label = "Preset ID Makkah Live (YouTube)",
                     value = live.makkahVideoId,
                     onValueChange = { v -> actions.onUpdateSettings { it.copy(live = live.copy(makkahVideoId = v)) } },
                     modifier = Modifier.weight(1f)
                 )
                 HybridTextInput(
-                    label = "Preset ID Madinah Live",
+                    label = "Preset ID Madinah Live (YouTube)",
                     value = live.madinahVideoId,
                     onValueChange = { v -> actions.onUpdateSettings { it.copy(live = live.copy(madinahVideoId = v)) } },
                     modifier = Modifier.weight(1f)
+                )
+            }
+
+            HybridToggleRow(
+                label = "Utamakan Native ExoPlayer HLS (.m3u8) — Lebih Hemat RAM di STB 2GB",
+                checked = live.preferNativeHls,
+                onCheckedChange = { v -> actions.onUpdateSettings { it.copy(live = live.copy(preferNativeHls = v)) } }
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                HybridTextInput(
+                    label = "URL HLS (.m3u8) Makkah (Opsional)",
+                    value = live.makkahHlsUrl,
+                    placeholder = "https://.../makkah.m3u8",
+                    onValueChange = { v -> actions.onUpdateSettings { it.copy(live = live.copy(makkahHlsUrl = v)) } },
+                    modifier = Modifier.weight(1f)
+                )
+                HybridTextInput(
+                    label = "URL HLS (.m3u8) Madinah (Opsional)",
+                    value = live.madinahHlsUrl,
+                    placeholder = "https://.../madinah.m3u8",
+                    onValueChange = { v -> actions.onUpdateSettings { it.copy(live = live.copy(madinahHlsUrl = v)) } },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            if (live.source == "custom") {
+                HybridTextInput(
+                    label = "URL Stream HLS Kustom (.m3u8) — Opsional",
+                    value = live.customStreamUrl,
+                    placeholder = "https://.../stream.m3u8 (kosongkan jika pakai YouTube ID)",
+                    onValueChange = { v -> actions.onUpdateSettings { it.copy(live = live.copy(customStreamUrl = v)) } }
                 )
             }
 
@@ -887,7 +924,7 @@ fun SwitchHardwareSettingsTab(
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         HybridSectionCard(
             title = "Pilih Konfigurasi / Channel Saklar (8 Pin)",
-            subtitle = "Mengacu pada JWS TV Al-Gaffar: pilih channel untuk mengatur jadwal tiap waktu sholat atau status aplikasi"
+            subtitle = "Pilih channel untuk mengatur jadwal otomatis berdasarkan waktu sholat atau transisi state layar"
         ) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -933,6 +970,11 @@ fun SwitchHardwareSettingsTab(
                         onValueChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(wifiIp = v)) } }
                     )
                 } else {
+                    HybridButton(
+                        label = "Deteksi & Minta Izin Modul USB Serial OTG",
+                        isPrimary = true,
+                        onClick = actions.onRequestUsbPermission
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         HybridTextInput(
                             label = "Port USB Serial",

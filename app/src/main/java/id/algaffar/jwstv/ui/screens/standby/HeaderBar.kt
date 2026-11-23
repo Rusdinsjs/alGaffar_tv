@@ -417,7 +417,7 @@ private fun MosqueIdentityBlock(
             horizontalAlignment = if (isReversed) Alignment.End else Alignment.Start
         ) {
             Text(
-                text = brand.name.ifBlank { "MASJID AL-GAFFAR" },
+                text = brand.name.ifBlank { "MASJID ANDA" },
                 color = palette.textPrimary,
                 fontSize = titleFontSp.sp,
                 lineHeight = (titleFontSp + 4).sp,

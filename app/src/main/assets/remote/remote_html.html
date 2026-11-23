@@ -5,13 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Smart JWS Remote — Masjid Al-Gaffar</title>
+    <title>Al-Gaffar TV — Smart Remote Control</title>
     <link rel="manifest" href="/manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0a0a0c">
-    <link rel="apple-touch-icon" href="/alGaffar.png">
+    <link rel="apple-touch-icon" href="/app-icon.png">
 
     <style>
         :root {
@@ -499,11 +499,11 @@
     <div id="authOverlay" class="auth-overlay">
         <div class="auth-card">
             <div style="font-size: 40px;">🔐</div>
-            <h2>Masuk JWS Remote Control</h2>
-            <p>Masukkan PIN Pengurus DKM (default: <b>732911</b>) atau Token pairing dari layar TV.</p>
+            <h2>Masuk Al-Gaffar TV Remote</h2>
+            <p>Scan QR Code dari layar Pengaturan TV, atau masukkan PIN Admin / Token akses 32 karakter.</p>
             <div class="form-group" style="text-align:left;">
-                <label>PIN / Token Akses</label>
-                <input type="password" id="authTokenInput" placeholder="Contoh: 732911" autocomplete="off"
+                <label>PIN Admin / Token Akses</label>
+                <input type="password" id="authTokenInput" placeholder="Masukkan PIN Admin atau Token TV" autocomplete="off"
                     onkeydown="if(event.key==='Enter') submitLogin()">
             </div>
             <button class="submit-btn" onclick="submitLogin()">HUBUNGKAN KE TV</button>
@@ -514,7 +514,7 @@
         <div class="brand">
             <div class="logo">🕌</div>
             <div class="brand-text">
-                <h1>JWS SMART REMOTE</h1>
+                <h1>AL-GAFFAR TV REMOTE</h1>
                 <div id="connStatus" class="status">MENGHUBUNGKAN...</div>
             </div>
         </div>
@@ -2061,6 +2061,12 @@
                     renderSwitchChannels(status.switchConfig.channels || []);
                 }
 
+                if (status.system && status.system.clockSuspect) {
+                    showClockSyncBanner();
+                } else {
+                    hideClockSyncBanner();
+                }
+
                 if (status.users) {
                     renderUsersList(status.users);
                 }
@@ -2548,6 +2554,40 @@
                 : '<div style="font-size:12px;color:var(--text-secondary);">Belum ada log aktivitas.</div>';
         }
 
+        async function syncClockFromPhone() {
+            if (!AUTH_TOKEN) { showAuthModal(true); return; }
+            try {
+                const res = await fetch('/api/sync_time', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${AUTH_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ epochMs: Date.now() })
+                });
+                const json = await res.json();
+                if (!res.ok) { showToast(json.error || 'Gagal menyamakan jam!', true); return; }
+                hideClockSyncBanner();
+                showToast('🕒 ' + (json.message || 'Jam TV berhasil disamakan dengan HP!'));
+            } catch (e) {
+                showToast('❌ Gagal menyamakan jam ke TV!', true);
+            }
+        }
+
+        function showClockSyncBanner() {
+            if (document.getElementById('clockSyncBanner')) return;
+            const div = document.createElement('div');
+            div.id = 'clockSyncBanner';
+            div.style.cssText = 'margin:10px 14px 0;padding:12px 14px;border-radius:14px;background:rgba(220,38,38,0.18);border:1.5px solid #f59e0b;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;';
+            div.innerHTML = '<div><b>⚠️ Jam STB Belum Sinkron (No-RTC)</b><div style="color:#fde68a;margin-top:2px;">Ketuk tombol ini untuk menyamakan jam TV dengan jam HP Anda.</div></div><button onclick="syncClockFromPhone()" style="background:#f59e0b;color:#111827;border:none;border-radius:10px;padding:8px 12px;font-weight:800;cursor:pointer;white-space:nowrap;">Samakan Jam</button>';
+            const header = document.querySelector('header');
+            if (header && header.parentNode) header.parentNode.insertBefore(div, header.nextSibling);
+        }
+
+        function hideClockSyncBanner() {
+            document.getElementById('clockSyncBanner')?.remove();
+        }
+
         async function downloadBackupJson() {
             if (!AUTH_TOKEN) { showAuthModal(true); return; }
             try {
@@ -2557,7 +2597,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'jws-algaffar-backup.json';
+                a.download = 'algaffar-tv-backup.json';
                 document.body.appendChild(a);
                 a.click();
                 a.remove();

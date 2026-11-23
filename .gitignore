@@ -19,8 +19,11 @@ release/
 build/
 app/build/
 
-# Local configuration file (sdk path, etc)
+# Local configuration file (sdk path, release signing keys, etc)
 local.properties
+keystore.properties
+*.jks
+*.keystore
 
 # Android Studio / IntelliJ
 *.iml
@@ -33,3 +36,5 @@ captures/
 # Reference repository & large PDF document (keep local only, exclude from Android git repo)
 _referensi_lama/
 prd.pdf
+hs_err_pid*.log
+replay_pid*.log

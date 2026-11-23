@@ -31,11 +31,18 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -94,6 +101,16 @@ fun YouTubeLiveFullscreen(
         }
     }
 
+    val resolvedHlsUrl = remember(
+        liveSettings.preferNativeHls,
+        liveSettings.source,
+        liveSettings.makkahHlsUrl,
+        liveSettings.madinahHlsUrl,
+        liveSettings.customStreamUrl
+    ) {
+        if (liveSettings.preferNativeHls) liveSettings.activeHlsUrl else ""
+    }
+
     val sourceTitle = when (liveSettings.source.lowercase()) {
         "makkah" -> "SIARAN LANGSUNG MASJIDIL HARAM — MAKKAH AL-MUKARRAMAH"
         "madinah" -> "SIARAN LANGSUNG MASJID NABAWI — MADINAH AL-MUNAWWARAH"
@@ -105,7 +122,14 @@ fun YouTubeLiveFullscreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // 1. Fullscreen Live Video Layer (1920 x 1080)
+        // 1. Fullscreen Live Video Layer (1920 x 1080): Native Media3 HLS when available, WebView fallback for YouTube IDs
+        if (resolvedHlsUrl.isNotBlank()) {
+            NativeHlsLivePlayer(
+                hlsUrl = resolvedHlsUrl,
+                muted = liveSettings.muted,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
         AndroidView(
             factory = { ctx ->
                 WebView(ctx).apply {
@@ -173,6 +197,7 @@ fun YouTubeLiveFullscreen(
             },
             modifier = Modifier.fillMaxSize()
         )
+        }
 
         // 2. Top Overlay: Logo + Nama Masjid (Tanpa Alamat & Tanpa Tanggal) di kiri, Card Jam di kanan
         Box(
@@ -208,7 +233,7 @@ fun YouTubeLiveFullscreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = settings.brand.name.ifBlank { "MASJID AL-GAFFAR" },
+                            text = settings.brand.name.ifBlank { "MASJID ANDA" },
                             color = Color.White,
                             fontSize = 38.sp,
                             fontWeight = FontWeight.ExtraBold,
@@ -671,4 +696,55 @@ internal fun extractYouTubeVideoId(rawInput: String): String {
     embedRegex.find(trimmed)?.groupValues?.get(1)?.let { return it }
 
     return trimmed
+}
+
+@Composable
+private fun NativeHlsLivePlayer(
+    hlsUrl: String,
+    muted: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val player = remember(context) {
+        ExoPlayer.Builder(context).build().apply {
+            repeatMode = Player.REPEAT_MODE_ONE
+            playWhenReady = true
+        }
+    }
+
+    LaunchedEffect(hlsUrl, muted) {
+        player.volume = if (muted) 0f else 1f
+        player.setMediaItem(MediaItem.fromUri(hlsUrl))
+        player.prepare()
+        player.play()
+    }
+
+    DisposableEffect(player) {
+        onDispose {
+            runCatching {
+                player.stop()
+                player.release()
+            }
+        }
+    }
+
+    AndroidView(
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                this.player = player
+                useController = false
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+            }
+        },
+        update = { view ->
+            if (view.player !== player) {
+                view.player = player
+            }
+        },
+        modifier = modifier
+    )
 }

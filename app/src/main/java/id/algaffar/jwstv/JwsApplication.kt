@@ -11,23 +11,28 @@ import coil.memory.MemoryCache
 import id.algaffar.jwstv.data.audio.JwsAudioEngine
 import id.algaffar.jwstv.data.hardware.SwitchController
 import id.algaffar.jwstv.data.logging.AppLogger
+import id.algaffar.jwstv.data.media.AudioPackDownloader
 import id.algaffar.jwstv.data.repository.SettingsRepository
+import id.algaffar.jwstv.data.server.RemoteTokenStore
+import id.algaffar.jwstv.data.update.OtaUpdateManager
+import id.algaffar.jwstv.domain.engine.ClockIntegrityGuard
 import id.algaffar.jwstv.domain.engine.HijriCalculator
 import id.algaffar.jwstv.domain.engine.JwsStateMachine
 import id.algaffar.jwstv.domain.engine.PrayerTimeCalculator
+import id.algaffar.jwstv.runtime.JwsRuntimeEngine
 import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
  * Shared singleton [OkHttpClient] pool to prevent creating duplicate thread pools
- * and connection pools across [OnlineFinanceManager] and [SwitchController].
+ * and connection pools across [OnlineFinanceManager], [OtaUpdateManager], and [SwitchController].
  */
 object SharedHttpClient {
     val baseClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(5, TimeUnit.SECONDS)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
             .build()
     }
 
@@ -45,7 +50,6 @@ class AppContainer(application: Application) {
 
     val assetsRootDir: File = File(application.filesDir, "jws-assets").apply {
         mkdirs()
-        // Pre-create standard audio directories for Tartil, Tarhim, Adzan & Sirine
         listOf("tartil", "tarhim", "adzan").forEach { cat ->
             File(this, "audio/$cat/default").mkdirs()
         }
@@ -53,13 +57,33 @@ class AppContainer(application: Application) {
         File(this, "videos").mkdirs()
     }
     private val settingsFile: File = File(application.filesDir, "jws_settings.json")
+    private val clockAnchorFile: File = File(application.filesDir, ".jws_clock_anchor")
 
     val settingsRepository: SettingsRepository = SettingsRepository(settingsFile)
+    val tokenStore: RemoteTokenStore = RemoteTokenStore(application.filesDir, appContext)
+    val clockIntegrityGuard: ClockIntegrityGuard = ClockIntegrityGuard(clockAnchorFile)
     val prayerTimeCalculator: PrayerTimeCalculator = PrayerTimeCalculator()
     val hijriCalculator: HijriCalculator = HijriCalculator()
     val stateMachine: JwsStateMachine = JwsStateMachine(prayerTimeCalculator)
     val audioEngine: JwsAudioEngine = JwsAudioEngine(appContext, assetsRootDir)
     val switchController: SwitchController = SwitchController(appContext)
+    val otaUpdateManager: OtaUpdateManager = OtaUpdateManager(appContext)
+    val audioPackDownloader: AudioPackDownloader = AudioPackDownloader()
+
+    val runtimeEngine: JwsRuntimeEngine = JwsRuntimeEngine(
+        appContext = appContext,
+        assetsRootDir = assetsRootDir,
+        settingsRepository = settingsRepository,
+        tokenStore = tokenStore,
+        clockIntegrityGuard = clockIntegrityGuard,
+        prayerTimeCalculator = prayerTimeCalculator,
+        hijriCalculator = hijriCalculator,
+        stateMachine = stateMachine,
+        audioEngine = audioEngine,
+        switchController = switchController,
+        otaUpdateManager = otaUpdateManager,
+        audioPackDownloader = audioPackDownloader
+    )
 }
 
 class JwsApplication : Application(), ImageLoaderFactory {
@@ -72,6 +96,7 @@ class JwsApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        container.runtimeEngine.ensureStarted()
     }
 
     override fun newImageLoader(): ImageLoader {
@@ -112,10 +137,6 @@ class JwsApplication : Application(), ImageLoaderFactory {
         }
     }
 
-    /**
-     * Reclaims image caches, idle audio decoder buffers, and stale in-memory logs
-     * so RAM can stabilize back toward baseline after heavy usage spikes.
-     */
     fun performMemoryRecovery(reason: String, aggressive: Boolean) {
         runCatching {
             Coil.imageLoader(this).memoryCache?.clear()
