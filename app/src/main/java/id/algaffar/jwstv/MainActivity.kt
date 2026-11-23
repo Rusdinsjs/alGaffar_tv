@@ -62,11 +62,13 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import id.algaffar.jwstv.data.server.KtorRemoteServer
 import id.algaffar.jwstv.domain.model.AppState
 import id.algaffar.jwstv.domain.model.LayoutPosition
+import id.algaffar.jwstv.service.JwsDeviceAdminReceiver
 import id.algaffar.jwstv.service.JwsForegroundService
 import id.algaffar.jwstv.ui.MainViewModel
 import id.algaffar.jwstv.ui.components.Responsive1080pCanvas
@@ -382,10 +384,32 @@ class MainActivity : ComponentActivity() {
         }.getOrNull()
     }
 
+    private fun applyImmersiveKioskMode() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applyImmersiveKioskMode()
+        JwsDeviceAdminReceiver.startKioskLockTaskIfDeviceOwner(this)
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            applyImmersiveKioskMode()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Always keep TV screen awake for 24/7 digital signage
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        applyImmersiveKioskMode()
         hasStoragePermission = checkStorageReadPermission()
         JwsForegroundService.startServiceSafely(this)
 
