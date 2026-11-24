@@ -322,33 +322,6 @@ fun OnlineFinanceFullscreen(
 ) {
     val palette = LocalJwsTheme.current
     val settings = snapshot.settings
-    val financeManager = remember { OnlineFinanceManager() }
-    var financialData by remember {
-        mutableStateOf(
-            OnlineFinanceManager.buildLocalFallback(
-                keuangan = settings.jumat.keuangan,
-                fallbackDateStr = snapshot.schedule.date.toString()
-            )
-        )
-    }
-
-    LaunchedEffect(
-        settings.onlineFinance.enabled,
-        settings.onlineFinance.sheetUrl,
-        settings.jumat.keuangan
-    ) {
-        financialData = financeManager.fetchFinancialData(
-            onlineFinance = settings.onlineFinance,
-            localJumatKeuangan = settings.jumat.keuangan
-        )
-    }
-
-    val idrFormatter = remember {
-        NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply {
-            maximumFractionDigits = 0
-        }
-    }
-
     val finCfg = settings.onlineFinance
     val qrCfg = settings.masjidQr
     val bankName = finCfg.bankName.ifBlank { qrCfg.bankName }
@@ -394,183 +367,17 @@ fun OnlineFinanceFullscreen(
             )
         }
 
-        // 2. Main Finance Content Card (Matching Holiday/WaktuJumat/Tarawih card style)
-        Column(
+        // 2. Main Finance Content Card (Shared with `online_finance` System Slide)
+        OnlineFinanceCardContent(
+            snapshot = snapshot,
+            isExpanded = true,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
                 .clip(RoundedCornerShape(24.dp))
                 .background(palette.bgCard)
                 .border(1.5.dp, palette.border, RoundedCornerShape(24.dp))
-                .padding(horizontal = 32.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
-            // Title & Sync Status Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.AccountBalanceWallet,
-                        contentDescription = null,
-                        tint = palette.accentSecondary,
-                        modifier = Modifier.size(40.dp)
-                    )
-                    Column {
-                        Text(
-                            text = "LAPORAN KEUANGAN KAS MASJID",
-                            color = palette.textPrimary,
-                            fontSize = 30.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                        Text(
-                            text = "Pembaruan: ${financialData.lastUpdated} • ${settings.brand.name}",
-                            color = palette.textSecondary,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(
-                            if (financialData.isLocalFallback) Color(0xFFF59E0B).copy(alpha = 0.16f)
-                            else Color(0xFF10B981).copy(alpha = 0.18f)
-                        )
-                        .border(
-                            1.dp,
-                            if (financialData.isLocalFallback) Color(0xFFF59E0B).copy(alpha = 0.5f)
-                            else Color(0xFF10B981).copy(alpha = 0.55f),
-                            RoundedCornerShape(50)
-                        )
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = if (financialData.isLocalFallback) "DATA BUKU KAS LOKAL" else "SINKRONISASI SPREADSHEET ONLINE",
-                        color = if (financialData.isLocalFallback) Color(0xFFFBBF24) else Color(0xFF34D399),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.sp
-                    )
-                }
-            }
-
-            // 3 Summary Cards (Pemasukan, Pengeluaran, Saldo Akhir)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
-            ) {
-                FinanceSummaryStatCard(
-                    label = "TOTAL PEMASUKAN (+)",
-                    amountFormatted = idrFormatter.format(financialData.income),
-                    accentColor = Color(0xFF10B981),
-                    modifier = Modifier.weight(1f)
-                )
-                FinanceSummaryStatCard(
-                    label = "TOTAL PENGELUARAN (-)",
-                    amountFormatted = idrFormatter.format(financialData.expense),
-                    accentColor = Color(0xFFF43F5E),
-                    modifier = Modifier.weight(1f)
-                )
-                FinanceSummaryStatCard(
-                    label = "SALDO AKHIR KAS MASJID",
-                    amountFormatted = idrFormatter.format(financialData.balance),
-                    accentColor = palette.accentSecondary,
-                    modifier = Modifier.weight(1.2f)
-                )
-            }
-
-            // Recent Transactions Table
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(palette.bgPrimary.copy(alpha = 0.45f))
-                    .border(1.dp, palette.border.copy(alpha = 0.6f), RoundedCornerShape(18.dp))
-                    .padding(horizontal = 22.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = "RINCIAN TRANSAKSI TERAKHIR",
-                    color = palette.accentSecondary,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 1.sp
-                )
-
-                if (financialData.recentTransactions.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Belum ada rincian jurnal transaksi yang tercatat pada periode ini.",
-                            color = palette.textSecondary,
-                            fontSize = 18.sp
-                        )
-                    }
-                } else {
-                    financialData.recentTransactions.take(5).forEach { tx ->
-                        val isIncome = tx.type.equals("in", ignoreCase = true)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White.copy(alpha = 0.04f))
-                                .padding(horizontal = 18.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    imageVector = if (isIncome) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
-                                    contentDescription = null,
-                                    tint = if (isIncome) Color(0xFF10B981) else Color(0xFFF43F5E),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Column {
-                                    Text(
-                                        text = tx.description.ifBlank { "Transaksi Kas Masjid" },
-                                        color = palette.textPrimary,
-                                        fontSize = 17.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    if (tx.date.isNotBlank()) {
-                                        Text(
-                                            text = tx.date,
-                                            color = palette.textSecondary,
-                                            fontSize = 13.sp
-                                        )
-                                    }
-                                }
-                            }
-
-                            Text(
-                                text = (if (isIncome) "+ " else "- ") + idrFormatter.format(tx.amount),
-                                color = if (isIncome) Color(0xFF34D399) else Color(0xFFFB7185),
-                                fontSize = 19.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        )
 
         // 3. Bottom Row: Left = Rekening / Transparansi Badge, Right = Quoted Guidance Text
         Row(
@@ -649,32 +456,257 @@ fun OnlineFinanceFullscreen(
     }
 }
 
+/**
+ * Reusable Online Finance Card Content shared between [OnlineFinanceFullscreen]
+ * and the `online_finance` System Slide inside Main Standby (`1440 x 675 dp`).
+ */
+@Composable
+fun OnlineFinanceCardContent(
+    snapshot: JwsRuntimeSnapshot,
+    isExpanded: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalJwsTheme.current
+    val settings = snapshot.settings
+    val financeManager = remember { OnlineFinanceManager() }
+    var financialData by remember {
+        mutableStateOf(
+            OnlineFinanceManager.buildLocalFallback(
+                keuangan = settings.jumat.keuangan,
+                fallbackDateStr = snapshot.schedule.date.toString()
+            )
+        )
+    }
+
+    LaunchedEffect(
+        settings.onlineFinance.enabled,
+        settings.onlineFinance.sheetUrl,
+        settings.jumat.keuangan
+    ) {
+        financialData = financeManager.fetchFinancialData(
+            onlineFinance = settings.onlineFinance,
+            localJumatKeuangan = settings.jumat.keuangan
+        )
+    }
+
+    val idrFormatter = remember {
+        NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply {
+            maximumFractionDigits = 0
+        }
+    }
+
+    val maxTxRows = if (isExpanded) 5 else 3
+
+    Column(
+        modifier = modifier.padding(
+            horizontal = if (isExpanded) 32.dp else 28.dp,
+            vertical = if (isExpanded) 24.dp else 20.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(if (isExpanded) 18.dp else 14.dp)
+    ) {
+        // Title & Sync Status Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.AccountBalanceWallet,
+                    contentDescription = null,
+                    tint = palette.accentSecondary,
+                    modifier = Modifier.size(if (isExpanded) 40.dp else 34.dp)
+                )
+                Column {
+                    Text(
+                        text = "LAPORAN KEUANGAN KAS MASJID",
+                        color = palette.textPrimary,
+                        fontSize = if (isExpanded) 30.sp else 26.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = "Pembaruan: ${financialData.lastUpdated} • ${settings.brand.name}",
+                        color = palette.textSecondary,
+                        fontSize = if (isExpanded) 18.sp else 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        if (financialData.isLocalFallback) Color(0xFFF59E0B).copy(alpha = 0.16f)
+                        else Color(0xFF10B981).copy(alpha = 0.18f)
+                    )
+                    .border(
+                        1.dp,
+                        if (financialData.isLocalFallback) Color(0xFFF59E0B).copy(alpha = 0.5f)
+                        else Color(0xFF10B981).copy(alpha = 0.55f),
+                        RoundedCornerShape(50)
+                    )
+                    .padding(horizontal = 16.dp, vertical = 7.dp)
+            ) {
+                Text(
+                    text = if (financialData.isLocalFallback) "DATA BUKU KAS LOKAL" else "SINKRONISASI SPREADSHEET ONLINE",
+                    color = if (financialData.isLocalFallback) Color(0xFFFBBF24) else Color(0xFF34D399),
+                    fontSize = if (isExpanded) 14.sp else 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp
+                )
+            }
+        }
+
+        // 3 Summary Cards (Pemasukan, Pengeluaran, Saldo Akhir)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
+        ) {
+            FinanceSummaryStatCard(
+                label = "TOTAL PEMASUKAN (+)",
+                amountFormatted = idrFormatter.format(financialData.income),
+                accentColor = Color(0xFF10B981),
+                isExpanded = isExpanded,
+                modifier = Modifier.weight(1f)
+            )
+            FinanceSummaryStatCard(
+                label = "TOTAL PENGELUARAN (-)",
+                amountFormatted = idrFormatter.format(financialData.expense),
+                accentColor = Color(0xFFF43F5E),
+                isExpanded = isExpanded,
+                modifier = Modifier.weight(1f)
+            )
+            FinanceSummaryStatCard(
+                label = "SALDO AKHIR KAS MASJID",
+                amountFormatted = idrFormatter.format(financialData.balance),
+                accentColor = palette.accentSecondary,
+                isExpanded = isExpanded,
+                modifier = Modifier.weight(1.2f)
+            )
+        }
+
+        // Recent Transactions Table
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(palette.bgPrimary.copy(alpha = 0.45f))
+                .border(1.dp, palette.border.copy(alpha = 0.6f), RoundedCornerShape(18.dp))
+                .padding(horizontal = 20.dp, vertical = if (isExpanded) 16.dp else 12.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isExpanded) 10.dp else 8.dp)
+        ) {
+            Text(
+                text = "RINCIAN TRANSAKSI TERAKHIR",
+                color = palette.accentSecondary,
+                fontSize = if (isExpanded) 17.sp else 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.sp
+            )
+
+            if (financialData.recentTransactions.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Belum ada rincian jurnal transaksi yang tercatat pada periode ini.",
+                        color = palette.textSecondary,
+                        fontSize = if (isExpanded) 18.sp else 16.sp
+                    )
+                }
+            } else {
+                financialData.recentTransactions.take(maxTxRows).forEach { tx ->
+                    val isIncome = tx.type.equals("in", ignoreCase = true)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White.copy(alpha = 0.04f))
+                            .padding(horizontal = 16.dp, vertical = if (isExpanded) 10.dp else 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = if (isIncome) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                                contentDescription = null,
+                                tint = if (isIncome) Color(0xFF10B981) else Color(0xFFF43F5E),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = tx.description.ifBlank { "Transaksi Kas Masjid" },
+                                    color = palette.textPrimary,
+                                    fontSize = if (isExpanded) 17.sp else 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (tx.date.isNotBlank()) {
+                                    Text(
+                                        text = tx.date,
+                                        color = palette.textSecondary,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        Text(
+                            text = (if (isIncome) "+ " else "- ") + idrFormatter.format(tx.amount),
+                            color = if (isIncome) Color(0xFF34D399) else Color(0xFFFB7185),
+                            fontSize = if (isExpanded) 19.sp else 17.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun FinanceSummaryStatCard(
     label: String,
     amountFormatted: String,
     accentColor: Color,
+    isExpanded: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(if (isExpanded) 22.dp else 18.dp))
             .background(palette.bgCard)
-            .border(1.5.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(22.dp))
-            .padding(horizontal = 24.dp, vertical = 20.dp)
+            .border(1.5.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(if (isExpanded) 22.dp else 18.dp))
+            .padding(
+                horizontal = if (isExpanded) 24.dp else 18.dp,
+                vertical = if (isExpanded) 20.dp else 14.dp
+            )
     ) {
         Text(
             text = label,
             color = palette.textSecondary,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold
+            fontSize = if (isExpanded) 14.sp else 13.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(if (isExpanded) 8.dp else 6.dp))
         Text(
             text = amountFormatted,
             color = accentColor,
-            fontSize = 32.sp,
+            fontSize = if (isExpanded) 32.sp else 28.sp,
             fontWeight = FontWeight.Black,
             fontFamily = FontFamily.Monospace,
             maxLines = 1,

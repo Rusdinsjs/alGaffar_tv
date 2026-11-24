@@ -98,10 +98,6 @@ private val SLIDE_TYPE_CATALOG: List<SlideTypeMeta> = listOf(
         "Otomatis menampilkan laporan pemasukan, pengeluaran, dan saldo kas dari menu Acara → Jum'at."
     ),
     SlideTypeMeta(
-        "qr_jumat", "QR Kas Jum'at", "QR JUM'AT", Color(0xFF34D399), Icons.Default.QrCode2,
-        "Menampilkan QR Code ringkasan laporan kas Jum'at (offline / custom URL)."
-    ),
-    SlideTypeMeta(
         "ramadhan_petugas", "Petugas Ramadhan", "RAMADHAN", Color(0xFF10B981), Icons.Default.Groups,
         "Otomatis menampilkan Penceramah, Imam Tarawih & Imam Witir malam aktif dari menu Acara → Ramadhan."
     ),
@@ -204,7 +200,7 @@ internal fun slideTextAlignOf(align: String): TextAlign = when (align.lowercase(
  * Clean, simple, accordion-based Slide Info Settings Tab (`slides`).
  * Feature-parity with `SlideSettingsForm.tsx` in `jws-android-algaffar`:
  * - Global slideshow controls (Auto-Play, Default Duration, Max Video Resolution)
- * - Add Basic Slides (Text, Image, Video) & 16 System Slides
+ * - Add Basic Slides (Text, Image, Video) & 15 System Slides
  * - Compact single-row accordion list with thumbnail previews & single-open editor
  * - Mode visibility toggles (Area Utama, Fullscreen, Jum'at, Ramadhan, Idul Fitri, Idul Adha)
  * - Rich Text formatting toolbar + Live Preview for text slides
@@ -237,7 +233,7 @@ fun SlideSettingsTab(
             enabled = true,
             showInMain = true,
             showInSlideshow = true,
-            showInJumat = isUniversalDefault || type.startsWith("jumat_") || type == "qr_jumat",
+            showInJumat = isUniversalDefault || type.startsWith("jumat_"),
             showInRamadhan = isUniversalDefault || type.startsWith("ramadhan_"),
             showInIdulFitri = isUniversalDefault || type == "idulfitri_petugas" || type == "ramadhan_laporan_akhir",
             showInIdulAdha = isUniversalDefault || type.startsWith("iduladha_"),
@@ -1113,14 +1109,14 @@ private fun SlideModeToggleChip(
 }
 
 private fun supportsRamadhanMode(type: String): Boolean =
-    type in setOf("text", "image", "video", "welcome", "analog_clock", "online_finance", "qr_infaq", "qr_finance", "qr_jumat") ||
+    type in setOf("text", "image", "video", "welcome", "analog_clock", "online_finance", "qr_infaq", "qr_finance") ||
         type.startsWith("ramadhan_")
 
 private fun supportsIdulFitriMode(type: String): Boolean =
-    type in setOf("text", "image", "video", "welcome", "analog_clock", "idulfitri_petugas", "ramadhan_laporan_akhir", "online_finance", "qr_infaq", "qr_finance", "qr_jumat")
+    type in setOf("text", "image", "video", "welcome", "analog_clock", "idulfitri_petugas", "ramadhan_laporan_akhir", "online_finance", "qr_infaq", "qr_finance")
 
 private fun supportsIdulAdhaMode(type: String): Boolean =
-    type in setOf("text", "image", "video", "welcome", "analog_clock", "iduladha_petugas", "iduladha_qurban", "online_finance", "qr_infaq", "qr_finance", "qr_jumat")
+    type in setOf("text", "image", "video", "welcome", "analog_clock", "iduladha_petugas", "iduladha_qurban", "online_finance", "qr_infaq", "qr_finance")
 
 private fun supportsJumatMode(type: String): Boolean =
-    type in setOf("text", "image", "video", "welcome", "analog_clock", "jumat_petugas", "jumat_keuangan", "qr_jumat", "online_finance", "qr_infaq", "qr_finance")
+    type in setOf("text", "image", "video", "welcome", "analog_clock", "jumat_petugas", "jumat_keuangan", "online_finance", "qr_infaq", "qr_finance")

@@ -98,9 +98,7 @@ fun StandbyScreen(
                         modifier = Modifier.size(width = 1920.dp, height = 675.dp)
                     ) {
                         MainSlideContainer(
-                            now = snapshot.now,
-                            today = snapshot.schedule.date,
-                            settings = settings,
+                            snapshot = snapshot,
                             assetsRootDir = assetsRootDir,
                             modifier = Modifier.size(width = 1440.dp, height = 675.dp)
                         )
@@ -142,9 +140,7 @@ fun StandbyScreen(
                             modifier = Modifier.size(width = 1440.dp, height = 900.dp)
                         ) {
                             MainSlideContainer(
-                                now = snapshot.now,
-                                today = snapshot.schedule.date,
-                                settings = settings,
+                                snapshot = snapshot,
                                 assetsRootDir = assetsRootDir,
                                 modifier = Modifier.size(width = 1440.dp, height = 675.dp)
                             )
@@ -194,9 +190,7 @@ fun StandbyScreen(
                             modifier = Modifier.size(width = 1440.dp, height = 900.dp)
                         ) {
                             MainSlideContainer(
-                                now = snapshot.now,
-                                today = snapshot.schedule.date,
-                                settings = settings,
+                                snapshot = snapshot,
                                 assetsRootDir = assetsRootDir,
                                 modifier = Modifier.size(width = 1440.dp, height = 675.dp)
                             )

@@ -53,8 +53,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import id.algaffar.jwstv.domain.engine.JwsStateMachine
-import id.algaffar.jwstv.domain.model.JumatKeuanganRecord
 import id.algaffar.jwstv.ui.JwsRuntimeSnapshot
 import id.algaffar.jwstv.ui.screens.standby.HeaderClockCard
 import id.algaffar.jwstv.ui.screens.standby.generateQrBitmap
@@ -63,7 +61,6 @@ import id.algaffar.jwstv.ui.settings.resolveMediaPreview
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
 import id.algaffar.jwstv.ui.theme.LocalPerformanceMode
 import java.io.File
-import java.text.NumberFormat
 import java.util.Locale
 
 /**
@@ -238,6 +235,7 @@ fun QrSplitOverlayFullscreen(
     assetsRootDir: File? = null,
     isLogoMenuOpen: Boolean = false,
     onLogoClick: () -> Unit = {},
+    isCompactSlide: Boolean = false,
     extraLeftContent: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -395,26 +393,36 @@ fun QrSplitOverlayFullscreen(
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .fillMaxHeight()
-                .fillMaxWidth(0.49f)
-                .padding(start = 52.dp, end = 32.dp, top = 28.dp, bottom = 36.dp),
+                .fillMaxWidth(if (isCompactSlide) 0.50f else 0.49f)
+                .padding(
+                    start = if (isCompactSlide) 32.dp else 52.dp,
+                    end = if (isCompactSlide) 20.dp else 32.dp,
+                    top = if (isCompactSlide) 22.dp else 28.dp,
+                    bottom = if (isCompactSlide) 24.dp else 36.dp
+                ),
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.Start
         ) {
-            // Top: Mosque Brand (Logo + Nama + Alamat) & State Context Badge
+            // Top: Mosque Brand (Logo + Nama + Alamat, fullscreen only) & State Context Badge
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                FullscreenBrandHeader(
-                    brand = snapshot.settings.brand,
-                    assetsRootDir = assetsRootDir,
-                    isLogoMenuOpen = isLogoMenuOpen,
-                    onLogoClick = onLogoClick
-                )
+                if (!isCompactSlide) {
+                    FullscreenBrandHeader(
+                        brand = snapshot.settings.brand,
+                        assetsRootDir = assetsRootDir,
+                        isLogoMenuOpen = isLogoMenuOpen,
+                        onLogoClick = onLogoClick
+                    )
+                }
 
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
                         .background(effectiveAccent.copy(alpha = 0.18f))
                         .border(1.dp, effectiveAccent.copy(alpha = 0.55f), RoundedCornerShape(50))
-                        .padding(horizontal = 18.dp, vertical = 7.dp),
+                        .padding(
+                            horizontal = if (isCompactSlide) 14.dp else 18.dp,
+                            vertical = if (isCompactSlide) 6.dp else 7.dp
+                        ),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -422,12 +430,12 @@ fun QrSplitOverlayFullscreen(
                         imageVector = badgeIcon,
                         contentDescription = null,
                         tint = effectiveAccent,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(if (isCompactSlide) 16.dp else 18.dp)
                     )
                     Text(
                         text = badgeLabel.uppercase(),
                         color = effectiveAccent,
-                        fontSize = 14.sp,
+                        fontSize = if (isCompactSlide) 13.sp else 14.sp,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 2.sp,
                         maxLines = 1,
@@ -439,13 +447,13 @@ fun QrSplitOverlayFullscreen(
             // Middle: Judul + Himbauan (+ Optional Extra Summary)
             Column(
                 modifier = Modifier.fillMaxWidth(0.95f),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(if (isCompactSlide) 10.dp else 14.dp)
             ) {
                 Text(
                     text = title.uppercase(),
                     color = secondaryRibbonColor,
-                    fontSize = 60.sp,
-                    lineHeight = 68.sp,
+                    fontSize = if (isCompactSlide) 40.sp else 60.sp,
+                    lineHeight = if (isCompactSlide) 46.sp else 68.sp,
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 0.5.sp,
@@ -457,11 +465,11 @@ fun QrSplitOverlayFullscreen(
                 Text(
                     text = "“$guidance”",
                     color = palette.textSecondary,
-                    fontSize = 27.sp,
-                    lineHeight = 36.sp,
+                    fontSize = if (isCompactSlide) 20.sp else 27.sp,
+                    lineHeight = if (isCompactSlide) 28.sp else 36.sp,
                     fontStyle = FontStyle.Italic,
                     fontWeight = FontWeight.Medium,
-                    maxLines = 4,
+                    maxLines = if (isCompactSlide) 3 else 4,
                     overflow = TextOverflow.Ellipsis
                 )
 
@@ -474,12 +482,15 @@ fun QrSplitOverlayFullscreen(
             val hasBankInfo = bankName.isNotBlank() || nomorRekening.isNotBlank() || atasNama.isNotBlank()
             Column(
                 modifier = Modifier
-                    .fillMaxWidth(0.88f)
-                    .clip(RoundedCornerShape(24.dp))
+                    .fillMaxWidth(if (isCompactSlide) 0.90f else 0.88f)
+                    .clip(RoundedCornerShape(if (isCompactSlide) 18.dp else 24.dp))
                     .background(palette.bgCard.copy(alpha = 0.92f))
-                    .border(2.dp, effectiveAccent.copy(alpha = 0.55f), RoundedCornerShape(24.dp))
-                    .padding(horizontal = 24.dp, vertical = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .border(2.dp, effectiveAccent.copy(alpha = 0.55f), RoundedCornerShape(if (isCompactSlide) 18.dp else 24.dp))
+                    .padding(
+                        horizontal = if (isCompactSlide) 18.dp else 24.dp,
+                        vertical = if (isCompactSlide) 12.dp else 18.dp
+                    ),
+                verticalArrangement = Arrangement.spacedBy(if (isCompactSlide) 5.dp else 8.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -488,18 +499,18 @@ fun QrSplitOverlayFullscreen(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.AccountBalance,
                             contentDescription = null,
                             tint = effectiveAccent,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(if (isCompactSlide) 18.dp else 22.dp)
                         )
                         Text(
                             text = "REKENING INFAQ & TRANSFER",
                             color = effectiveAccent,
-                            fontSize = 15.sp,
+                            fontSize = if (isCompactSlide) 13.sp else 15.sp,
                             fontWeight = FontWeight.ExtraBold,
                             letterSpacing = 1.5.sp
                         )
@@ -510,12 +521,12 @@ fun QrSplitOverlayFullscreen(
                                 .clip(RoundedCornerShape(50))
                                 .background(effectiveAccent.copy(alpha = 0.20f))
                                 .border(1.dp, effectiveAccent.copy(alpha = 0.5f), RoundedCornerShape(50))
-                                .padding(horizontal = 14.dp, vertical = 4.dp)
+                                .padding(horizontal = if (isCompactSlide) 10.dp else 14.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 text = bankName.uppercase(),
                                 color = palette.textPrimary,
-                                fontSize = 16.sp,
+                                fontSize = if (isCompactSlide) 13.sp else 16.sp,
                                 fontWeight = FontWeight.Black,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -528,7 +539,7 @@ fun QrSplitOverlayFullscreen(
                     Text(
                         text = nomorRekening.ifBlank { "-" },
                         color = secondaryRibbonColor,
-                        fontSize = 38.sp,
+                        fontSize = if (isCompactSlide) 28.sp else 38.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Black,
                         maxLines = 1,
@@ -538,7 +549,7 @@ fun QrSplitOverlayFullscreen(
                     Text(
                         text = "a.n. ${atasNama.ifBlank { snapshot.settings.brand.name }}",
                         color = palette.textPrimary,
-                        fontSize = 22.sp,
+                        fontSize = if (isCompactSlide) 17.sp else 22.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -547,13 +558,13 @@ fun QrSplitOverlayFullscreen(
                     Text(
                         text = "Pembayaran Non-Tunai via QRIS",
                         color = palette.textPrimary,
-                        fontSize = 24.sp,
+                        fontSize = if (isCompactSlide) 19.sp else 24.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = "Scan QR Code di samping dengan aplikasi Mobile Banking / E-Wallet",
                         color = palette.textSecondary,
-                        fontSize = 17.sp,
+                        fontSize = if (isCompactSlide) 14.sp else 17.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -561,32 +572,43 @@ fun QrSplitOverlayFullscreen(
             }
         }
 
-        // 4. Top-Right Clock Card matching Standby & Pelaksanaan Sholat (480x180dp)
-        HeaderClockCard(
-            now = snapshot.now,
-            clockStyle = snapshot.settings.brand.clockStyle,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 24.dp, end = 32.dp)
-        )
+        // 4. Top-Right Clock Card matching Standby & Pelaksanaan Sholat (480x180dp, fullscreen only)
+        if (!isCompactSlide) {
+            HeaderClockCard(
+                now = snapshot.now,
+                clockStyle = snapshot.settings.brand.clockStyle,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 24.dp, end = 32.dp)
+            )
+        }
 
         // 5. Right-Side Full QR Card (~80% of available right-side area below clock)
         Box(
             modifier = Modifier
-                .align(Alignment.BottomEnd)
+                .align(if (isCompactSlide) Alignment.CenterEnd else Alignment.BottomEnd)
                 .fillMaxWidth(0.51f)
                 .fillMaxHeight()
-                .padding(top = 216.dp, bottom = 36.dp, start = 24.dp, end = 48.dp),
+                .padding(
+                    top = if (isCompactSlide) 24.dp else 216.dp,
+                    bottom = if (isCompactSlide) 24.dp else 36.dp,
+                    start = if (isCompactSlide) 20.dp else 24.dp,
+                    end = if (isCompactSlide) 36.dp else 48.dp
+                ),
             contentAlignment = Alignment.Center
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxHeight(0.88f)
+                    .fillMaxHeight(if (isCompactSlide) 0.86f else 0.88f)
                     .aspectRatio(1f)
-                    .clip(RoundedCornerShape(36.dp))
+                    .clip(RoundedCornerShape(if (isCompactSlide) 26.dp else 36.dp))
                     .background(Color.White)
-                    .border(4.dp, secondaryRibbonColor.copy(alpha = 0.85f), RoundedCornerShape(36.dp))
-                    .padding(28.dp),
+                    .border(
+                        width = if (isCompactSlide) 3.dp else 4.dp,
+                        color = secondaryRibbonColor.copy(alpha = 0.85f),
+                        shape = RoundedCornerShape(if (isCompactSlide) 26.dp else 36.dp)
+                    )
+                    .padding(if (isCompactSlide) 18.dp else 28.dp),
                 contentAlignment = Alignment.Center
             ) {
                 when (resolvedCustomQr) {
@@ -635,6 +657,7 @@ fun FinanceQrFullscreen(
     assetsRootDir: File? = null,
     isLogoMenuOpen: Boolean = false,
     onLogoClick: () -> Unit = {},
+    isCompactSlide: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val finance = snapshot.settings.onlineFinance
@@ -655,107 +678,7 @@ fun FinanceQrFullscreen(
         assetsRootDir = assetsRootDir,
         isLogoMenuOpen = isLogoMenuOpen,
         onLogoClick = onLogoClick,
-        modifier = modifier
-    )
-}
-
-/**
- * Fullscreen QR Code Ringkasan Kas Jum'at (`jumat_qr`).
- * Mirrors `src/components/Screens/FullScreen/shared/JumatQrSlide.tsx`.
- */
-@Composable
-fun JumatQrFullscreen(
-    snapshot: JwsRuntimeSnapshot,
-    assetsRootDir: File? = null,
-    isLogoMenuOpen: Boolean = false,
-    onLogoClick: () -> Unit = {},
-    modifier: Modifier = Modifier
-) {
-    val palette = LocalJwsTheme.current
-    val jumat = snapshot.settings.jumat
-    val qrCfg = snapshot.settings.masjidQr
-    val finance = snapshot.settings.onlineFinance
-    val today = snapshot.schedule.date
-    val effDate = remember(jumat.keuangan.records, today) {
-        JwsStateMachine.findEffectiveJumatKeuanganDate(jumat.keuangan.records, today) ?: today.toString()
-    }
-    val record = jumat.keuangan.records[effDate] ?: JumatKeuanganRecord(saldoKasLalu = jumat.keuangan.saldoKasLalu)
-    val rupiah = remember {
-        NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply { maximumFractionDigits = 0 }
-    }
-
-    val qrPayload = remember(jumat.keuangan, record, effDate, snapshot.settings.brand.name) {
-        if (jumat.keuangan.qrType == "custom_url" && jumat.keuangan.qrCustomUrl.isNotBlank()) {
-            jumat.keuangan.qrCustomUrl
-        } else {
-            buildString {
-                appendLine(jumat.keuangan.customTitle.ifBlank { "Laporan Infaq Kas Jum'at" })
-                appendLine(snapshot.settings.brand.name)
-                appendLine("Tanggal: $effDate")
-                appendLine("Saldo Lalu: ${rupiah.format(record.saldoKasLalu)}")
-                appendLine("Pemasukan: ${rupiah.format(record.pemasukan)}")
-                appendLine("Pengeluaran: ${rupiah.format(record.pengeluaran)}")
-                appendLine("Saldo Akhir: ${rupiah.format(record.saldoAkhir)}")
-            }
-        }
-    }
-
-    QrSplitOverlayFullscreen(
-        snapshot = snapshot,
-        badgeLabel = "QR LAPORAN KAS JUM'AT",
-        badgeIcon = Icons.Default.QrCode2,
-        title = jumat.keuangan.customTitle.ifBlank { "Laporan Infaq Kas Jum'at" },
-        guidance = "Periode $effDate — Pindai QR Code di samping untuk melihat & menyimpan ringkasan laporan kas Jum'at ${snapshot.settings.brand.name}.",
-        qrPayload = qrPayload,
-        bankName = qrCfg.bankName.ifBlank { finance.bankName },
-        nomorRekening = qrCfg.nomorRekening.ifBlank { finance.nomorRekening },
-        atasNama = qrCfg.atasNama.ifBlank { finance.atasNama },
-        accentColor = Color(0xFFF59E0B),
-        assetsRootDir = assetsRootDir,
-        isLogoMenuOpen = isLogoMenuOpen,
-        onLogoClick = onLogoClick,
-        extraLeftContent = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(palette.bgCard.copy(alpha = 0.78f))
-                    .border(1.dp, palette.border, RoundedCornerShape(18.dp))
-                    .padding(horizontal = 18.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = "Saldo Lalu: ${rupiah.format(record.saldoKasLalu)}",
-                        color = palette.textSecondary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Masuk: +${rupiah.format(record.pemasukan)}  •  Keluar: -${rupiah.format(record.pengeluaran)}",
-                        color = Color(0xFF34D399),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "SALDO AKHIR",
-                        color = palette.textSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-                    Text(
-                        text = rupiah.format(record.saldoAkhir),
-                        color = palette.accentSecondary,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                }
-            }
-        },
+        isCompactSlide = isCompactSlide,
         modifier = modifier
     )
 }

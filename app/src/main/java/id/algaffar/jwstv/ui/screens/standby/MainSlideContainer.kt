@@ -83,9 +83,22 @@ import id.algaffar.jwstv.domain.model.BrandSettings
 import id.algaffar.jwstv.domain.model.JumatKeuanganRecord
 import id.algaffar.jwstv.domain.model.JumatPetugasRecord
 import id.algaffar.jwstv.domain.model.MasjidQrSettings
+import id.algaffar.jwstv.domain.model.QurbanGroup
 import id.algaffar.jwstv.domain.model.RamadhanSettings
 import id.algaffar.jwstv.domain.model.SlideItem
+import id.algaffar.jwstv.ui.JwsRuntimeSnapshot
 import id.algaffar.jwstv.ui.components.clock.BigAnalogClock
+import id.algaffar.jwstv.ui.screens.fullscreen.EidPetugasSlideView
+import id.algaffar.jwstv.ui.screens.fullscreen.FinanceQrFullscreen
+import id.algaffar.jwstv.ui.screens.fullscreen.IdulFitriKeuanganSlideView
+import id.algaffar.jwstv.ui.screens.fullscreen.MasjidQrFullscreen
+import id.algaffar.jwstv.ui.screens.fullscreen.OnlineFinanceCardContent
+import id.algaffar.jwstv.ui.screens.fullscreen.OnlineFinanceFullscreen
+import id.algaffar.jwstv.ui.screens.fullscreen.QurbanGroupSlideView
+import id.algaffar.jwstv.ui.screens.fullscreen.RamadhanJadwalSlideView
+import id.algaffar.jwstv.ui.screens.fullscreen.TarawihKeuanganSlideView
+import id.algaffar.jwstv.ui.screens.fullscreen.TarawihPetugasSlideView
+import id.algaffar.jwstv.ui.screens.fullscreen.TarawihTakjilSlideView
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
 import id.algaffar.jwstv.ui.theme.LocalPerformanceMode
 import kotlinx.coroutines.delay
@@ -181,13 +194,13 @@ internal fun parseWelcomeMasjidLines(
  */
 @Composable
 fun MainSlideContainer(
-    now: ZonedDateTime,
-    today: LocalDate,
-    settings: AppStateSettings,
+    snapshot: JwsRuntimeSnapshot,
     assetsRootDir: File?,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
+    val settings = snapshot.settings
+    val today = snapshot.schedule.date
 
     val deck: List<MainDeckSlide> = remember(today, settings) {
         buildList {
@@ -198,18 +211,25 @@ fun MainSlideContainer(
                 add(MainDeckSlide.CustomSlide(slide))
             }
 
-            // 2. Ramadhan Overview slide when Ramadhan mode is active and no explicit ramadhan slide added
+            // 2. Auto Ramadhan slides when Ramadhan mode is active and no explicit ramadhan slide added
             val hasExplicitRamadhanSlide = configuredTypes.any { it.startsWith("ramadhan_") }
             if (settings.ramadhan.isRamadhan && !hasExplicitRamadhanSlide) {
-                add(
-                    MainDeckSlide.RamadhanOverview(
-                        ramadhan = settings.ramadhan,
-                        durationSeconds = settings.ramadhan.slideshow.slideDuration
-                    )
-                )
+                val dur = settings.ramadhan.slideshow.slideDuration.coerceIn(5, 60)
+                if (settings.ramadhan.slideshow.showPetugas) {
+                    add(MainDeckSlide.CustomSlide(SlideItem(id = "auto-ramadhan-petugas", type = "ramadhan_petugas", duration = dur)))
+                }
+                if (settings.ramadhan.slideshow.showKeuangan) {
+                    add(MainDeckSlide.CustomSlide(SlideItem(id = "auto-ramadhan-keuangan", type = "ramadhan_keuangan", duration = dur)))
+                }
+                if (settings.ramadhan.slideshow.showJadwal) {
+                    add(MainDeckSlide.CustomSlide(SlideItem(id = "auto-ramadhan-jadwal", type = "ramadhan_jadwal", duration = dur)))
+                }
+                if (settings.ramadhan.slideshow.showTakjil) {
+                    add(MainDeckSlide.CustomSlide(SlideItem(id = "auto-ramadhan-takjil", type = "ramadhan_takjil", duration = dur)))
+                }
             }
 
-            // 4. Fallback so main container is never blank if user disabled all slides
+            // 3. Fallback so main container is never blank if user disabled all slides
             if (isEmpty()) {
                 SlideItem.defaultSystemSlides().forEach { add(MainDeckSlide.CustomSlide(it)) }
             }
@@ -220,8 +240,9 @@ fun MainSlideContainer(
     val safeIndex = currentIndex.mod(deck.size.coerceAtLeast(1))
     val activeSlide = deck[safeIndex]
 
-    val isSystemDefaultSlide = activeSlide is MainDeckSlide.CustomSlide &&
-        (activeSlide.item.type == "welcome" || activeSlide.item.type == "analog_clock")
+    val activeSlideType = (activeSlide as? MainDeckSlide.CustomSlide)?.item?.type.orEmpty()
+    val isSystemDefaultSlide = activeSlideType == "welcome" || activeSlideType == "analog_clock"
+    val isQrSystemSlide = activeSlideType == "qr_infaq" || activeSlideType == "qr_finance"
 
     LaunchedEffect(safeIndex, activeSlide.durationSeconds, deck.size, settings.slideConfig.autoPlay) {
         if (!settings.slideConfig.autoPlay || deck.size <= 1) return@LaunchedEffect
@@ -253,27 +274,37 @@ fun MainSlideContainer(
             when (slide) {
                 is MainDeckSlide.CustomSlide -> CustomSlideView(
                     slide = slide.item,
-                    settings = settings,
-                    today = today,
-                    now = now,
+                    snapshot = snapshot,
                     assetsRootDir = assetsRootDir
                 )
                 is MainDeckSlide.JumatPetugas -> JumatPetugasSlideView(
                     fridayDate = slide.fridayDate,
-                    record = slide.record
+                    record = slide.record,
+                    isRowLayout = true,
+                    isExpanded = false
                 )
                 is MainDeckSlide.JumatKeuangan -> JumatKeuanganSlideView(
                     fridayDate = slide.fridayDate,
-                    record = slide.record
+                    record = slide.record,
+                    isExpanded = false
                 )
-                is MainDeckSlide.RamadhanOverview -> RamadhanOverviewSlideView(
-                    ramadhan = slide.ramadhan
-                )
+                is MainDeckSlide.RamadhanOverview -> {
+                    val nightIdx = (slide.ramadhan.currentNight - 1).coerceIn(0, 29)
+                    val p = slide.ramadhan.petugas.getOrNull(nightIdx)
+                    TarawihPetugasSlideView(
+                        night = slide.ramadhan.currentNight,
+                        hijriYear = slide.ramadhan.hijriYear,
+                        penceramah = p?.penceramah ?: "-",
+                        imamTarawih = p?.imamTarawih ?: "-",
+                        imamWitir = p?.imamWitir ?: "-",
+                        isExpanded = false
+                    )
+                }
             }
         }
 
-        // Floating Masjid QR Infaq Badge (Bottom-Right)
-        if (settings.masjidQr.enabled && settings.masjidQr.showFloatingOnMain) {
+        // Floating Masjid QR Infaq Badge (Bottom-Right, hidden on full QR system slides)
+        if (settings.masjidQr.enabled && settings.masjidQr.showFloatingOnMain && !isQrSystemSlide) {
             FloatingMasjidQrBadge(
                 masjidQr = settings.masjidQr,
                 modifier = Modifier
@@ -635,294 +666,279 @@ fun StyledTextSlideView(
 }
 
 /**
- * Renders system data slides (`jumat_*`, `ramadhan_*`, `idulfitri_*`, `iduladha_*`, `online_finance`, `qr_*`).
+ * Renders system data slides (`jumat_*`, `ramadhan_*`, `idulfitri_*`, `iduladha_*`, `online_finance`, `qr_*`)
+ * using the exact same UI components as the Fullscreen Simulation screens (`WaktuJumatFullscreen`,
+ * `TarawihFullscreen`, `HolidayAndQurbanFullscreen`, `OnlineFinanceFullscreen`, `MasjidQrFullscreen`,
+ * `FinanceQrFullscreen`).
  * Returns true if the slide type was handled as a system data slide.
  */
 @Composable
 fun RenderSystemDataSlideIfApplicable(
     slide: SlideItem,
-    settings: AppStateSettings,
-    today: LocalDate,
+    snapshot: JwsRuntimeSnapshot,
+    assetsRootDir: File? = null,
     isExpanded: Boolean = false,
     modifier: Modifier = Modifier
 ): Boolean {
-    val palette = LocalJwsTheme.current
-    val rupiah = remember {
-        NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply { maximumFractionDigits = 0 }
-    }
+    val settings = snapshot.settings
+    val today = snapshot.schedule.date
 
     when (slide.type) {
-        "jumat_petugas" -> {
-            val effDate = JwsStateMachine.findEffectivePetugasJumatDate(settings.jumat.petugas.records, today)
-            val rec = effDate?.let { settings.jumat.petugas.records[it] } ?: JumatPetugasRecord()
-            JumatPetugasSlideView(
-                fridayDate = effDate ?: JwsStateMachine.snapToNearestFriday(today).toString(),
-                record = rec
-            )
-            return true
-        }
-        "jumat_keuangan" -> {
-            val effDate = JwsStateMachine.findEffectiveJumatKeuanganDate(settings.jumat.keuangan.records, today)
-            val rec = effDate?.let { settings.jumat.keuangan.records[it] }
-                ?: JumatKeuanganRecord(saldoKasLalu = settings.jumat.keuangan.saldoKasLalu)
-            JumatKeuanganSlideView(fridayDate = effDate ?: today.toString(), record = rec, isExpanded = isExpanded)
-            return true
-        }
-        "qr_jumat" -> {
-            val effDate = JwsStateMachine.findEffectiveJumatKeuanganDate(settings.jumat.keuangan.records, today) ?: today.toString()
-            val rec = settings.jumat.keuangan.records[effDate] ?: JumatKeuanganRecord(saldoKasLalu = settings.jumat.keuangan.saldoKasLalu)
-            val payload = if (settings.jumat.keuangan.qrType == "custom_url" && settings.jumat.keuangan.qrCustomUrl.isNotBlank()) {
-                settings.jumat.keuangan.qrCustomUrl
-            } else {
-                "${settings.jumat.keuangan.customTitle}\n${settings.brand.name}\nTgl: $effDate\nSaldo Akhir: ${rupiah.format(rec.saldoAkhir)}"
-            }
-            CompactSystemQrSlideCard(
-                badge = "QR KAS JUM'AT",
-                title = settings.jumat.keuangan.customTitle.ifBlank { "Laporan Infaq Kas Jum'at" },
-                subtitle = "Periode $effDate • Saldo Akhir: ${rupiah.format(rec.saldoAkhir)}",
-                qrPayload = payload,
-                isExpanded = isExpanded,
-                modifier = modifier
-            )
-            return true
-        }
-        "ramadhan_petugas", "ramadhan_keuangan", "ramadhan_jadwal" -> {
-            RamadhanOverviewSlideView(ramadhan = settings.ramadhan, isExpanded = isExpanded)
-            return true
-        }
-        "ramadhan_takjil" -> {
-            val night = settings.ramadhan.currentNight.coerceIn(1, 30)
-            val donors = settings.ramadhan.takjil[night.toString()].orEmpty()
-            CompactSystemInfoSlideCard(
-                badge = "RAMADHAN HARI KE-$night",
-                title = "DAFTAR PENYUMBANG TA'JIL BUKA PUASA",
-                rows = listOf(
-                    "Donatur Hari Ini" to if (donors.isEmpty()) "Jazakumullahu Khairan kepada seluruh Muhsinin" else donors.joinToString(" • ")
-                ),
-                isExpanded = isExpanded,
-                modifier = modifier
-            )
-            return true
-        }
-        "ramadhan_laporan_akhir" -> {
-            RamadhanLaporanAkhirSlideView(
-                ramadhan = settings.ramadhan,
-                brandName = settings.brand.name,
-                isExpanded = isExpanded
-            )
-            return true
-        }
-        "idulfitri_petugas" -> {
-            val p = settings.idulFitri.petugas
-            CompactSystemInfoSlideCard(
-                badge = "IDUL FITRI ${settings.idulFitri.hijriYear} H",
-                title = "PETUGAS SHOLAT HARI RAYA IDUL FITRI",
-                rows = listOf("Khotib" to p.khotib, "Imam" to p.imam, "Bilal" to p.bilal),
-                isExpanded = isExpanded,
-                modifier = modifier
-            )
-            return true
-        }
-        "iduladha_petugas" -> {
-            val p = settings.idulAdha.petugas
-            CompactSystemInfoSlideCard(
-                badge = "IDUL ADHA ${settings.idulAdha.hijriYear} H",
-                title = "PETUGAS SHOLAT HARI RAYA IDUL ADHA",
-                rows = listOf("Khotib" to p.khotib, "Imam" to p.imam, "Bilal" to p.bilal),
-                isExpanded = isExpanded,
-                modifier = modifier
-            )
-            return true
-        }
-        "iduladha_qurban" -> {
-            val groups = settings.idulAdha.qurbanGroups
-            val summaryRows = if (groups.isEmpty()) {
-                listOf("Status Qurban" to "Pendaftaran & Data Qurban Masjid ${settings.brand.name}")
-            } else {
-                groups.take(4).map { g ->
-                    "${g.groupName} (${g.animalType})" to g.members.joinToString(", ").ifBlank { "${g.members.size} Peserta" }
-                }
-            }
-            CompactSystemInfoSlideCard(
-                badge = "IBADAH QURBAN ${settings.idulAdha.hijriYear} H",
-                title = "DAFTAR PESERTA & KELOMPOK QURBAN",
-                rows = summaryRows,
-                isExpanded = isExpanded,
-                modifier = modifier
-            )
-            return true
-        }
         "online_finance" -> {
-            val fin = settings.onlineFinance
-            CompactSystemInfoSlideCard(
-                badge = "TRANSPARANSI KAS ONLINE",
-                title = "KAS UMUM ${settings.brand.name.uppercase()}",
-                rows = listOf(
-                    "Rekening Infaq" to listOf(fin.bankName, fin.nomorRekening).filter { it.isNotBlank() }.joinToString(" • ").ifBlank { "Lihat Laporan Kas Online" },
-                    "Atas Nama" to fin.atasNama.ifBlank { settings.brand.name }
-                ),
-                isExpanded = isExpanded,
-                modifier = modifier
-            )
+            if (isExpanded) {
+                OnlineFinanceFullscreen(
+                    snapshot = snapshot,
+                    assetsRootDir = assetsRootDir,
+                    modifier = modifier
+                )
+            } else {
+                OnlineFinanceCardContent(
+                    snapshot = snapshot,
+                    isExpanded = false,
+                    modifier = modifier.fillMaxSize()
+                )
+            }
             return true
         }
         "qr_infaq" -> {
-            val qr = settings.masjidQr
-            CompactSystemQrSlideCard(
-                badge = "INFAQ & SEDEKAH DIGITAL",
-                title = qr.label.ifBlank { "Infaq Digital ${settings.brand.name}" },
-                subtitle = listOf(qr.bankName, qr.nomorRekening, qr.atasNama).filter { it.isNotBlank() }.joinToString(" • ")
-                    .ifBlank { "Pindai QR Code menggunakan aplikasi pembayaran / m-banking Anda" },
-                qrPayload = qr.link.ifBlank { "Infaq Digital ${settings.brand.name}" },
-                isExpanded = isExpanded,
+            MasjidQrFullscreen(
+                snapshot = snapshot,
+                assetsRootDir = assetsRootDir,
+                isCompactSlide = !isExpanded,
                 modifier = modifier
             )
             return true
         }
         "qr_finance" -> {
-            val fin = settings.onlineFinance
-            val payload = fin.reportUrl.ifBlank { fin.sheetUrl }.ifBlank { settings.masjidQr.link }
-            CompactSystemQrSlideCard(
-                badge = "QR LAPORAN KAS ONLINE",
-                title = "TRANSPARANSI KEUANGAN ${settings.brand.name.uppercase()}",
-                subtitle = "Pindai QR Code untuk melihat rincian mutasi kas masjid secara real-time",
-                qrPayload = payload.ifBlank { "Laporan Kas ${settings.brand.name}" },
-                isExpanded = isExpanded,
+            FinanceQrFullscreen(
+                snapshot = snapshot,
+                assetsRootDir = assetsRootDir,
+                isCompactSlide = !isExpanded,
                 modifier = modifier
             )
+            return true
+        }
+        "jumat_petugas",
+        "jumat_keuangan",
+        "ramadhan_petugas",
+        "ramadhan_keuangan",
+        "ramadhan_takjil",
+        "ramadhan_jadwal",
+        "ramadhan_laporan_akhir",
+        "idulfitri_petugas",
+        "iduladha_petugas",
+        "iduladha_qurban" -> {
+            SystemDataSlideContainer(
+                snapshot = snapshot,
+                assetsRootDir = assetsRootDir,
+                isExpanded = isExpanded,
+                modifier = modifier
+            ) {
+                when (slide.type) {
+                    "jumat_petugas" -> {
+                        val effDate = JwsStateMachine.findEffectivePetugasJumatDate(settings.jumat.petugas.records, today)
+                        val rec = effDate?.let { settings.jumat.petugas.records[it] } ?: JumatPetugasRecord()
+                        JumatPetugasSlideView(
+                            fridayDate = effDate ?: JwsStateMachine.snapToNearestFriday(today).toString(),
+                            record = rec,
+                            isRowLayout = true,
+                            isExpanded = isExpanded
+                        )
+                    }
+                    "jumat_keuangan" -> {
+                        val effDate = JwsStateMachine.findEffectiveJumatKeuanganDate(settings.jumat.keuangan.records, today)
+                        val rec = effDate?.let { settings.jumat.keuangan.records[it] }
+                            ?: JumatKeuanganRecord(saldoKasLalu = settings.jumat.keuangan.saldoKasLalu)
+                        JumatKeuanganSlideView(
+                            fridayDate = effDate ?: today.toString(),
+                            record = rec,
+                            isExpanded = isExpanded
+                        )
+                    }
+                    "ramadhan_petugas" -> {
+                        val night = settings.ramadhan.currentNight.coerceIn(1, 30)
+                        val petugas = settings.ramadhan.petugas.getOrNull(night - 1)
+                        TarawihPetugasSlideView(
+                            night = night,
+                            hijriYear = settings.ramadhan.hijriYear,
+                            penceramah = petugas?.penceramah ?: "-",
+                            imamTarawih = petugas?.imamTarawih ?: "-",
+                            imamWitir = petugas?.imamWitir ?: "-",
+                            isExpanded = isExpanded
+                        )
+                    }
+                    "ramadhan_keuangan" -> {
+                        val night = settings.ramadhan.currentNight.coerceIn(1, 30)
+                        val keuangan = settings.ramadhan.keuangan.getOrNull(night - 1)
+                        TarawihKeuanganSlideView(
+                            night = night,
+                            hijriYear = settings.ramadhan.hijriYear,
+                            penerimaanPria = keuangan?.penerimaanPria ?: 0L,
+                            penerimaanWanita = keuangan?.penerimaanWanita ?: 0L,
+                            jumlahInfaqMalamIni = keuangan?.totalPenerimaan ?: 0L,
+                            saldoAkhir = keuangan?.saldoAkhir ?: 0L,
+                            isExpanded = isExpanded
+                        )
+                    }
+                    "ramadhan_takjil" -> {
+                        val night = settings.ramadhan.currentNight.coerceIn(1, 30)
+                        val donors = settings.ramadhan.takjil[night.toString()].orEmpty()
+                        val takjilPages = remember(donors) {
+                            if (donors.isEmpty()) listOf(emptyList()) else donors.chunked(10)
+                        }
+                        var pageIdx by remember(donors) { mutableIntStateOf(0) }
+                        LaunchedEffect(takjilPages.size) {
+                            if (takjilPages.size <= 1) return@LaunchedEffect
+                            while (true) {
+                                delay(6_000L)
+                                pageIdx = (pageIdx + 1) % takjilPages.size
+                            }
+                        }
+                        val safePage = pageIdx.coerceIn(0, takjilPages.lastIndex)
+                        TarawihTakjilSlideView(
+                            night = night,
+                            hijriYear = settings.ramadhan.hijriYear,
+                            donors = takjilPages[safePage],
+                            startNumber = safePage * 10 + 1,
+                            pageNumber = safePage + 1,
+                            totalTakjilPages = takjilPages.size,
+                            isExpanded = isExpanded
+                        )
+                    }
+                    "ramadhan_jadwal" -> {
+                        RamadhanJadwalSlideView(
+                            ramadhan = settings.ramadhan,
+                            schedule = snapshot.schedule,
+                            isExpanded = isExpanded
+                        )
+                    }
+                    "ramadhan_laporan_akhir" -> {
+                        IdulFitriKeuanganSlideView(
+                            hijriYear = settings.idulFitri.hijriYear,
+                            brandName = settings.brand.name,
+                            ramadhan = settings.ramadhan,
+                            fallbackEidKeuangan = settings.idulFitri.keuangan,
+                            isExpanded = isExpanded
+                        )
+                    }
+                    "idulfitri_petugas" -> {
+                        val p = settings.idulFitri.petugas
+                        EidPetugasSlideView(
+                            title = "PETUGAS SHOLAT HARI RAYA IDUL FITRI",
+                            subtitle = "1 Syawal ${settings.idulFitri.hijriYear} H • ${settings.brand.name}",
+                            khotib = p.khotib.ifBlank { "-" },
+                            imam = p.imam.ifBlank { "-" },
+                            bilal = p.bilal.ifBlank { "-" },
+                            isExpanded = isExpanded
+                        )
+                    }
+                    "iduladha_petugas" -> {
+                        val p = settings.idulAdha.petugas
+                        EidPetugasSlideView(
+                            title = "PETUGAS SHOLAT HARI RAYA IDUL ADHA",
+                            subtitle = "10 Dzulhijjah ${settings.idulAdha.hijriYear} H • ${settings.brand.name}",
+                            khotib = p.khotib.ifBlank { "-" },
+                            imam = p.imam.ifBlank { "-" },
+                            bilal = p.bilal.ifBlank { "-" },
+                            isExpanded = isExpanded
+                        )
+                    }
+                    "iduladha_qurban" -> {
+                        val groups = settings.idulAdha.qurbanGroups.ifEmpty {
+                            listOf(
+                                QurbanGroup(
+                                    id = "q-default",
+                                    animalType = "Sapi",
+                                    groupName = "Kelompok Qurban 1",
+                                    members = listOf("Belum ada data peserta Qurban — atur di Pengaturan Acara → Idul Adha & Qurban")
+                                )
+                            )
+                        }
+                        var groupIdx by remember(groups) { mutableIntStateOf(0) }
+                        LaunchedEffect(groups.size) {
+                            if (groups.size <= 1) return@LaunchedEffect
+                            while (true) {
+                                delay(6_000L)
+                                groupIdx = (groupIdx + 1) % groups.size
+                            }
+                        }
+                        val safeIdx = groupIdx.coerceIn(0, groups.lastIndex)
+                        QurbanGroupSlideView(
+                            group = groups[safeIdx],
+                            groupNumber = safeIdx + 1,
+                            totalGroups = groups.size,
+                            isExpanded = isExpanded
+                        )
+                    }
+                }
+            }
             return true
         }
         else -> return false
     }
 }
 
+/**
+ * Wraps card-based system slides with the full Simulation header (`HeaderBar` + `HeaderClockCard` + `bgCard`)
+ * when rendered in Fullscreen Slideshow (`isExpanded = true`), and renders directly inside `MainSlideContainer`
+ * when `isExpanded = false` (since `StandbyScreen` already renders the header & card container).
+ */
 @Composable
-private fun CompactSystemInfoSlideCard(
-    badge: String,
-    title: String,
-    rows: List<Pair<String, String>>,
-    isExpanded: Boolean = false,
-    modifier: Modifier = Modifier
+private fun SystemDataSlideContainer(
+    snapshot: JwsRuntimeSnapshot,
+    assetsRootDir: File?,
+    isExpanded: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
 ) {
+    if (!isExpanded) {
+        Box(modifier = modifier.fillMaxSize()) {
+            content()
+        }
+        return
+    }
+
     val palette = LocalJwsTheme.current
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(palette.bgPrimary, palette.bgSecondary)))
-            .padding(horizontal = 36.dp, vertical = if (isExpanded) 36.dp else 28.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = badge,
-            color = palette.accent,
-            fontSize = if (isExpanded) 34.sp else 28.sp,
-            fontWeight = FontWeight.ExtraBold,
-            letterSpacing = 2.sp
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = title,
-            color = palette.textPrimary,
-            fontSize = if (isExpanded) 56.sp else 48.sp,
-            lineHeight = if (isExpanded) 64.sp else 56.sp,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(if (isExpanded) 28.dp else 20.dp))
-        Column(
-            modifier = Modifier.fillMaxWidth(0.92f),
-            verticalArrangement = Arrangement.spacedBy(if (isExpanded) 18.dp else 14.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            rows.forEach { (k, v) ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(palette.bgCard)
-                        .border(1.5.dp, palette.border, RoundedCornerShape(16.dp))
-                        .padding(
-                            horizontal = if (isExpanded) 32.dp else 26.dp,
-                            vertical = if (isExpanded) 22.dp else 18.dp
-                        ),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = k,
-                        color = palette.accentSecondary,
-                        fontSize = if (isExpanded) 36.sp else 30.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Spacer(modifier = Modifier.width(20.dp))
-                    Text(
-                        text = v.ifBlank { "-" },
-                        color = palette.textPrimary,
-                        fontSize = if (isExpanded) 46.sp else 38.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        textAlign = TextAlign.End
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CompactSystemQrSlideCard(
-    badge: String,
-    title: String,
-    subtitle: String,
-    qrPayload: String,
-    isExpanded: Boolean = false,
-    modifier: Modifier = Modifier
-) {
-    val palette = LocalJwsTheme.current
-    val qrBmp = remember(qrPayload) { generateQrBitmap(qrPayload, 360) }
-    Row(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(palette.bgPrimary, palette.bgSecondary)))
-            .padding(if (isExpanded) 56.dp else 40.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 48.dp else 36.dp)
-    ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(
-                text = badge,
-                color = palette.accent,
-                fontSize = if (isExpanded) 34.sp else 28.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 2.sp
+            HeaderBar(
+                now = snapshot.now,
+                brand = snapshot.settings.brand,
+                hijriDate = snapshot.hijriDate,
+                assetsRootDir = assetsRootDir,
+                isReversed = false,
+                isLogoMenuOpen = false,
+                onLogoClick = {},
+                modifier = Modifier
+                    .weight(1f)
+                    .height(180.dp)
             )
-            Text(
-                text = title,
-                color = palette.textPrimary,
-                fontSize = if (isExpanded) 62.sp else 52.sp,
-                lineHeight = if (isExpanded) 70.sp else 60.sp,
-                fontWeight = FontWeight.Black
-            )
-            Text(
-                text = subtitle,
-                color = palette.textSecondary,
-                fontSize = if (isExpanded) 34.sp else 28.sp,
-                lineHeight = if (isExpanded) 44.sp else 38.sp
+            HeaderClockCard(
+                now = snapshot.now,
+                clockStyle = snapshot.settings.brand.clockStyle
             )
         }
         Box(
             modifier = Modifier
-                .size(if (isExpanded) 400.dp else 320.dp)
+                .fillMaxWidth()
+                .weight(1f)
                 .clip(RoundedCornerShape(24.dp))
-                .background(Color.White)
-                .border(3.dp, palette.accent, RoundedCornerShape(24.dp))
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
+                .background(palette.bgCard)
+                .border(1.5.dp, palette.border, RoundedCornerShape(24.dp))
         ) {
-            if (qrBmp != null) {
-                Image(bitmap = qrBmp.asImageBitmap(), contentDescription = title, modifier = Modifier.fillMaxSize())
-            } else {
-                Icon(Icons.Default.QrCode2, contentDescription = null, tint = Color.Black, modifier = Modifier.size(160.dp))
-            }
+            content()
         }
     }
 }
@@ -930,12 +946,11 @@ private fun CompactSystemQrSlideCard(
 @Composable
 private fun CustomSlideView(
     slide: SlideItem,
-    settings: AppStateSettings,
-    today: LocalDate,
-    now: ZonedDateTime,
+    snapshot: JwsRuntimeSnapshot,
     assetsRootDir: File?
 ) {
     val palette = LocalJwsTheme.current
+    val settings = snapshot.settings
     val brand = settings.brand
 
     if (slide.type == "welcome") {
@@ -950,14 +965,20 @@ private fun CustomSlideView(
 
     if (slide.type == "analog_clock") {
         BigAnalogClock(
-            now = now,
+            now = snapshot.now,
             isSmall = true,
             modifier = Modifier.fillMaxSize()
         )
         return
     }
 
-    if (RenderSystemDataSlideIfApplicable(slide = slide, settings = settings, today = today)) {
+    if (RenderSystemDataSlideIfApplicable(
+            slide = slide,
+            snapshot = snapshot,
+            assetsRootDir = assetsRootDir,
+            isExpanded = false
+        )
+    ) {
         return
     }
 
@@ -1100,15 +1121,23 @@ fun LocalSlideVideoPlayer(
 fun JumatPetugasSlideView(
     fridayDate: String,
     record: JumatPetugasRecord,
-    isRowLayout: Boolean = false
+    isRowLayout: Boolean = true,
+    isExpanded: Boolean = true
 ) {
     val palette = LocalJwsTheme.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 36.dp, vertical = if (isRowLayout) 28.dp else 36.dp),
-        verticalArrangement = if (isRowLayout) Arrangement.spacedBy(20.dp) else Arrangement.SpaceBetween
+            .padding(
+                horizontal = 36.dp,
+                vertical = if (isExpanded) 28.dp else 22.dp
+            ),
+        verticalArrangement = if (isRowLayout) {
+            Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
+        } else {
+            Arrangement.SpaceBetween
+        }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1117,25 +1146,25 @@ fun JumatPetugasSlideView(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(if (isRowLayout) 16.dp else 12.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 12.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Groups,
                     contentDescription = null,
                     tint = palette.accent,
-                    modifier = Modifier.size(if (isRowLayout) 44.dp else 34.dp)
+                    modifier = Modifier.size(if (isExpanded) 44.dp else 36.dp)
                 )
                 Column {
                     Text(
                         text = "PETUGAS IBADAH SHOLAT JUM'AT",
                         color = palette.textPrimary,
-                        fontSize = if (isRowLayout) 44.sp else 36.sp,
+                        fontSize = if (isExpanded) 38.sp else 28.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
                     Text(
                         text = "Jadwal Efektif Hari Jum'at: $fridayDate",
                         color = palette.accent,
-                        fontSize = if (isRowLayout) 28.sp else 22.sp,
+                        fontSize = if (isExpanded) 24.sp else 18.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -1147,24 +1176,27 @@ fun JumatPetugasSlideView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 12.dp)
             ) {
                 OfficerRoleRowCard(
                     roleTitle = "KHOTIB JUM'AT",
                     officerName = record.khotib,
                     accentColor = palette.accent,
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
                 OfficerRoleRowCard(
                     roleTitle = "IMAM SHOLAT",
                     officerName = record.imam,
                     accentColor = palette.accentSecondary,
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
                 OfficerRoleRowCard(
                     roleTitle = "MUADZIN / BILAL",
                     officerName = record.muadzin,
                     accentColor = palette.accent,
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -1206,6 +1238,7 @@ fun OfficerRoleRowCard(
     roleTitle: String,
     officerName: String,
     accentColor: Color,
+    isExpanded: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
@@ -1214,25 +1247,31 @@ fun OfficerRoleRowCard(
     Row(
         modifier = modifier
             .fillMaxSize()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(if (isExpanded) 20.dp else 16.dp))
             .background(palette.bgPrimary.copy(alpha = 0.65f))
-            .border(1.5.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(20.dp))
-            .padding(horizontal = 32.dp, vertical = 12.dp),
+            .border(1.5.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(if (isExpanded) 20.dp else 16.dp))
+            .padding(
+                horizontal = if (isExpanded) 32.dp else 24.dp,
+                vertical = if (isExpanded) 12.dp else 10.dp
+            ),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(28.dp)
+        horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 28.dp else 20.dp)
     ) {
         Box(
             modifier = Modifier
-                .width(460.dp)
-                .clip(RoundedCornerShape(14.dp))
+                .width(if (isExpanded) 460.dp else 360.dp)
+                .clip(RoundedCornerShape(if (isExpanded) 14.dp else 12.dp))
                 .background(accentColor.copy(alpha = 0.18f))
-                .padding(horizontal = 20.dp, vertical = 14.dp),
+                .padding(
+                    horizontal = if (isExpanded) 20.dp else 16.dp,
+                    vertical = if (isExpanded) 14.dp else 10.dp
+                ),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = roleTitle,
                 color = accentColor,
-                fontSize = 32.sp,
+                fontSize = if (isExpanded) 32.sp else 24.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 1.5.sp,
                 maxLines = 1,
@@ -1242,8 +1281,16 @@ fun OfficerRoleRowCard(
         Text(
             text = displayName,
             color = palette.textPrimary,
-            fontSize = if (isLongName) 60.sp else 84.sp,
-            lineHeight = if (isLongName) 66.sp else 90.sp,
+            fontSize = if (isExpanded) {
+                if (isLongName) 60.sp else 84.sp
+            } else {
+                if (isLongName) 42.sp else 58.sp
+            },
+            lineHeight = if (isExpanded) {
+                if (isLongName) 66.sp else 90.sp
+            } else {
+                if (isLongName) 48.sp else 64.sp
+            },
             fontWeight = FontWeight.ExtraBold,
             textAlign = TextAlign.Start,
             maxLines = if (isLongName) 2 else 1,
@@ -1582,80 +1629,6 @@ fun FinanceMetricBox(
             overflow = TextOverflow.Ellipsis,
             style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
         )
-    }
-}
-
-@Composable
-private fun RamadhanOverviewSlideView(
-    ramadhan: RamadhanSettings,
-    isExpanded: Boolean = false
-) {
-    val palette = LocalJwsTheme.current
-    val nightIndex = (ramadhan.currentNight - 1).coerceIn(0, 29)
-    val petugasTonight = ramadhan.petugas.getOrNull(nightIndex)
-    val donorsTonight = ramadhan.takjil[ramadhan.currentNight.toString()].orEmpty()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 36.dp, vertical = if (isExpanded) 28.dp else 24.dp),
-        verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 16.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 14.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.NightsStay,
-                contentDescription = null,
-                tint = palette.accentSecondary,
-                modifier = Modifier.size(if (isExpanded) 44.dp else 38.dp)
-            )
-            Column {
-                Text(
-                    text = "INFORMASI IBADAH RAMADHAN — MALAM KE-${ramadhan.currentNight}",
-                    color = palette.textPrimary,
-                    fontSize = if (isExpanded) 44.sp else 38.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
-                Text(
-                    text = "Petugas Sholat Tarawih, Kultum & Daftar Penyumbang Ta'jil",
-                    color = palette.accent,
-                    fontSize = if (isExpanded) 28.sp else 24.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
-            OfficerRoleCard(
-                roleTitle = "PENCERAMAH KULTUM",
-                officerName = petugasTonight?.penceramah ?: "-",
-                accentColor = palette.accentSecondary,
-                isExpanded = isExpanded,
-                modifier = Modifier.weight(1f)
-            )
-            OfficerRoleCard(
-                roleTitle = "IMAM TARAWIH & WITIR",
-                officerName = "${petugasTonight?.imamTarawih ?: "-"} / ${petugasTonight?.imamWitir ?: "-"}",
-                accentColor = palette.accent,
-                isExpanded = isExpanded,
-                modifier = Modifier.weight(1f)
-            )
-            OfficerRoleCard(
-                roleTitle = "DONATUR TA'JIL HARI INI",
-                officerName = if (donorsTonight.isEmpty()) "Jamaah Masjid Al-Gaffar" else donorsTonight.joinToString(", "),
-                accentColor = palette.accentSecondary,
-                isExpanded = isExpanded,
-                modifier = Modifier.weight(1f)
-            )
-        }
     }
 }
 

@@ -36,6 +36,7 @@ import id.algaffar.jwstv.domain.model.JumatJournalEntry
 import id.algaffar.jwstv.domain.model.JumatKeuanganRecord
 import id.algaffar.jwstv.domain.model.JumatPetugasRecord
 import id.algaffar.jwstv.domain.model.QurbanGroup
+import id.algaffar.jwstv.domain.model.RamadhanJadwalItem
 import id.algaffar.jwstv.domain.model.ScreenSaverSchedule
 import id.algaffar.jwstv.domain.model.TimeSlot
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
@@ -184,36 +185,13 @@ fun JumatSettingsTab(
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("SUMBER DATA KAS JUM'AT", color = palette.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    HybridSegmentedRow(
-                        options = listOf("manual" to "Manual Lokal", "online" to "Google Sheets Online"),
-                        selectedId = jumat.keuangan.source,
-                        onSelect = { src ->
-                            actions.onUpdateSettings { it.copy(jumat = it.jumat.copy(keuangan = it.jumat.keuangan.copy(source = src))) }
-                        }
-                    )
-                }
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("TIPE QR CODE KAS JUM'AT", color = palette.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    HybridSegmentedRow(
-                        options = listOf("text_summary" to "Ringkasan Offline", "custom_url" to "URL Kustom"),
-                        selectedId = jumat.keuangan.qrType,
-                        onSelect = { qt ->
-                            actions.onUpdateSettings { it.copy(jumat = it.jumat.copy(keuangan = it.jumat.keuangan.copy(qrType = qt))) }
-                        }
-                    )
-                }
-            }
-
-            if (jumat.keuangan.qrType == "custom_url") {
-                HybridTextInput(
-                    label = "URL Kustom QR Kas Jum'at",
-                    value = jumat.keuangan.qrCustomUrl,
-                    placeholder = "https://...",
-                    onValueChange = { v ->
-                        actions.onUpdateSettings { it.copy(jumat = it.jumat.copy(keuangan = it.jumat.keuangan.copy(qrCustomUrl = v))) }
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("SUMBER DATA KAS JUM'AT", color = palette.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                HybridSegmentedRow(
+                    options = listOf("manual" to "Manual Lokal", "online" to "Google Sheets Online"),
+                    selectedId = jumat.keuangan.source,
+                    onSelect = { src ->
+                        actions.onUpdateSettings { it.copy(jumat = it.jumat.copy(keuangan = it.jumat.keuangan.copy(source = src))) }
                     }
                 )
             }
@@ -297,12 +275,31 @@ fun RamadhanSettingsTab(
     settings: AppStateSettings,
     actions: SettingsActions
 ) {
+    val palette = LocalJwsTheme.current
     val ramadhan = settings.ramadhan
     val nightIdx = (ramadhan.currentNight - 1).coerceIn(0, 29)
     val currentPetugas = ramadhan.petugas.getOrNull(nightIdx)
     val currentKeuangan = ramadhan.keuangan.getOrNull(nightIdx)
     val currentTakjilList = ramadhan.takjil[ramadhan.currentNight.toString()].orEmpty()
     var newDonorName by remember { mutableStateOf("") }
+    var newJadwalLabel by remember { mutableStateOf("") }
+    var newJadwalSource by remember { mutableStateOf("custom") }
+    var newJadwalPrayerId by remember { mutableStateOf("imsak") }
+    var newJadwalCustomTime by remember { mutableStateOf("03:00") }
+    var newJadwalHighlighted by remember { mutableStateOf(false) }
+
+    val prayerSourceOptions = remember {
+        listOf(
+            HybridSelectOption("imsak", "Otomatis: Imsak"),
+            HybridSelectOption("fajr", "Otomatis: Subuh"),
+            HybridSelectOption("sunrise", "Otomatis: Syuruq"),
+            HybridSelectOption("dhuha", "Otomatis: Dhuha"),
+            HybridSelectOption("dhuhr", "Otomatis: Dzuhur"),
+            HybridSelectOption("asr", "Otomatis: Ashar"),
+            HybridSelectOption("maghrib", "Otomatis: Maghrib"),
+            HybridSelectOption("isha", "Otomatis: Isya")
+        )
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         HybridSectionCard(
@@ -506,6 +503,272 @@ fun RamadhanSettingsTab(
                         }
                     }
                 )
+            }
+        }
+
+        // ==================== JADWAL IMSAKIYAH & RAMADHAN DINAMIS ====================
+        val activeJadwalCount = ramadhan.jadwalImsakiyah.count { it.enabled }
+        HybridSectionCard(
+            title = "Jadwal Imsakiyah & Ramadhan Dinamis ($activeJadwalCount Aktif)",
+            subtitle = "Atur item jadwal yang tampil pada Slide Jadwal Ramadhan & layar Tarawih (Otomatis dari Hisab Sholat atau Jam Manual)",
+            headerAction = {
+                HybridButton(
+                    label = "Reset Default",
+                    onClick = {
+                        actions.onUpdateSettings { prev ->
+                            prev.copy(
+                                ramadhan = prev.ramadhan.copy(
+                                    jadwalTitle = "JADWAL IMSAKIYAH & BERBUKA RAMADHAN",
+                                    jadwalImsakiyah = RamadhanJadwalItem.defaultImsakiyahItems()
+                                )
+                            )
+                        }
+                    }
+                )
+            }
+        ) {
+            HybridTextInput(
+                label = "Judul Slide Jadwal Imsakiyah",
+                value = ramadhan.jadwalTitle,
+                placeholder = "JADWAL IMSAKIYAH & BERBUKA RAMADHAN",
+                onValueChange = { v ->
+                    actions.onUpdateSettings { it.copy(ramadhan = it.ramadhan.copy(jadwalTitle = v)) }
+                }
+            )
+
+            // Toggle tampilan slide yang ikut berputar di layar Tarawih / Mode Ramadhan
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                HybridToggleRow(
+                    label = "Tampil Petugas",
+                    checked = ramadhan.slideshow.showPetugas,
+                    onCheckedChange = { v -> actions.onUpdateSettings { it.copy(ramadhan = it.ramadhan.copy(slideshow = it.ramadhan.slideshow.copy(showPetugas = v))) } },
+                    modifier = Modifier.weight(1f)
+                )
+                HybridToggleRow(
+                    label = "Tampil Keuangan",
+                    checked = ramadhan.slideshow.showKeuangan,
+                    onCheckedChange = { v -> actions.onUpdateSettings { it.copy(ramadhan = it.ramadhan.copy(slideshow = it.ramadhan.slideshow.copy(showKeuangan = v))) } },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                HybridToggleRow(
+                    label = "Tampil Jadwal Imsakiyah",
+                    checked = ramadhan.slideshow.showJadwal,
+                    onCheckedChange = { v -> actions.onUpdateSettings { it.copy(ramadhan = it.ramadhan.copy(slideshow = it.ramadhan.slideshow.copy(showJadwal = v))) } },
+                    modifier = Modifier.weight(1f)
+                )
+                HybridToggleRow(
+                    label = "Tampil Daftar Ta'jil",
+                    checked = ramadhan.slideshow.showTakjil,
+                    onCheckedChange = { v -> actions.onUpdateSettings { it.copy(ramadhan = it.ramadhan.copy(slideshow = it.ramadhan.slideshow.copy(showTakjil = v))) } },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Daftar Item Jadwal Dinamis (Edit Label, Sumber Otomatis/Manual, Sorotan, Urutan, Hapus)
+            ramadhan.jadwalImsakiyah.forEachIndexed { idx, item ->
+                fun updateItem(transform: (RamadhanJadwalItem) -> RamadhanJadwalItem) {
+                    actions.onUpdateSettings { prev ->
+                        val list = prev.ramadhan.jadwalImsakiyah.toMutableList()
+                        if (idx in list.indices) {
+                            list[idx] = transform(list[idx])
+                        }
+                        prev.copy(ramadhan = prev.ramadhan.copy(jadwalImsakiyah = list))
+                    }
+                }
+                fun moveItem(delta: Int) {
+                    actions.onUpdateSettings { prev ->
+                        val list = prev.ramadhan.jadwalImsakiyah.toMutableList()
+                        val target = idx + delta
+                        if (idx in list.indices && target in list.indices) {
+                            val moved = list.removeAt(idx)
+                            list.add(target, moved)
+                        }
+                        prev.copy(ramadhan = prev.ramadhan.copy(jadwalImsakiyah = list))
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(palette.bgPrimary.copy(alpha = if (item.enabled) 0.85f else 0.45f))
+                        .border(
+                            1.dp,
+                            if (item.enabled && item.highlighted) palette.accentSecondary.copy(alpha = 0.65f) else palette.border,
+                            RoundedCornerShape(14.dp)
+                        )
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        HybridTextInput(
+                            label = "Label #${idx + 1}",
+                            value = item.label,
+                            placeholder = "IMSAK / SAHUR / BUKA PUASA",
+                            onValueChange = { v -> updateItem { it.copy(label = v) } },
+                            modifier = Modifier.weight(1.2f)
+                        )
+                        if (item.sourceType.equals("custom", ignoreCase = true)) {
+                            HybridTextInput(
+                                label = "Jam Manual (HH:mm)",
+                                value = item.customTime,
+                                placeholder = "03:00",
+                                onValueChange = { v -> updateItem { it.copy(customTime = v) } },
+                                modifier = Modifier.weight(0.9f)
+                            )
+                        } else {
+                            HybridSelectDropdown(
+                                label = "Sumber Hisab",
+                                selectedId = item.prayerId,
+                                options = prayerSourceOptions,
+                                onSelect = { pid -> updateItem { it.copy(prayerId = pid) } },
+                                modifier = Modifier.weight(0.9f)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        HybridButton(
+                            label = if (item.enabled) "TAMPIL" else "NONAKTIF",
+                            isPrimary = item.enabled,
+                            onClick = { updateItem { it.copy(enabled = !it.enabled) } }
+                        )
+                        HybridButton(
+                            label = if (item.sourceType.equals("custom", ignoreCase = true)) "Mode: Manual" else "Mode: Hisab",
+                            onClick = {
+                                updateItem {
+                                    val nextSource = if (it.sourceType.equals("custom", ignoreCase = true)) "prayer" else "custom"
+                                    it.copy(
+                                        sourceType = nextSource,
+                                        customTime = if (nextSource == "custom" && it.customTime.isBlank()) "03:00" else it.customTime
+                                    )
+                                }
+                            }
+                        )
+                        HybridButton(
+                            label = if (item.highlighted) "★ Disorot" else "Sorot",
+                            isPrimary = item.highlighted,
+                            onClick = { updateItem { it.copy(highlighted = !it.highlighted) } }
+                        )
+                        HybridButton(
+                            label = "⬆",
+                            enabled = idx > 0,
+                            onClick = { moveItem(-1) }
+                        )
+                        HybridButton(
+                            label = "⬇",
+                            enabled = idx < ramadhan.jadwalImsakiyah.lastIndex,
+                            onClick = { moveItem(1) }
+                        )
+                        HybridButton(
+                            label = "Hapus",
+                            icon = Icons.Default.Delete,
+                            isDanger = true,
+                            onClick = {
+                                actions.onUpdateSettings { prev ->
+                                    prev.copy(
+                                        ramadhan = prev.ramadhan.copy(
+                                            jadwalImsakiyah = prev.ramadhan.jadwalImsakiyah.filterIndexed { i, _ -> i != idx }
+                                        )
+                                    )
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Form Tambah Item Jadwal Baru (Hisab Otomatis atau Manual HH:mm)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(palette.bgPrimary.copy(alpha = 0.65f))
+                    .border(1.dp, palette.accent.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "+ TAMBAH ITEM JADWAL IMSAKIYAH / RAMADHAN BARU",
+                    color = palette.accent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    HybridTextInput(
+                        label = "Nama Jadwal",
+                        value = newJadwalLabel,
+                        placeholder = "Mis: SAHUR / KAJIAN / QIYAMUL LAIL",
+                        onValueChange = { newJadwalLabel = it },
+                        modifier = Modifier.weight(1.2f)
+                    )
+                    if (newJadwalSource == "custom") {
+                        HybridTextInput(
+                            label = "Jam (HH:mm)",
+                            value = newJadwalCustomTime,
+                            placeholder = "03:00",
+                            onValueChange = { newJadwalCustomTime = it },
+                            modifier = Modifier.weight(0.8f)
+                        )
+                    } else {
+                        HybridSelectDropdown(
+                            label = "Sumber Hisab",
+                            selectedId = newJadwalPrayerId,
+                            options = prayerSourceOptions,
+                            onSelect = { newJadwalPrayerId = it },
+                            modifier = Modifier.weight(0.8f)
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HybridButton(
+                        label = if (newJadwalSource == "custom") "Sumber: Jam Manual" else "Sumber: Otomatis Hisab",
+                        onClick = { newJadwalSource = if (newJadwalSource == "custom") "prayer" else "custom" }
+                    )
+                    HybridButton(
+                        label = if (newJadwalHighlighted) "★ Sorot Aktif" else "Sorot Kartu",
+                        isPrimary = newJadwalHighlighted,
+                        onClick = { newJadwalHighlighted = !newJadwalHighlighted }
+                    )
+                    HybridButton(
+                        label = "+ Tambah Jadwal",
+                        icon = Icons.Default.Add,
+                        isPrimary = true,
+                        onClick = {
+                            if (newJadwalLabel.isNotBlank()) {
+                                val added = RamadhanJadwalItem(
+                                    id = "im_${System.currentTimeMillis()}",
+                                    label = newJadwalLabel.trim(),
+                                    sourceType = newJadwalSource,
+                                    prayerId = newJadwalPrayerId,
+                                    customTime = if (newJadwalSource == "custom") newJadwalCustomTime.trim() else "",
+                                    highlighted = newJadwalHighlighted,
+                                    enabled = true
+                                )
+                                actions.onUpdateSettings { prev ->
+                                    prev.copy(ramadhan = prev.ramadhan.copy(jadwalImsakiyah = prev.ramadhan.jadwalImsakiyah + added))
+                                }
+                                newJadwalLabel = ""
+                                newJadwalHighlighted = false
+                            }
+                        }
+                    )
+                }
             }
         }
     }

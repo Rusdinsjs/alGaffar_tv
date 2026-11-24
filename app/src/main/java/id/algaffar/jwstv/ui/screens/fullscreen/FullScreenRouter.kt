@@ -134,6 +134,7 @@ fun FullScreenRouter(
                 }
 
                 AppState.PELAKSANAAN_SHOLAT -> {
+                    val isMaghrib = activePrayer == PrayerId.MAGHRIB
                     SimpleStateOverlayFullscreen(
                         snapshot = snapshot,
                         stageTitle = "Pelaksanaan Sholat\n$prayerLabel",
@@ -153,7 +154,9 @@ fun FullScreenRouter(
                         backgroundImagePath = snapshot.settings.media.sholat5WaktuImage,
                         assetsRootDir = assetsRootDir,
                         isLogoMenuOpen = isLogoMenuOpen,
-                        onLogoClick = onToggleLogoMenu
+                        onLogoClick = onToggleLogoMenu,
+                        mainTitleFontSize = if (isMaghrib) 148.sp else null,
+                        mainTitleMaxLines = if (isMaghrib) 1 else 2
                     )
                 }
 
@@ -441,15 +444,6 @@ fun FullScreenRouter(
 
                 AppState.FINANCE_QR -> {
                     FinanceQrFullscreen(
-                        snapshot = snapshot,
-                        assetsRootDir = assetsRootDir,
-                        isLogoMenuOpen = isLogoMenuOpen,
-                        onLogoClick = onToggleLogoMenu
-                    )
-                }
-
-                AppState.JUMAT_QR -> {
-                    JumatQrFullscreen(
                         snapshot = snapshot,
                         assetsRootDir = assetsRootDir,
                         isLogoMenuOpen = isLogoMenuOpen,

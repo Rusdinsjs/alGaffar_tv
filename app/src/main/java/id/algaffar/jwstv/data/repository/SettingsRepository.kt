@@ -100,6 +100,9 @@ class SettingsRepository(
                 onboardingCompleted = if (fromExistingDisk) true else current.onboardingCompleted
             )
         }
+        if (current.slides.any { it.type == "qr_jumat" }) {
+            current = current.copy(slides = current.slides.filterNot { it.type == "qr_jumat" })
+        }
         return current
     }
 

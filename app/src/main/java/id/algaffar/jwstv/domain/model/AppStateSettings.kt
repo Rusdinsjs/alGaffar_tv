@@ -171,9 +171,7 @@ data class JumatKeuanganSettings(
     val saldoKasLalu: Long = 0L,
     val records: Map<String, JumatKeuanganRecord> = emptyMap(),
     val source: String = "manual", // "manual" | "online"
-    val customTitle: String = "Laporan Infaq Kas Jum'at",
-    val qrType: String = "text_summary", // "text_summary" | "custom_url"
-    val qrCustomUrl: String = ""
+    val customTitle: String = "Laporan Infaq Kas Jum'at"
 )
 
 @Serializable
@@ -231,6 +229,30 @@ data class RamadhanLaporanAkhir(
 )
 
 @Serializable
+data class RamadhanJadwalItem(
+    val id: String = "",
+    val label: String = "",
+    val sourceType: String = "prayer", // "prayer" (otomatis hisab) | "custom" (jam manual HH:mm)
+    val prayerId: String = "imsak",    // "imsak" | "fajr" | "sunrise" | "dhuha" | "dhuhr" | "asr" | "maghrib" | "isha"
+    val customTime: String = "",       // "HH:mm" when sourceType == "custom"
+    val highlighted: Boolean = false,
+    val enabled: Boolean = true
+) {
+    companion object {
+        fun defaultImsakiyahItems(): List<RamadhanJadwalItem> = listOf(
+            RamadhanJadwalItem("im-imsak", "IMSAK", "prayer", "imsak", "", highlighted = true, enabled = true),
+            RamadhanJadwalItem("im-fajr", "SUBUH", "prayer", "fajr", "", highlighted = false, enabled = true),
+            RamadhanJadwalItem("im-sunrise", "SYURUQ", "prayer", "sunrise", "", highlighted = false, enabled = false),
+            RamadhanJadwalItem("im-dhuha", "DHUHA", "prayer", "dhuha", "", highlighted = false, enabled = false),
+            RamadhanJadwalItem("im-dhuhr", "DZUHUR", "prayer", "dhuhr", "", highlighted = false, enabled = true),
+            RamadhanJadwalItem("im-asr", "ASHAR", "prayer", "asr", "", highlighted = false, enabled = true),
+            RamadhanJadwalItem("im-maghrib", "MAGHRIB (BERBUKA)", "prayer", "maghrib", "", highlighted = true, enabled = true),
+            RamadhanJadwalItem("im-isha", "ISYA & TARAWIH", "prayer", "isha", "", highlighted = false, enabled = true)
+        )
+    }
+}
+
+@Serializable
 data class RamadhanSlideshowConfig(
     val showPetugas: Boolean = true,
     val showKeuangan: Boolean = true,
@@ -264,6 +286,8 @@ data class RamadhanSettings(
     val petugas: List<RamadhanPetugasItem> = (1..30).map { RamadhanPetugasItem(malamKe = it) },
     val keuangan: List<RamadhanKeuanganItem> = (1..30).map { RamadhanKeuanganItem(malamKe = it) },
     val takjil: Map<String, List<String>> = emptyMap(), // key: "1".."30", value: list of donor names
+    val jadwalTitle: String = "JADWAL IMSAKIYAH & BERBUKA RAMADHAN",
+    val jadwalImsakiyah: List<RamadhanJadwalItem> = RamadhanJadwalItem.defaultImsakiyahItems(),
     val laporanAkhir: RamadhanLaporanAkhir = RamadhanLaporanAkhir(),
     val slideshow: RamadhanSlideshowConfig = RamadhanSlideshowConfig(),
     val sirine: SirineSettings = SirineSettings()

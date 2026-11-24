@@ -93,9 +93,6 @@ enum class AppState(val serialName: String, val displayLabel: String) {
     @SerialName("finance_qr")
     FINANCE_QR("finance_qr", "QR Laporan Keuangan Online"),
 
-    @SerialName("jumat_qr")
-    JUMAT_QR("jumat_qr", "QR Laporan Kas Jum'at"),
-
     @SerialName("online_finance")
     ONLINE_FINANCE("online_finance", "Laporan Keuangan Online");
 

@@ -1604,7 +1604,7 @@ class JwsRuntimeEngine(
                     val type = payload.stringArg("type").orEmpty().trim()
                     val title = payload.stringArg("title").orEmpty()
                     val duration = payload.intArg("duration")?.coerceIn(4, 120) ?: 15
-                    if (type.isNotBlank()) {
+                    if (type.isNotBlank() && type != "qr_jumat") {
                         val isUniversalDefault = type in setOf("welcome", "analog_clock", "qr_infaq", "qr_finance", "online_finance")
                         val newSlide = SlideItem(
                             id = "slide_${type}_${System.currentTimeMillis()}",
@@ -1614,7 +1614,7 @@ class JwsRuntimeEngine(
                             enabled = true,
                             showInMain = payload.booleanArg("showInMain") ?: true,
                             showInSlideshow = payload.booleanArg("showInSlideshow") ?: true,
-                            showInJumat = payload.booleanArg("showInJumat") ?: (isUniversalDefault || type in setOf("jumat_petugas", "jumat_keuangan", "qr_jumat")),
+                            showInJumat = payload.booleanArg("showInJumat") ?: (isUniversalDefault || type in setOf("jumat_petugas", "jumat_keuangan")),
                             showInRamadhan = payload.booleanArg("showInRamadhan") ?: (isUniversalDefault || type.startsWith("ramadhan_")),
                             showInIdulFitri = payload.booleanArg("showInIdulFitri") ?: (isUniversalDefault || type in setOf("idulfitri_petugas", "ramadhan_laporan_akhir")),
                             showInIdulAdha = payload.booleanArg("showInIdulAdha") ?: (isUniversalDefault || type in setOf("iduladha_petugas", "iduladha_qurban"))

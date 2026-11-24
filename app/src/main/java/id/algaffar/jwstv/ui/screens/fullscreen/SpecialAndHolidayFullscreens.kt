@@ -61,10 +61,14 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import id.algaffar.jwstv.domain.engine.DailyPrayerSchedule
 import id.algaffar.jwstv.domain.engine.JwsStateMachine
 import id.algaffar.jwstv.domain.model.JumatKeuanganRecord
 import id.algaffar.jwstv.domain.model.JumatPetugasRecord
+import id.algaffar.jwstv.domain.model.PrayerId
 import id.algaffar.jwstv.domain.model.QurbanGroup
+import id.algaffar.jwstv.domain.model.RamadhanJadwalItem
+import id.algaffar.jwstv.domain.model.RamadhanSettings
 import id.algaffar.jwstv.ui.JwsRuntimeSnapshot
 import id.algaffar.jwstv.ui.components.clock.ArtisticClock
 import id.algaffar.jwstv.ui.components.clock.BigAnalogClock
@@ -288,7 +292,19 @@ fun TarawihFullscreen(
     val takjilPages = remember(takjilDonors) {
         if (takjilDonors.isEmpty()) listOf(emptyList()) else takjilDonors.chunked(10)
     }
-    val totalPages = 2 + takjilPages.size
+
+    val slideKinds: List<Pair<String, Int>> = remember(ramadhan.slideshow, takjilPages.size) {
+        buildList {
+            if (ramadhan.slideshow.showPetugas) add("petugas" to 0)
+            if (ramadhan.slideshow.showKeuangan) add("keuangan" to 0)
+            if (ramadhan.slideshow.showJadwal) add("jadwal" to 0)
+            if (ramadhan.slideshow.showTakjil) {
+                takjilPages.indices.forEach { add("takjil" to it) }
+            }
+            if (isEmpty()) add("petugas" to 0)
+        }
+    }
+    val totalPages = slideKinds.size
 
     var page by remember { mutableIntStateOf(0) }
     LaunchedEffect(ramadhan.slideshow.slideDuration, totalPages) {
@@ -342,19 +358,19 @@ fun TarawihFullscreen(
                 .border(1.5.dp, palette.border, RoundedCornerShape(24.dp))
         ) {
             AnimatedContent(
-                targetState = page,
+                targetState = slideKinds[page.coerceIn(0, slideKinds.lastIndex)],
                 transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(400)) },
                 label = "TarawihSlide"
-            ) { idx ->
-                when (idx) {
-                    0 -> TarawihPetugasSlideView(
+            ) { (kind, subIdx) ->
+                when (kind) {
+                    "petugas" -> TarawihPetugasSlideView(
                         night = ramadhan.currentNight,
                         hijriYear = ramadhan.hijriYear,
                         penceramah = petugas?.penceramah ?: "-",
                         imamTarawih = petugas?.imamTarawih ?: "-",
                         imamWitir = petugas?.imamWitir ?: "-"
                     )
-                    1 -> TarawihKeuanganSlideView(
+                    "keuangan" -> TarawihKeuanganSlideView(
                         night = ramadhan.currentNight,
                         hijriYear = ramadhan.hijriYear,
                         penerimaanPria = keuangan?.penerimaanPria ?: 0L,
@@ -362,8 +378,13 @@ fun TarawihFullscreen(
                         jumlahInfaqMalamIni = keuangan?.totalPenerimaan ?: 0L,
                         saldoAkhir = keuangan?.saldoAkhir ?: 0L
                     )
+                    "jadwal" -> RamadhanJadwalSlideView(
+                        ramadhan = ramadhan,
+                        schedule = snapshot.schedule,
+                        isExpanded = true
+                    )
                     else -> {
-                        val takjilPageIdx = (idx - 2).coerceIn(0, takjilPages.lastIndex)
+                        val takjilPageIdx = subIdx.coerceIn(0, takjilPages.lastIndex)
                         TarawihTakjilSlideView(
                             night = ramadhan.currentNight,
                             hijriYear = ramadhan.hijriYear,
@@ -440,42 +461,43 @@ fun TarawihFullscreen(
 }
 
 @Composable
-private fun TarawihPetugasSlideView(
+internal fun TarawihPetugasSlideView(
     night: Int,
     hijriYear: String,
     penceramah: String,
     imamTarawih: String,
-    imamWitir: String
+    imamWitir: String,
+    isExpanded: Boolean = true
 ) {
     val palette = LocalJwsTheme.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 36.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .padding(horizontal = 36.dp, vertical = if (isExpanded) 28.dp else 22.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 12.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Groups,
                 contentDescription = null,
                 tint = palette.accent,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(if (isExpanded) 44.dp else 36.dp)
             )
             Column {
                 Text(
                     text = "PETUGAS SHOLAT TARAWIH & WITIR",
                     color = palette.textPrimary,
-                    fontSize = 32.sp,
+                    fontSize = if (isExpanded) 32.sp else 28.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
                     text = "Ibadah Malam Ramadhan Ke-$night ($hijriYear H)",
                     color = palette.accent,
-                    fontSize = 20.sp,
+                    fontSize = if (isExpanded) 20.sp else 18.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -485,24 +507,27 @@ private fun TarawihPetugasSlideView(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 12.dp)
         ) {
             OfficerRoleRowCard(
                 roleTitle = "PENCERAMAH KULTUM",
                 officerName = penceramah,
                 accentColor = palette.accent,
+                isExpanded = isExpanded,
                 modifier = Modifier.weight(1f)
             )
             OfficerRoleRowCard(
                 roleTitle = "IMAM SHOLAT TARAWIH",
                 officerName = imamTarawih,
                 accentColor = palette.accentSecondary,
+                isExpanded = isExpanded,
                 modifier = Modifier.weight(1f)
             )
             OfficerRoleRowCard(
                 roleTitle = "IMAM SHOLAT WITIR",
                 officerName = imamWitir,
                 accentColor = palette.accent,
+                isExpanded = isExpanded,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -510,43 +535,44 @@ private fun TarawihPetugasSlideView(
 }
 
 @Composable
-private fun TarawihKeuanganSlideView(
+internal fun TarawihKeuanganSlideView(
     night: Int,
     hijriYear: String,
     penerimaanPria: Long,
     penerimaanWanita: Long,
     jumlahInfaqMalamIni: Long,
-    saldoAkhir: Long
+    saldoAkhir: Long,
+    isExpanded: Boolean = true
 ) {
     val palette = LocalJwsTheme.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 36.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .padding(horizontal = 36.dp, vertical = if (isExpanded) 28.dp else 22.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 12.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.AccountBalanceWallet,
                 contentDescription = null,
                 tint = palette.accentSecondary,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(if (isExpanded) 44.dp else 36.dp)
             )
             Column {
                 Text(
                     text = "LAPORAN INFAQ MALAM RAMADHAN KE-$night",
                     color = palette.textPrimary,
-                    fontSize = 32.sp,
+                    fontSize = if (isExpanded) 32.sp else 28.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
                     text = "Periode Laporan: Malam Ke-$night Ramadhan $hijriYear H",
                     color = palette.textSecondary,
-                    fontSize = 20.sp,
+                    fontSize = if (isExpanded) 20.sp else 18.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -557,26 +583,26 @@ private fun TarawihKeuanganSlideView(
                 .fillMaxWidth()
                 .weight(1f)
                 .padding(vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
             ) {
                 FinanceMetricBox(
                     label = "INFAQ JAMAAH PRIA",
                     amount = penerimaanPria,
                     valueColor = Color(0xFF34D399),
-                    isExpanded = true,
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
                 FinanceMetricBox(
                     label = "INFAQ JAMAAH WANITA",
                     amount = penerimaanWanita,
                     valueColor = Color(0xFF34D399),
-                    isExpanded = true,
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -585,13 +611,13 @@ private fun TarawihKeuanganSlideView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
             ) {
                 FinanceMetricBox(
                     label = "JUMLAH INFAQ MALAM INI",
                     amount = jumlahInfaqMalamIni,
                     valueColor = palette.accent,
-                    isExpanded = true,
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
                 FinanceMetricBox(
@@ -599,7 +625,7 @@ private fun TarawihKeuanganSlideView(
                     amount = saldoAkhir,
                     valueColor = palette.accentSecondary,
                     isHighlighted = true,
-                    isExpanded = true,
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -608,13 +634,14 @@ private fun TarawihKeuanganSlideView(
 }
 
 @Composable
-private fun TarawihTakjilSlideView(
+internal fun TarawihTakjilSlideView(
     night: Int,
     hijriYear: String,
     donors: List<String>,
     startNumber: Int = 1,
     pageNumber: Int = 1,
-    totalTakjilPages: Int = 1
+    totalTakjilPages: Int = 1,
+    isExpanded: Boolean = true
 ) {
     val palette = LocalJwsTheme.current
     val subtitleText = if (totalTakjilPages > 1) {
@@ -626,30 +653,30 @@ private fun TarawihTakjilSlideView(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 36.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .padding(horizontal = 36.dp, vertical = if (isExpanded) 28.dp else 20.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 12.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.NightsStay,
                 contentDescription = null,
                 tint = palette.accentSecondary,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(if (isExpanded) 44.dp else 36.dp)
             )
             Column {
                 Text(
                     text = "DAFTAR PENYUMBANG TA'JIL BUKA PUASA",
                     color = palette.textPrimary,
-                    fontSize = 32.sp,
+                    fontSize = if (isExpanded) 32.sp else 28.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
                     text = subtitleText,
                     color = palette.accent,
-                    fontSize = 20.sp,
+                    fontSize = if (isExpanded) 20.sp else 18.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -667,16 +694,18 @@ private fun TarawihTakjilSlideView(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(20.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
         ) {
             TakjilDonorColumn(
                 items = leftCol,
                 startNumber = startNumber,
+                isExpanded = isExpanded,
                 modifier = Modifier.weight(1f)
             )
             TakjilDonorColumn(
                 items = rightCol,
                 startNumber = startNumber + 5,
+                isExpanded = isExpanded,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -687,13 +716,14 @@ private fun TarawihTakjilSlideView(
 private fun TakjilDonorColumn(
     items: List<String>,
     startNumber: Int,
+    isExpanded: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
 
     Column(
         modifier = modifier.fillMaxHeight(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(if (isExpanded) 12.dp else 9.dp)
     ) {
         for (i in 0 until 5) {
             val donor = items.getOrNull(i)
@@ -702,25 +732,25 @@ private fun TakjilDonorColumn(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(if (isExpanded) 16.dp else 13.dp))
                         .background(palette.bgPrimary.copy(alpha = 0.65f))
-                        .border(1.5.dp, palette.border, RoundedCornerShape(16.dp))
-                        .padding(horizontal = 20.dp),
+                        .border(1.5.dp, palette.border, RoundedCornerShape(if (isExpanded) 16.dp else 13.dp))
+                        .padding(horizontal = if (isExpanded) 20.dp else 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 12.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .width(64.dp)
+                            .width(if (isExpanded) 64.dp else 52.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .background(palette.accent.copy(alpha = 0.18f))
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = if (isExpanded) 8.dp else 5.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "${startNumber + i}.",
                             color = palette.accent,
-                            fontSize = 24.sp,
+                            fontSize = if (isExpanded) 24.sp else 20.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.ExtraBold
                         )
@@ -728,7 +758,7 @@ private fun TakjilDonorColumn(
                     Text(
                         text = donor.ifBlank { "Nama ${startNumber + i}" },
                         color = palette.textPrimary,
-                        fontSize = 30.sp,
+                        fontSize = if (isExpanded) 30.sp else 24.sp,
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -739,6 +769,172 @@ private fun TakjilDonorColumn(
                 Spacer(modifier = Modifier.weight(1f))
             }
         }
+    }
+}
+
+@Composable
+internal fun RamadhanJadwalSlideView(
+    ramadhan: RamadhanSettings,
+    schedule: DailyPrayerSchedule,
+    isExpanded: Boolean = true
+) {
+    val palette = LocalJwsTheme.current
+    val timeFmt = remember { java.time.format.DateTimeFormatter.ofPattern("HH:mm") }
+    val activeItems = remember(ramadhan.jadwalImsakiyah) {
+        ramadhan.jadwalImsakiyah
+            .filter { it.enabled && it.label.isNotBlank() }
+            .ifEmpty { RamadhanJadwalItem.defaultImsakiyahItems().filter { it.enabled } }
+    }
+    val cols = when {
+        activeItems.size <= 3 -> activeItems.size.coerceAtLeast(1)
+        activeItems.size == 4 -> 2
+        activeItems.size <= 6 -> 3
+        else -> 4
+    }
+    val rows = remember(activeItems, cols) { activeItems.chunked(cols) }
+
+    val (labelSp, timeSp) = when {
+        rows.size == 1 -> if (isExpanded) 30.sp to 112.sp else 24.sp to 84.sp
+        rows.size == 2 && cols == 2 -> if (isExpanded) 28.sp to 98.sp else 22.sp to 74.sp
+        rows.size == 2 && cols == 3 -> if (isExpanded) 24.sp to 84.sp else 19.sp to 62.sp
+        rows.size == 2 -> if (isExpanded) 20.sp to 68.sp else 16.sp to 50.sp
+        else -> if (isExpanded) 18.sp to 52.sp else 14.sp to 38.sp
+    }
+
+    fun resolveTime(item: RamadhanJadwalItem): String {
+        return if (item.sourceType.equals("custom", ignoreCase = true)) {
+            item.customTime.trim().ifBlank { "--:--" }
+        } else {
+            val pid = PrayerId.fromId(item.prayerId)
+            pid?.let { schedule.timeFor(it)?.format(timeFmt) }
+                ?: item.customTime.trim().ifBlank { "--:--" }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 36.dp, vertical = if (isExpanded) 28.dp else 22.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.NightsStay,
+                contentDescription = null,
+                tint = palette.accentSecondary,
+                modifier = Modifier.size(if (isExpanded) 44.dp else 36.dp)
+            )
+            Column {
+                Text(
+                    text = ramadhan.jadwalTitle.ifBlank { "JADWAL IMSAKIYAH & BERBUKA RAMADHAN" }.uppercase(),
+                    color = palette.textPrimary,
+                    fontSize = if (isExpanded) 32.sp else 28.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Hari Ke-${ramadhan.currentNight} Ramadhan ${ramadhan.hijriYear} H • ${schedule.date}",
+                    color = palette.accent,
+                    fontSize = if (isExpanded) 20.sp else 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(if (isExpanded) 18.dp else 12.dp)
+        ) {
+            rows.forEach { rowItems ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 18.dp else 12.dp)
+                ) {
+                    rowItems.forEach { item ->
+                        val isMaghribHighlight = item.highlighted &&
+                            !item.sourceType.equals("custom", ignoreCase = true) &&
+                            item.prayerId.equals("maghrib", ignoreCase = true)
+                        val valueColor = when {
+                            isMaghribHighlight -> Color(0xFF34D399)
+                            item.highlighted -> palette.accentSecondary
+                            else -> palette.textPrimary
+                        }
+                        RamadhanTimeBox(
+                            label = item.label.uppercase(),
+                            timeText = resolveTime(item),
+                            valueColor = valueColor,
+                            isHighlighted = item.highlighted,
+                            labelFontSize = labelSp,
+                            timeFontSize = timeSp,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    repeat(cols - rowItems.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RamadhanTimeBox(
+    label: String,
+    timeText: String,
+    valueColor: Color,
+    isHighlighted: Boolean = false,
+    labelFontSize: androidx.compose.ui.unit.TextUnit = 24.sp,
+    timeFontSize: androidx.compose.ui.unit.TextUnit = 84.sp,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalJwsTheme.current
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                if (isHighlighted) palette.accent.copy(alpha = 0.22f)
+                else palette.bgPrimary.copy(alpha = 0.65f)
+            )
+            .border(
+                width = if (isHighlighted) 2.dp else 1.5.dp,
+                color = if (isHighlighted) palette.accentSecondary else palette.border,
+                shape = RoundedCornerShape(18.dp)
+            )
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = label,
+            color = if (isHighlighted) palette.accentSecondary else palette.textSecondary,
+            fontSize = labelFontSize,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 1.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = timeText,
+            color = valueColor,
+            fontSize = timeFontSize,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Black,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
+        )
     }
 }
 
@@ -978,42 +1174,43 @@ fun HolidayAndQurbanFullscreen(
 }
 
 @Composable
-private fun EidPetugasSlideView(
+internal fun EidPetugasSlideView(
     title: String,
     subtitle: String,
     khotib: String,
     imam: String,
-    bilal: String
+    bilal: String,
+    isExpanded: Boolean = true
 ) {
     val palette = LocalJwsTheme.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 36.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .padding(horizontal = 36.dp, vertical = if (isExpanded) 28.dp else 22.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 12.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Groups,
                 contentDescription = null,
                 tint = palette.accent,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(if (isExpanded) 44.dp else 36.dp)
             )
             Column {
                 Text(
                     text = title,
                     color = palette.textPrimary,
-                    fontSize = 32.sp,
+                    fontSize = if (isExpanded) 32.sp else 28.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
                     text = subtitle,
                     color = palette.accent,
-                    fontSize = 20.sp,
+                    fontSize = if (isExpanded) 20.sp else 18.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -1023,24 +1220,27 @@ private fun EidPetugasSlideView(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 12.dp)
         ) {
             OfficerRoleRowCard(
                 roleTitle = "KHOTIB SHOLAT IED",
                 officerName = khotib,
                 accentColor = palette.accent,
+                isExpanded = isExpanded,
                 modifier = Modifier.weight(1f)
             )
             OfficerRoleRowCard(
                 roleTitle = "IMAM SHOLAT IED",
                 officerName = imam,
                 accentColor = palette.accentSecondary,
+                isExpanded = isExpanded,
                 modifier = Modifier.weight(1f)
             )
             OfficerRoleRowCard(
                 roleTitle = "BILAL / MUADZIN",
                 officerName = bilal,
                 accentColor = palette.accent,
+                isExpanded = isExpanded,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -1048,11 +1248,12 @@ private fun EidPetugasSlideView(
 }
 
 @Composable
-private fun IdulFitriKeuanganSlideView(
+internal fun IdulFitriKeuanganSlideView(
     hijriYear: String,
     brandName: String,
     ramadhan: id.algaffar.jwstv.domain.model.RamadhanSettings,
-    fallbackEidKeuangan: id.algaffar.jwstv.domain.model.EidKeuangan
+    fallbackEidKeuangan: id.algaffar.jwstv.domain.model.EidKeuangan,
+    isExpanded: Boolean = true
 ) {
     val palette = LocalJwsTheme.current
 
@@ -1099,30 +1300,30 @@ private fun IdulFitriKeuanganSlideView(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 36.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .padding(horizontal = 36.dp, vertical = if (isExpanded) 28.dp else 22.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 12.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.AccountBalanceWallet,
                 contentDescription = null,
                 tint = palette.accentSecondary,
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(if (isExpanded) 44.dp else 36.dp)
             )
             Column {
                 Text(
                     text = "LAPORAN KEUANGAN AKHIR RAMADHAN",
                     color = palette.textPrimary,
-                    fontSize = 32.sp,
+                    fontSize = if (isExpanded) 32.sp else 28.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
                     text = "Ramadhan ${ramadhan.hijriYear} H • 1 Syawal $hijriYear H • $brandName",
                     color = palette.textSecondary,
-                    fontSize = 20.sp,
+                    fontSize = if (isExpanded) 20.sp else 18.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -1133,26 +1334,26 @@ private fun IdulFitriKeuanganSlideView(
                 .fillMaxWidth()
                 .weight(1f)
                 .padding(vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
             ) {
                 FinanceMetricBox(
                     label = "SALDO AWAL RAMADHAN",
                     amount = saldoAwal,
                     valueColor = palette.textPrimary,
-                    isExpanded = true,
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
                 FinanceMetricBox(
                     label = "TOTAL PEMASUKAN RAMADHAN (+)",
                     amount = totalPemasukan,
                     valueColor = Color(0xFF34D399),
-                    isExpanded = true,
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -1161,13 +1362,13 @@ private fun IdulFitriKeuanganSlideView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(20.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
             ) {
                 FinanceMetricBox(
                     label = "TOTAL PENGELUARAN RAMADHAN (-)",
                     amount = totalPengeluaran,
                     valueColor = Color(0xFFF87171),
-                    isExpanded = true,
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
                 FinanceMetricBox(
@@ -1175,7 +1376,7 @@ private fun IdulFitriKeuanganSlideView(
                     amount = totalSaldoAkhir,
                     valueColor = palette.accentSecondary,
                     isHighlighted = true,
-                    isExpanded = true,
+                    isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -1184,46 +1385,55 @@ private fun IdulFitriKeuanganSlideView(
 }
 
 @Composable
-private fun QurbanGroupSlideView(
+internal fun QurbanGroupSlideView(
     group: QurbanGroup,
     groupNumber: Int,
-    totalGroups: Int
+    totalGroups: Int,
+    isExpanded: Boolean = true
 ) {
     val palette = LocalJwsTheme.current
     val members = group.members.take(7)
-    val (nameFontSize, badgeFontSize, badgeWidth) = when {
-        members.size <= 3 -> Triple(54.sp, 32.sp, 84.dp)
-        members.size <= 5 -> Triple(46.sp, 28.sp, 76.dp)
-        else -> Triple(40.sp, 26.sp, 72.dp)
+    val (nameFontSize, badgeFontSize, badgeWidth) = if (isExpanded) {
+        when {
+            members.size <= 3 -> Triple(54.sp, 32.sp, 84.dp)
+            members.size <= 5 -> Triple(46.sp, 28.sp, 76.dp)
+            else -> Triple(40.sp, 26.sp, 72.dp)
+        }
+    } else {
+        when {
+            members.size <= 3 -> Triple(42.sp, 26.sp, 72.dp)
+            members.size <= 5 -> Triple(34.sp, 22.sp, 64.dp)
+            else -> Triple(28.sp, 20.sp, 58.dp)
+        }
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 36.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 36.dp, vertical = if (isExpanded) 24.dp else 18.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 10.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 12.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Celebration,
                 contentDescription = null,
                 tint = palette.accentSecondary,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(if (isExpanded) 48.dp else 36.dp)
             )
             Column {
                 Text(
                     text = "${group.groupName.uppercase()} (HEWAN: ${group.animalType.uppercase()})",
                     color = palette.textPrimary,
-                    fontSize = 36.sp,
+                    fontSize = if (isExpanded) 36.sp else 28.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
                     text = "Daftar Peserta Ibadah Qurban • Kelompok $groupNumber dari $totalGroups",
                     color = palette.accent,
-                    fontSize = 22.sp,
+                    fontSize = if (isExpanded) 22.sp else 18.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -1233,7 +1443,7 @@ private fun QurbanGroupSlideView(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(if (isExpanded) 10.dp else 7.dp)
         ) {
             members.forEachIndexed { idx, rawMember ->
                 // Strip leading "1. " if already numbered in settings so badge doesn't duplicate number
@@ -1242,19 +1452,19 @@ private fun QurbanGroupSlideView(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(if (isExpanded) 16.dp else 12.dp))
                         .background(palette.bgPrimary.copy(alpha = 0.65f))
-                        .border(1.5.dp, palette.border, RoundedCornerShape(16.dp))
-                        .padding(horizontal = 24.dp),
+                        .border(1.5.dp, palette.border, RoundedCornerShape(if (isExpanded) 16.dp else 12.dp))
+                        .padding(horizontal = if (isExpanded) 24.dp else 18.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(20.dp)
+                    horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 14.dp)
                 ) {
                     Box(
                         modifier = Modifier
                             .width(badgeWidth)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .background(palette.accent.copy(alpha = 0.18f))
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = if (isExpanded) 8.dp else 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -1367,8 +1577,8 @@ fun StandbySlideshowFullscreen(
             activeSlide != null -> {
                 val handled = id.algaffar.jwstv.ui.screens.standby.RenderSystemDataSlideIfApplicable(
                     slide = activeSlide,
-                    settings = snapshot.settings,
-                    today = snapshot.schedule.date,
+                    snapshot = snapshot,
+                    assetsRootDir = assetsRootDir,
                     isExpanded = true,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -1532,6 +1742,7 @@ fun MasjidQrFullscreen(
     assetsRootDir: File? = null,
     isLogoMenuOpen: Boolean = false,
     onLogoClick: () -> Unit = {},
+    isCompactSlide: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val qrCfg = snapshot.settings.masjidQr
@@ -1552,6 +1763,7 @@ fun MasjidQrFullscreen(
         assetsRootDir = assetsRootDir,
         isLogoMenuOpen = isLogoMenuOpen,
         onLogoClick = onLogoClick,
+        isCompactSlide = isCompactSlide,
         modifier = modifier
     )
 }
