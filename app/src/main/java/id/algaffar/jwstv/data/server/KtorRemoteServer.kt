@@ -568,6 +568,10 @@ class KtorRemoteServer(
                 put("makkahVideoId", settings.live.makkahVideoId)
                 put("madinahVideoId", settings.live.madinahVideoId)
                 put("customVideoId", settings.live.customVideoId)
+                put("makkahHlsUrl", settings.live.makkahHlsUrl)
+                put("madinahHlsUrl", settings.live.madinahHlsUrl)
+                put("customStreamUrl", settings.live.customStreamUrl)
+                put("preferNativeHls", settings.live.preferNativeHls)
                 put("muted", settings.live.muted)
             }
 
@@ -923,7 +927,8 @@ class KtorRemoteServer(
             "regenerate_remote_token",
             "clear_logs",
             "factory_reset",
-            "ota_install"
+            "ota_install",
+            "check_ota_update"
         )
 
         fun maxUploadBytesForCategory(category: String): Long = when (category.lowercase()) {

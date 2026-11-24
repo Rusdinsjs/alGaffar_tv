@@ -1369,6 +1369,7 @@ fun StandbySlideshowFullscreen(
                     slide = activeSlide,
                     settings = snapshot.settings,
                     today = snapshot.schedule.date,
+                    isExpanded = true,
                     modifier = Modifier.fillMaxSize()
                 )
                 if (!handled) {

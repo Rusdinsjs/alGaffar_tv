@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.PlatformTextStyle
@@ -615,6 +616,7 @@ fun BigAnalogClock(
     isSmall: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val palette = LocalJwsTheme.current
     val hours = now.hour % 12
     val minutes = now.minute
     val seconds = now.second
@@ -623,9 +625,51 @@ fun BigAnalogClock(
     val minuteDeg = minutes * 6f + seconds * 0.1f
     val hourDeg = hours * 30f + minutes * 0.5f
 
-    val numberPaint = remember {
+    val bgOuter = remember(palette) {
+        lerp(
+            palette.bgPrimary,
+            if (palette.isLight) palette.bgSecondary else Color.Black,
+            if (palette.isLight) 0.25f else 0.45f
+        )
+    }
+    val bezelOuter = palette.accentSecondary
+    val bezelGroove = remember(palette) {
+        lerp(palette.bgPrimary, Color.Black, if (palette.isLight) 0.18f else 0.50f)
+    }
+    val bezelMid = remember(palette) { lerp(palette.accentSecondary, palette.accent, 0.45f) }
+    val bezelHighlight = remember(palette) { lerp(palette.accentSecondary, Color.White, 0.35f) }
+    val bezelInnerRim = palette.bgSecondary
+    val dialFaceColor = remember(palette) {
+        if (palette.isLight) palette.bgCard.copy(alpha = 1f)
+        else lerp(palette.bgPrimary, Color.Black, 0.28f)
+    }
+    val dialBorderColor = remember(palette) { palette.accent.copy(alpha = 0.35f) }
+    val arabesqueColor = remember(palette) {
+        palette.accentSecondary.copy(alpha = if (palette.isLight) 0.14f else 0.12f)
+    }
+    val hourTickColor = palette.accentSecondary
+    val minuteTickColor = remember(palette) { palette.accent.copy(alpha = 0.78f) }
+    val numberColor = remember(palette) {
+        if (palette.isLight) palette.textPrimary
+        else lerp(palette.textPrimary, palette.accentSecondary, 0.50f)
+    }
+    val domeColor = remember(palette) { palette.accentSecondary.copy(alpha = 0.78f) }
+    val domeFinialColor = remember(palette) { lerp(palette.accentSecondary, palette.textPrimary, 0.4f) }
+    val hourHandBase = remember(palette) { lerp(palette.accentSecondary, palette.accent, 0.35f) }
+    val hourHandFacet = remember(palette) {
+        if (palette.isLight) lerp(palette.accentSecondary, Color.White, 0.35f)
+        else palette.textPrimary.copy(alpha = 0.90f)
+    }
+    val minuteHandBase = palette.accentSecondary
+    val minuteHandFacet = remember(palette) {
+        if (palette.isLight) Color.White.copy(alpha = 0.85f)
+        else palette.textPrimary
+    }
+    val secondHandColor = remember(palette) { lerp(Color(0xFFEF4444), palette.accent, 0.22f) }
+
+    val numberPaint = remember(numberColor) {
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color(0xFFFFEA79).toArgb()
+            color = numberColor.toArgb()
             textAlign = Paint.Align.CENTER
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
         }
@@ -636,7 +680,7 @@ fun BigAnalogClock(
             .fillMaxSize()
             .background(
                 Brush.radialGradient(
-                    colors = listOf(Color(0xFF05261C), Color(0xFF031710), Color(0xFF010A07))
+                    colors = listOf(palette.bgSecondary, palette.bgPrimary, bgOuter)
                 )
             ),
         contentAlignment = Alignment.Center
@@ -653,24 +697,23 @@ fun BigAnalogClock(
 
             fun pt(x: Float, y: Float): Offset = Offset(cx + (x - 250f) * s, cy + (y - 250f) * s)
 
-            // Layer 1: Outer Metallic Gold Bezel (5 concentric rings)
-            drawCircle(color = Color(0xFFD4AF37), radius = 246f * s, center = center)
-            drawCircle(color = Color(0xFF1A150A), radius = 238f * s, center = center)
-            drawCircle(color = Color(0xFFB38728), radius = 232f * s, center = center)
-            drawCircle(color = Color(0xFFFFD700), radius = 228f * s, center = center)
-            drawCircle(color = Color(0xFF14261D), radius = 225f * s, center = center)
+            // Layer 1: Outer Metallic Bezel (5 concentric rings harmonized with theme)
+            drawCircle(color = bezelOuter, radius = 246f * s, center = center)
+            drawCircle(color = bezelGroove, radius = 238f * s, center = center)
+            drawCircle(color = bezelMid, radius = 232f * s, center = center)
+            drawCircle(color = bezelHighlight, radius = 228f * s, center = center)
+            drawCircle(color = bezelInnerRim, radius = 225f * s, center = center)
 
             // Layer 2: Dial Face
-            drawCircle(color = Color(0xFF041A12), radius = 222f * s, center = center)
+            drawCircle(color = dialFaceColor, radius = 222f * s, center = center)
             drawCircle(
-                color = Color(0xFF0E3F2C),
+                color = dialBorderColor,
                 radius = 222f * s,
                 center = center,
                 style = Stroke(width = 2f * s)
             )
 
             // Layer 3: Inner Arabesque Motif (Subtle Luxury Watermark)
-            val arabesqueColor = Color(0xFFFFD700).copy(alpha = 0.12f)
             val arabesqueStroke = Stroke(width = 1.5f * s)
             val squareTopLeft = pt(170f, 170f)
             val squareSize = Size(160f * s, 160f * s)
@@ -694,7 +737,7 @@ fun BigAnalogClock(
             drawCircle(color = arabesqueColor, radius = 105f * s, center = center, style = arabesqueStroke)
             drawCircle(color = arabesqueColor, radius = 145f * s, center = center, style = arabesqueStroke)
 
-            // Layer 4: 60 Ticks (12 Gold Hour Ticks + 48 Emerald Minute Ticks)
+            // Layer 4: 60 Ticks (12 Hour Ticks + 48 Minute Ticks)
             for (i in 0 until 60) {
                 val isHour = i % 5 == 0
                 val rad = (i * 6.0) * PI / 180.0
@@ -705,7 +748,7 @@ fun BigAnalogClock(
                 val x2 = cx + (r2 * sin(rad)).toFloat()
                 val y2 = cy - (r2 * cos(rad)).toFloat()
                 drawLine(
-                    color = if (isHour) Color(0xFFFFD700) else Color(0xFF4E9F76),
+                    color = if (isHour) hourTickColor else minuteTickColor,
                     start = Offset(x1, y1),
                     end = Offset(x2, y2),
                     strokeWidth = (if (isHour) 4.5f else 1.8f) * s,
@@ -731,7 +774,7 @@ fun BigAnalogClock(
                 )
             }
 
-            // Layer 6: Golden Mosque Dome Emblem in Upper Dial (centered at 250, 142, scale 0.9)
+            // Layer 6: Mosque Dome Emblem in Upper Dial (centered at 250, 142, scale 0.9)
             val domeCx = cx
             val domeCy = cy + (142f - 250f) * s
             val ds = 0.9f * s
@@ -750,9 +793,9 @@ fun BigAnalogClock(
                 )
                 close()
             }
-            drawPath(path = domePath, color = Color(0xFFFFD700).copy(alpha = 0.75f))
+            drawPath(path = domePath, color = domeColor)
             drawCircle(
-                color = Color(0xFFFFF2A3),
+                color = domeFinialColor,
                 radius = 3f * ds,
                 center = Offset(domeCx, domeCy - 28f * ds)
             )
@@ -771,7 +814,7 @@ fun BigAnalogClock(
 
             fun pt(x: Float, y: Float): Offset = Offset(cx + (x - 250f) * s, cy + (y - 250f) * s)
 
-            // Layer 7: Hour Hand (Gold Sword)
+            // Layer 7: Hour Hand (Theme Sword)
             rotate(degrees = hourDeg, pivot = center) {
                 val hourBase = Path().apply {
                     val p0 = pt(243f, 265f)
@@ -786,7 +829,7 @@ fun BigAnalogClock(
                     lineTo(p4.x, p4.y)
                     close()
                 }
-                drawPath(hourBase, color = Color(0xFFD4AF37))
+                drawPath(hourBase, color = hourHandBase)
 
                 val hourFacet = Path().apply {
                     val p0 = pt(250f, 260f)
@@ -799,10 +842,10 @@ fun BigAnalogClock(
                     lineTo(p3.x, p3.y)
                     close()
                 }
-                drawPath(hourFacet, color = Color(0xFFFFF8DC))
+                drawPath(hourFacet, color = hourHandFacet)
             }
 
-            // Layer 8: Minute Hand (Long Gold Sword)
+            // Layer 8: Minute Hand (Long Theme Sword)
             rotate(degrees = minuteDeg, pivot = center) {
                 val minBase = Path().apply {
                     val p0 = pt(244f, 275f)
@@ -817,7 +860,7 @@ fun BigAnalogClock(
                     lineTo(p4.x, p4.y)
                     close()
                 }
-                drawPath(minBase, color = Color(0xFFFFD700))
+                drawPath(minBase, color = minuteHandBase)
 
                 val minFacet = Path().apply {
                     val p0 = pt(250f, 270f)
@@ -830,14 +873,14 @@ fun BigAnalogClock(
                     lineTo(p3.x, p3.y)
                     close()
                 }
-                drawPath(minFacet, color = Color(0xFFFFFFF0))
+                drawPath(minFacet, color = minuteHandFacet)
             }
 
-            // Layer 9: Second Hand (Sport Red Needle)
+            // Layer 9: Second Hand (Contrasting Needle harmonized with theme)
             rotate(degrees = secondDeg, pivot = center) {
-                drawCircle(color = Color(0xFFEF4444), radius = 7f * s, center = pt(250f, 285f))
+                drawCircle(color = secondHandColor, radius = 7f * s, center = pt(250f, 285f))
                 drawLine(
-                    color = Color(0xFFEF4444),
+                    color = secondHandColor,
                     start = pt(250f, 295f),
                     end = pt(250f, 35f),
                     strokeWidth = 3f * s,
@@ -852,18 +895,18 @@ fun BigAnalogClock(
                     lineTo(p2.x, p2.y)
                     close()
                 }
-                drawPath(arrowTip, color = Color(0xFFEF4444))
+                drawPath(arrowTip, color = secondHandColor)
             }
 
             // Layer 10: Center Hub Nut
-            drawCircle(color = Color(0xFFD4AF37), radius = 14f * s, center = center)
+            drawCircle(color = hourHandBase, radius = 14f * s, center = center)
             drawCircle(
-                color = Color(0xFFFFF2A3),
+                color = domeFinialColor,
                 radius = 14f * s,
                 center = center,
                 style = Stroke(width = 2f * s)
             )
-            drawCircle(color = Color(0xFFEF4444), radius = 7f * s, center = center)
+            drawCircle(color = secondHandColor, radius = 7f * s, center = center)
         }
     }
 }

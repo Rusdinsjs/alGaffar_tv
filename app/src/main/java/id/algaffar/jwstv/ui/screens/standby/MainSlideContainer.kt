@@ -54,6 +54,7 @@ import androidx.annotation.OptIn
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.PlatformTextStyle
@@ -331,27 +332,66 @@ fun WelcomeMasjidSlideView(
         }
     }
 
+    val palette = LocalJwsTheme.current
     val isPerformanceMode = LocalPerformanceMode.current
+    val bgOuter = remember(palette) {
+        lerp(
+            palette.bgPrimary,
+            if (palette.isLight) palette.bgSecondary else Color.Black,
+            if (palette.isLight) 0.25f else 0.45f
+        )
+    }
+    val heroGradient = remember(palette) {
+        if (palette.isLight) {
+            listOf(
+                palette.textPrimary,
+                lerp(palette.textPrimary, palette.accent, 0.45f),
+                palette.accent
+            )
+        } else {
+            listOf(
+                palette.textPrimary,
+                lerp(palette.textPrimary, palette.accentSecondary, 0.55f),
+                palette.accentSecondary
+            )
+        }
+    }
+    val pillBg = remember(palette) {
+        if (palette.isLight) {
+            lerp(palette.bgCard, palette.accent, 0.10f)
+        } else {
+            lerp(palette.bgPrimary, palette.accent, 0.18f).copy(alpha = 0.90f)
+        }
+    }
+    val pillTextColor = remember(palette) {
+        if (palette.isLight) {
+            palette.textPrimary
+        } else {
+            lerp(palette.textPrimary, palette.accentSecondary, 0.45f)
+        }
+    }
+    val textShadowColor = Color.Black.copy(alpha = if (palette.isLight) 0.14f else 0.72f)
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(
                 Brush.radialGradient(
                     colorStops = arrayOf(
-                        0.0f to Color(0xFF05261C),
-                        0.6f to Color(0xFF031710),
-                        1.0f to Color(0xFF010A07)
+                        0.0f to palette.bgSecondary,
+                        0.6f to palette.bgPrimary,
+                        1.0f to bgOuter
                     )
                 )
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Subtle Islamic Golden Dot Motif Overlay (`radial-gradient(#FFE082 1px, transparent 1px)`, 28px spacing)
+        // Subtle Islamic Dot Motif Overlay harmonized with theme accentSecondary
         if (!isPerformanceMode) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val step = 28.dp.toPx()
                 val dotRadius = 1.2.dp.toPx()
-                val dotColor = Color(0xFFFFE082).copy(alpha = 0.055f)
+                val dotColor = palette.accentSecondary.copy(alpha = if (palette.isLight) 0.09f else 0.06f)
                 var y = step / 2f
                 while (y < size.height) {
                     var x = step / 2f
@@ -382,7 +422,7 @@ fun WelcomeMasjidSlideView(
             // Line 1: SELAMAT DATANG DI
             Text(
                 text = lines.line1.uppercase(Locale.getDefault()),
-                color = Color(0xFFFCD34D), // amber-300
+                color = palette.accentSecondary,
                 fontSize = if (isSmall) 26.sp else 38.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = if (isSmall) 6.sp else 9.sp,
@@ -391,7 +431,7 @@ fun WelcomeMasjidSlideView(
                 overflow = TextOverflow.Ellipsis,
                 style = TextStyle(
                     shadow = Shadow(
-                        color = Color.Black.copy(alpha = 0.65f),
+                        color = textShadowColor,
                         offset = Offset(0f, 3f),
                         blurRadius = 8f
                     ),
@@ -399,7 +439,7 @@ fun WelcomeMasjidSlideView(
                 )
             )
 
-            // Line 2: {{Nama Masjid}} (Gold Gradient Hero Title)
+            // Line 2: {{Nama Masjid}} (Theme-Harmonized Hero Title)
             Text(
                 text = lines.line2,
                 fontSize = heroFontSize,
@@ -410,15 +450,9 @@ fun WelcomeMasjidSlideView(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style = TextStyle(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color(0xFFFEF3C7), // amber-100
-                            Color(0xFFFDE047), // yellow-300
-                            Color(0xFFFBBF24)  // amber-400
-                        )
-                    ),
+                    brush = Brush.horizontalGradient(colors = heroGradient),
                     shadow = Shadow(
-                        color = Color.Black.copy(alpha = 0.85f),
+                        color = textShadowColor,
                         offset = Offset(0f, 6f),
                         blurRadius = 22f
                     ),
@@ -426,7 +460,7 @@ fun WelcomeMasjidSlideView(
                 )
             )
 
-            // Line 3: {{Alamat Masjid}} with Emerald MapPin icon
+            // Line 3: {{Alamat Masjid}} with Theme Accent MapPin icon
             if (lines.line3.isNotBlank()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -435,12 +469,12 @@ fun WelcomeMasjidSlideView(
                     Icon(
                         imageVector = Icons.Default.LocationOn,
                         contentDescription = null,
-                        tint = Color(0xFF34D399), // emerald-400
+                        tint = palette.accent,
                         modifier = Modifier.size(if (isSmall) 26.dp else 34.dp)
                     )
                     Text(
                         text = lines.line3,
-                        color = Color(0xFFA7F3D0).copy(alpha = 0.92f), // emerald-200/90
+                        color = palette.textSecondary,
                         fontSize = if (isSmall) 22.sp else 30.sp,
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center,
@@ -450,7 +484,7 @@ fun WelcomeMasjidSlideView(
                 }
             }
 
-            // Ornamental Gold Diamond Divider
+            // Ornamental Theme Diamond Divider
             Row(
                 modifier = Modifier
                     .width(if (isSmall) 580.dp else 780.dp)
@@ -466,8 +500,8 @@ fun WelcomeMasjidSlideView(
                             Brush.horizontalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    Color(0xFFFBBF24).copy(alpha = 0.6f),
-                                    Color(0xFFFBBF24)
+                                    palette.accentSecondary.copy(alpha = 0.6f),
+                                    palette.accentSecondary
                                 )
                             )
                         )
@@ -476,8 +510,8 @@ fun WelcomeMasjidSlideView(
                     modifier = Modifier
                         .size(if (isSmall) 14.dp else 16.dp)
                         .rotate(45f)
-                        .background(Color(0xFFFBBF24).copy(alpha = 0.42f))
-                        .border(2.dp, Color(0xFFFCD34D))
+                        .background(palette.accentSecondary.copy(alpha = if (palette.isLight) 0.22f else 0.36f))
+                        .border(2.dp, palette.accentSecondary)
                 )
                 Box(
                     modifier = Modifier
@@ -486,8 +520,8 @@ fun WelcomeMasjidSlideView(
                         .background(
                             Brush.horizontalGradient(
                                 colors = listOf(
-                                    Color(0xFFFBBF24),
-                                    Color(0xFFFBBF24).copy(alpha = 0.6f),
+                                    palette.accentSecondary,
+                                    palette.accentSecondary.copy(alpha = 0.6f),
                                     Color.Transparent
                                 )
                             )
@@ -498,7 +532,7 @@ fun WelcomeMasjidSlideView(
             // Line 4: SELAMA BERADA DI DALAM MASJID
             Text(
                 text = lines.line4.uppercase(Locale.getDefault()),
-                color = Color(0xFFE2E8F0), // slate-200
+                color = palette.textPrimary.copy(alpha = 0.88f),
                 fontSize = if (isSmall) 22.sp else 30.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = if (isSmall) 4.sp else 6.sp,
@@ -507,13 +541,13 @@ fun WelcomeMasjidSlideView(
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Line 5: HARAP TENANG DAN KHIDMAT (Prominent Red Pill with VolumeOff icon)
+            // Line 5: HARAP TENANG DAN KHIDMAT (Theme-Harmonized Pill with VolumeOff icon)
             Row(
                 modifier = Modifier
                     .padding(top = if (isSmall) 2.dp else 8.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(Color(0xFF450A0A).copy(alpha = 0.88f)) // red-950/85
-                    .border(2.dp, Color(0xFFEF4444).copy(alpha = 0.82f), RoundedCornerShape(50))
+                    .background(pillBg)
+                    .border(2.dp, palette.accent.copy(alpha = 0.78f), RoundedCornerShape(50))
                     .padding(
                         horizontal = if (isSmall) 32.dp else 52.dp,
                         vertical = if (isSmall) 12.dp else 16.dp
@@ -524,12 +558,12 @@ fun WelcomeMasjidSlideView(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.VolumeOff,
                     contentDescription = null,
-                    tint = Color(0xFFF87171), // red-400
+                    tint = palette.accent,
                     modifier = Modifier.size(if (isSmall) 26.dp else 38.dp)
                 )
                 Text(
                     text = lines.line5.uppercase(Locale.getDefault()),
-                    color = Color(0xFFFDE68A), // amber-200
+                    color = pillTextColor,
                     fontSize = if (isSmall) 24.sp else 36.sp,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 2.sp,
@@ -537,7 +571,7 @@ fun WelcomeMasjidSlideView(
                     overflow = TextOverflow.Ellipsis,
                     style = TextStyle(
                         shadow = Shadow(
-                            color = Color.Black.copy(alpha = 0.65f),
+                            color = textShadowColor,
                             offset = Offset(0f, 2f),
                             blurRadius = 6f
                         ),
@@ -609,6 +643,7 @@ fun RenderSystemDataSlideIfApplicable(
     slide: SlideItem,
     settings: AppStateSettings,
     today: LocalDate,
+    isExpanded: Boolean = false,
     modifier: Modifier = Modifier
 ): Boolean {
     val palette = LocalJwsTheme.current
@@ -630,7 +665,7 @@ fun RenderSystemDataSlideIfApplicable(
             val effDate = JwsStateMachine.findEffectiveJumatKeuanganDate(settings.jumat.keuangan.records, today)
             val rec = effDate?.let { settings.jumat.keuangan.records[it] }
                 ?: JumatKeuanganRecord(saldoKasLalu = settings.jumat.keuangan.saldoKasLalu)
-            JumatKeuanganSlideView(fridayDate = effDate ?: today.toString(), record = rec)
+            JumatKeuanganSlideView(fridayDate = effDate ?: today.toString(), record = rec, isExpanded = isExpanded)
             return true
         }
         "qr_jumat" -> {
@@ -646,12 +681,13 @@ fun RenderSystemDataSlideIfApplicable(
                 title = settings.jumat.keuangan.customTitle.ifBlank { "Laporan Infaq Kas Jum'at" },
                 subtitle = "Periode $effDate • Saldo Akhir: ${rupiah.format(rec.saldoAkhir)}",
                 qrPayload = payload,
+                isExpanded = isExpanded,
                 modifier = modifier
             )
             return true
         }
         "ramadhan_petugas", "ramadhan_keuangan", "ramadhan_jadwal" -> {
-            RamadhanOverviewSlideView(ramadhan = settings.ramadhan)
+            RamadhanOverviewSlideView(ramadhan = settings.ramadhan, isExpanded = isExpanded)
             return true
         }
         "ramadhan_takjil" -> {
@@ -663,21 +699,16 @@ fun RenderSystemDataSlideIfApplicable(
                 rows = listOf(
                     "Donatur Hari Ini" to if (donors.isEmpty()) "Jazakumullahu Khairan kepada seluruh Muhsinin" else donors.joinToString(" • ")
                 ),
+                isExpanded = isExpanded,
                 modifier = modifier
             )
             return true
         }
         "ramadhan_laporan_akhir" -> {
-            val lap = settings.ramadhan.laporanAkhir
-            CompactSystemInfoSlideCard(
-                badge = "RAMADHAN ${settings.ramadhan.hijriYear} H",
-                title = "LAPORAN AKHIR KAS RAMADHAN",
-                rows = listOf(
-                    "Total Penerimaan" to rupiah.format(lap.totalPenerimaan),
-                    "Total Pengeluaran" to rupiah.format(lap.totalPengeluaran),
-                    "Saldo Akhir" to rupiah.format(lap.saldoAkhir)
-                ),
-                modifier = modifier
+            RamadhanLaporanAkhirSlideView(
+                ramadhan = settings.ramadhan,
+                brandName = settings.brand.name,
+                isExpanded = isExpanded
             )
             return true
         }
@@ -687,6 +718,7 @@ fun RenderSystemDataSlideIfApplicable(
                 badge = "IDUL FITRI ${settings.idulFitri.hijriYear} H",
                 title = "PETUGAS SHOLAT HARI RAYA IDUL FITRI",
                 rows = listOf("Khotib" to p.khotib, "Imam" to p.imam, "Bilal" to p.bilal),
+                isExpanded = isExpanded,
                 modifier = modifier
             )
             return true
@@ -697,6 +729,7 @@ fun RenderSystemDataSlideIfApplicable(
                 badge = "IDUL ADHA ${settings.idulAdha.hijriYear} H",
                 title = "PETUGAS SHOLAT HARI RAYA IDUL ADHA",
                 rows = listOf("Khotib" to p.khotib, "Imam" to p.imam, "Bilal" to p.bilal),
+                isExpanded = isExpanded,
                 modifier = modifier
             )
             return true
@@ -714,6 +747,7 @@ fun RenderSystemDataSlideIfApplicable(
                 badge = "IBADAH QURBAN ${settings.idulAdha.hijriYear} H",
                 title = "DAFTAR PESERTA & KELOMPOK QURBAN",
                 rows = summaryRows,
+                isExpanded = isExpanded,
                 modifier = modifier
             )
             return true
@@ -727,6 +761,7 @@ fun RenderSystemDataSlideIfApplicable(
                     "Rekening Infaq" to listOf(fin.bankName, fin.nomorRekening).filter { it.isNotBlank() }.joinToString(" • ").ifBlank { "Lihat Laporan Kas Online" },
                     "Atas Nama" to fin.atasNama.ifBlank { settings.brand.name }
                 ),
+                isExpanded = isExpanded,
                 modifier = modifier
             )
             return true
@@ -739,6 +774,7 @@ fun RenderSystemDataSlideIfApplicable(
                 subtitle = listOf(qr.bankName, qr.nomorRekening, qr.atasNama).filter { it.isNotBlank() }.joinToString(" • ")
                     .ifBlank { "Pindai QR Code menggunakan aplikasi pembayaran / m-banking Anda" },
                 qrPayload = qr.link.ifBlank { "Infaq Digital ${settings.brand.name}" },
+                isExpanded = isExpanded,
                 modifier = modifier
             )
             return true
@@ -751,6 +787,7 @@ fun RenderSystemDataSlideIfApplicable(
                 title = "TRANSPARANSI KEUANGAN ${settings.brand.name.uppercase()}",
                 subtitle = "Pindai QR Code untuk melihat rincian mutasi kas masjid secara real-time",
                 qrPayload = payload.ifBlank { "Laporan Kas ${settings.brand.name}" },
+                isExpanded = isExpanded,
                 modifier = modifier
             )
             return true
@@ -764,6 +801,7 @@ private fun CompactSystemInfoSlideCard(
     badge: String,
     title: String,
     rows: List<Pair<String, String>>,
+    isExpanded: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
@@ -771,32 +809,59 @@ private fun CompactSystemInfoSlideCard(
         modifier = modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(palette.bgPrimary, palette.bgSecondary)))
-            .padding(40.dp),
+            .padding(horizontal = 36.dp, vertical = if (isExpanded) 36.dp else 28.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(badge, color = palette.accent, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+        Text(
+            text = badge,
+            color = palette.accent,
+            fontSize = if (isExpanded) 34.sp else 28.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 2.sp
+        )
         Spacer(modifier = Modifier.height(8.dp))
-        Text(title, color = palette.textPrimary, fontSize = 32.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
-        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = title,
+            color = palette.textPrimary,
+            fontSize = if (isExpanded) 56.sp else 48.sp,
+            lineHeight = if (isExpanded) 64.sp else 56.sp,
+            fontWeight = FontWeight.Black,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(if (isExpanded) 28.dp else 20.dp))
         Column(
-            modifier = Modifier.fillMaxWidth(0.86f),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.fillMaxWidth(0.92f),
+            verticalArrangement = Arrangement.spacedBy(if (isExpanded) 18.dp else 14.dp)
         ) {
             rows.forEach { (k, v) ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .background(palette.bgCard)
-                        .border(1.dp, palette.border, RoundedCornerShape(14.dp))
-                        .padding(horizontal = 24.dp, vertical = 14.dp),
+                        .border(1.5.dp, palette.border, RoundedCornerShape(16.dp))
+                        .padding(
+                            horizontal = if (isExpanded) 32.dp else 26.dp,
+                            vertical = if (isExpanded) 22.dp else 18.dp
+                        ),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(k, color = palette.accentSecondary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Text(v.ifBlank { "-" }, color = palette.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.End)
+                    Text(
+                        text = k,
+                        color = palette.accentSecondary,
+                        fontSize = if (isExpanded) 36.sp else 30.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Spacer(modifier = Modifier.width(20.dp))
+                    Text(
+                        text = v.ifBlank { "-" },
+                        color = palette.textPrimary,
+                        fontSize = if (isExpanded) 46.sp else 38.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.End
+                    )
                 }
             }
         }
@@ -809,6 +874,7 @@ private fun CompactSystemQrSlideCard(
     title: String,
     subtitle: String,
     qrPayload: String,
+    isExpanded: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
@@ -817,18 +883,35 @@ private fun CompactSystemQrSlideCard(
         modifier = modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(palette.bgPrimary, palette.bgSecondary)))
-            .padding(48.dp),
+            .padding(if (isExpanded) 56.dp else 40.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(40.dp)
+        horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 48.dp else 36.dp)
     ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(badge, color = palette.accent, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
-            Text(title, color = palette.textPrimary, fontSize = 34.sp, fontWeight = FontWeight.Black)
-            Text(subtitle, color = palette.textSecondary, fontSize = 20.sp, lineHeight = 28.sp)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(
+                text = badge,
+                color = palette.accent,
+                fontSize = if (isExpanded) 34.sp else 28.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 2.sp
+            )
+            Text(
+                text = title,
+                color = palette.textPrimary,
+                fontSize = if (isExpanded) 62.sp else 52.sp,
+                lineHeight = if (isExpanded) 70.sp else 60.sp,
+                fontWeight = FontWeight.Black
+            )
+            Text(
+                text = subtitle,
+                color = palette.textSecondary,
+                fontSize = if (isExpanded) 34.sp else 28.sp,
+                lineHeight = if (isExpanded) 44.sp else 38.sp
+            )
         }
         Box(
             modifier = Modifier
-                .size(280.dp)
+                .size(if (isExpanded) 400.dp else 320.dp)
                 .clip(RoundedCornerShape(24.dp))
                 .background(Color.White)
                 .border(3.dp, palette.accent, RoundedCornerShape(24.dp))
@@ -1046,13 +1129,13 @@ fun JumatPetugasSlideView(
                     Text(
                         text = "PETUGAS IBADAH SHOLAT JUM'AT",
                         color = palette.textPrimary,
-                        fontSize = if (isRowLayout) 32.sp else 26.sp,
+                        fontSize = if (isRowLayout) 44.sp else 36.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
                     Text(
                         text = "Jadwal Efektif Hari Jum'at: $fridayDate",
                         color = palette.accent,
-                        fontSize = if (isRowLayout) 20.sp else 16.sp,
+                        fontSize = if (isRowLayout) 28.sp else 22.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -1140,7 +1223,7 @@ fun OfficerRoleRowCard(
     ) {
         Box(
             modifier = Modifier
-                .width(420.dp)
+                .width(460.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(accentColor.copy(alpha = 0.18f))
                 .padding(horizontal = 20.dp, vertical = 14.dp),
@@ -1149,7 +1232,7 @@ fun OfficerRoleRowCard(
             Text(
                 text = roleTitle,
                 color = accentColor,
-                fontSize = 24.sp,
+                fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 1.5.sp,
                 maxLines = 1,
@@ -1176,6 +1259,7 @@ private fun OfficerRoleCard(
     roleTitle: String,
     officerName: String,
     accentColor: Color,
+    isExpanded: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
@@ -1193,12 +1277,12 @@ private fun OfficerRoleCard(
             modifier = Modifier
                 .clip(RoundedCornerShape(10.dp))
                 .background(accentColor.copy(alpha = 0.18f))
-                .padding(horizontal = 14.dp, vertical = 6.dp)
+                .padding(horizontal = 18.dp, vertical = 10.dp)
         ) {
             Text(
                 text = roleTitle,
                 color = accentColor,
-                fontSize = 15.sp,
+                fontSize = if (isExpanded) 32.sp else 26.sp,
                 fontWeight = FontWeight.ExtraBold
             )
         }
@@ -1206,7 +1290,8 @@ private fun OfficerRoleCard(
         Text(
             text = officerName.ifBlank { "-" },
             color = palette.textPrimary,
-            fontSize = 26.sp,
+            fontSize = if (isExpanded) 48.sp else 40.sp,
+            lineHeight = if (isExpanded) 56.sp else 48.sp,
             fontWeight = FontWeight.ExtraBold,
             textAlign = TextAlign.Center,
             maxLines = 3,
@@ -1226,30 +1311,30 @@ fun JumatKeuanganSlideView(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 36.dp, vertical = if (isExpanded) 28.dp else 36.dp),
-        verticalArrangement = if (isExpanded) Arrangement.spacedBy(20.dp) else Arrangement.SpaceBetween
+            .padding(horizontal = 36.dp, vertical = if (isExpanded) 28.dp else 24.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 16.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 12.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 14.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.AccountBalanceWallet,
                 contentDescription = null,
                 tint = palette.accentSecondary,
-                modifier = Modifier.size(if (isExpanded) 44.dp else 34.dp)
+                modifier = Modifier.size(if (isExpanded) 44.dp else 38.dp)
             )
             Column {
                 Text(
                     text = "LAPORAN KEUANGAN KAS MASJID (JUM'AT)",
                     color = palette.textPrimary,
-                    fontSize = if (isExpanded) 32.sp else 26.sp,
+                    fontSize = if (isExpanded) 44.sp else 38.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
                     text = "Periode Laporan: $fridayDate",
                     color = palette.textSecondary,
-                    fontSize = if (isExpanded) 20.sp else 16.sp,
+                    fontSize = if (isExpanded) 28.sp else 24.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -1259,7 +1344,7 @@ fun JumatKeuanganSlideView(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(vertical = if (isExpanded) 4.dp else 20.dp),
+                .padding(vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 16.dp)
         ) {
             Row(
@@ -1278,7 +1363,7 @@ fun JumatKeuanganSlideView(
                 FinanceMetricBox(
                     label = "TOTAL PEMASUKAN (+)",
                     amount = record.pemasukan,
-                    valueColor = Color(0xFF34D399),
+                    valueColor = if (palette.isLight) Color(0xFF059669) else Color(0xFF34D399),
                     isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
@@ -1293,13 +1378,129 @@ fun JumatKeuanganSlideView(
                 FinanceMetricBox(
                     label = "TOTAL PENGELUARAN (-)",
                     amount = record.pengeluaran,
-                    valueColor = Color(0xFFF87171),
+                    valueColor = if (palette.isLight) Color(0xFFDC2626) else Color(0xFFF87171),
                     isExpanded = isExpanded,
                     modifier = Modifier.weight(1f)
                 )
                 FinanceMetricBox(
                     label = "SALDO AKHIR KAS MASJID",
                     amount = record.saldoAkhir,
+                    valueColor = palette.accentSecondary,
+                    isHighlighted = true,
+                    isExpanded = isExpanded,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        if (!isExpanded) {
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+    }
+}
+
+@Composable
+fun RamadhanLaporanAkhirSlideView(
+    ramadhan: RamadhanSettings,
+    brandName: String,
+    isExpanded: Boolean = false
+) {
+    val palette = LocalJwsTheme.current
+
+    val hasNightlyData = remember(ramadhan.keuangan) {
+        ramadhan.keuangan.any {
+            it.saldoAwal != 0L || it.penerimaanPria != 0L || it.penerimaanWanita != 0L || it.pengeluaran != 0L
+        }
+    }
+    val (saldoAwal, totalPemasukan, totalPengeluaran, totalSaldoAkhir) = remember(ramadhan.keuangan, ramadhan.laporanAkhir, hasNightlyData) {
+        if (hasNightlyData) {
+            val awal = ramadhan.keuangan.firstOrNull { it.saldoAwal != 0L }?.saldoAwal ?: 0L
+            val masuk = ramadhan.keuangan.sumOf { it.totalPenerimaan }
+            val keluar = ramadhan.keuangan.sumOf { it.pengeluaran }
+            listOf(awal, masuk, keluar, awal + masuk - keluar)
+        } else {
+            val lap = ramadhan.laporanAkhir
+            listOf(0L, lap.totalPenerimaan, lap.totalPengeluaran, lap.saldoAkhir)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 36.dp, vertical = if (isExpanded) 28.dp else 24.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 16.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 14.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.AccountBalanceWallet,
+                contentDescription = null,
+                tint = palette.accentSecondary,
+                modifier = Modifier.size(if (isExpanded) 44.dp else 38.dp)
+            )
+            Column {
+                Text(
+                    text = "LAPORAN KEUANGAN AKHIR RAMADHAN",
+                    color = palette.textPrimary,
+                    fontSize = if (isExpanded) 44.sp else 38.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = "Ramadhan ${ramadhan.hijriYear} H • $brandName",
+                    color = palette.textSecondary,
+                    fontSize = if (isExpanded) 28.sp else 24.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 16.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 16.dp)
+            ) {
+                FinanceMetricBox(
+                    label = "SALDO AWAL RAMADHAN",
+                    amount = saldoAwal,
+                    valueColor = palette.textPrimary,
+                    isExpanded = isExpanded,
+                    modifier = Modifier.weight(1f)
+                )
+                FinanceMetricBox(
+                    label = "TOTAL PEMASUKAN RAMADHAN (+)",
+                    amount = totalPemasukan,
+                    valueColor = if (palette.isLight) Color(0xFF059669) else Color(0xFF34D399),
+                    isExpanded = isExpanded,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 16.dp)
+            ) {
+                FinanceMetricBox(
+                    label = "TOTAL PENGELUARAN RAMADHAN (-)",
+                    amount = totalPengeluaran,
+                    valueColor = if (palette.isLight) Color(0xFFDC2626) else Color(0xFFF87171),
+                    isExpanded = isExpanded,
+                    modifier = Modifier.weight(1f)
+                )
+                FinanceMetricBox(
+                    label = "TOTAL SALDO AKHIR RAMADHAN",
+                    amount = totalSaldoAkhir,
                     valueColor = palette.accentSecondary,
                     isHighlighted = true,
                     isExpanded = isExpanded,
@@ -1335,6 +1536,11 @@ fun FinanceMetricBox(
         formattedAmount.length <= 14 -> 96.sp
         else -> 80.sp
     }
+    val compactAmountSize = when {
+        formattedAmount.length <= 12 -> 64.sp
+        formattedAmount.length <= 14 -> 54.sp
+        else -> 46.sp
+    }
 
     Column(
         modifier = modifier
@@ -1350,23 +1556,26 @@ fun FinanceMetricBox(
                 shape = RoundedCornerShape(18.dp)
             )
             .padding(
-                horizontal = if (isExpanded) 28.dp else 22.dp,
-                vertical = if (isExpanded) 16.dp else 22.dp
+                horizontal = if (isExpanded) 28.dp else 24.dp,
+                vertical = if (isExpanded) 16.dp else 18.dp
             ),
         verticalArrangement = Arrangement.Center
     ) {
         Text(
             text = label,
             color = palette.textSecondary,
-            fontSize = if (isExpanded) 24.sp else 15.sp,
-            fontWeight = if (isExpanded) FontWeight.ExtraBold else FontWeight.Bold,
-            letterSpacing = if (isExpanded) 1.5.sp else 0.sp
+            fontSize = if (isExpanded) 34.sp else 28.sp,
+            lineHeight = if (isExpanded) 40.sp else 34.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = if (isExpanded) 1.2.sp else 0.4.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
         )
-        Spacer(modifier = Modifier.height(if (isExpanded) 10.dp else 8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         Text(
             text = formattedAmount,
             color = valueColor,
-            fontSize = if (isExpanded) expandedAmountSize else 32.sp,
+            fontSize = if (isExpanded) expandedAmountSize else compactAmountSize,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.ExtraBold,
             maxLines = 1,
@@ -1378,7 +1587,8 @@ fun FinanceMetricBox(
 
 @Composable
 private fun RamadhanOverviewSlideView(
-    ramadhan: RamadhanSettings
+    ramadhan: RamadhanSettings,
+    isExpanded: Boolean = false
 ) {
     val palette = LocalJwsTheme.current
     val nightIndex = (ramadhan.currentNight - 1).coerceIn(0, 29)
@@ -1388,30 +1598,30 @@ private fun RamadhanOverviewSlideView(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(36.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 36.dp, vertical = if (isExpanded) 28.dp else 24.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isExpanded) 20.dp else 16.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (isExpanded) 16.dp else 14.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.NightsStay,
                 contentDescription = null,
                 tint = palette.accentSecondary,
-                modifier = Modifier.size(34.dp)
+                modifier = Modifier.size(if (isExpanded) 44.dp else 38.dp)
             )
             Column {
                 Text(
                     text = "INFORMASI IBADAH RAMADHAN — MALAM KE-${ramadhan.currentNight}",
                     color = palette.textPrimary,
-                    fontSize = 26.sp,
+                    fontSize = if (isExpanded) 44.sp else 38.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
                     text = "Petugas Sholat Tarawih, Kultum & Daftar Penyumbang Ta'jil",
                     color = palette.accent,
-                    fontSize = 16.sp,
+                    fontSize = if (isExpanded) 28.sp else 24.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -1421,30 +1631,31 @@ private fun RamadhanOverviewSlideView(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(vertical = 20.dp),
+                .padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             OfficerRoleCard(
                 roleTitle = "PENCERAMAH KULTUM",
                 officerName = petugasTonight?.penceramah ?: "-",
                 accentColor = palette.accentSecondary,
+                isExpanded = isExpanded,
                 modifier = Modifier.weight(1f)
             )
             OfficerRoleCard(
                 roleTitle = "IMAM TARAWIH & WITIR",
                 officerName = "${petugasTonight?.imamTarawih ?: "-"} / ${petugasTonight?.imamWitir ?: "-"}",
                 accentColor = palette.accent,
+                isExpanded = isExpanded,
                 modifier = Modifier.weight(1f)
             )
             OfficerRoleCard(
                 roleTitle = "DONATUR TA'JIL HARI INI",
                 officerName = if (donorsTonight.isEmpty()) "Jamaah Masjid Al-Gaffar" else donorsTonight.joinToString(", "),
                 accentColor = palette.accentSecondary,
+                isExpanded = isExpanded,
                 modifier = Modifier.weight(1f)
             )
         }
-
-        Spacer(modifier = Modifier.height(20.dp))
     }
 }
 

@@ -325,44 +325,51 @@ fun FirstRunOnboardingWizard(
                     }
 
                     1 -> {
-                        HybridSectionCard(
-                            title = "Pilih Provinsi (38 Provinsi Indonesia & ASEAN)",
-                            subtitle = "Koordinat dan zona waktu (WIB/WITA/WIT) otomatis terisi tanpa perlu mengetik angka manual"
-                        ) {
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                provinces.forEach { prov ->
-                                    HybridButton(
-                                        label = prov,
-                                        isPrimary = (selectedProvince == prov),
-                                        onClick = {
-                                            selectedProvince = prov
-                                            selectedCity = IndonesiaCityRepository.getCitiesInProvince(allCities, prov).firstOrNull()
-                                        }
-                                    )
-                                }
+                        val provinceOptions = remember(provinces) {
+                            provinces.map { id.algaffar.jwstv.ui.settings.HybridSelectOption(id = it, label = it) }
+                        }
+                        val cityOptions = remember(citiesInProvince) {
+                            citiesInProvince.map { city ->
+                                id.algaffar.jwstv.ui.settings.HybridSelectOption(
+                                    id = city.city,
+                                    label = city.city,
+                                    subtitle = "${city.timezone} • Lat ${city.latitude}, Lng ${city.longitude}"
+                                )
                             }
                         }
-
                         HybridSectionCard(
-                            title = "Pilih Kabupaten / Kota di $selectedProvince",
+                            title = "Pilih Provinsi & Kota (38 Provinsi Indonesia & ASEAN)",
                             subtitle = selectedCity?.let {
-                                "Terpilih: ${it.city} (${it.timezone}) • Lat ${it.latitude}, Lng ${it.longitude}"
-                            } ?: "Pilih kota terdekat dari masjid Anda"
+                                "Terpilih: ${it.city}, ${it.province} (${it.timezone}) • Lat ${it.latitude}, Lng ${it.longitude}"
+                            } ?: "Koordinat dan zona waktu (WIB/WITA/WIT) otomatis terisi tanpa mengetik angka manual"
                         ) {
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                citiesInProvince.forEach { city ->
-                                    HybridButton(
-                                        label = city.city,
-                                        isPrimary = (selectedCity?.city == city.city),
-                                        onClick = { selectedCity = city }
-                                    )
-                                }
+                                id.algaffar.jwstv.ui.settings.HybridSelectDropdown(
+                                    label = "Provinsi",
+                                    selectedId = selectedProvince,
+                                    options = provinceOptions,
+                                    onSelect = { prov ->
+                                        selectedProvince = prov
+                                        selectedCity = IndonesiaCityRepository.getCitiesInProvince(allCities, prov).firstOrNull()
+                                    },
+                                    placeholder = "Pilih Provinsi...",
+                                    dialogTitle = "Pilih Provinsi",
+                                    modifier = Modifier.weight(1f)
+                                )
+                                id.algaffar.jwstv.ui.settings.HybridSelectDropdown(
+                                    label = "Kabupaten / Kota",
+                                    selectedId = selectedCity?.city ?: "",
+                                    options = cityOptions,
+                                    onSelect = { cityName ->
+                                        selectedCity = citiesInProvince.firstOrNull { it.city == cityName }
+                                    },
+                                    placeholder = "Pilih Kabupaten / Kota...",
+                                    dialogTitle = "Pilih Kabupaten / Kota ($selectedProvince)",
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
                         }
 

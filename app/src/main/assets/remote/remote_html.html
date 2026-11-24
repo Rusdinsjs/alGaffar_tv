@@ -142,16 +142,16 @@
             .container { max-width: 100%; padding: 18px 24px; }
             .tab-content.active {
                 display: grid;
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-columns: minmax(0, 1fr);
                 gap: 16px;
                 align-items: start;
             }
         }
 
         @media (min-width: 1120px) {
-            .container { max-width: 1480px; padding: 24px 32px; }
+            .container { max-width: 100%; padding: 24px 32px; }
             .tab-content.active {
-                grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+                grid-template-columns: minmax(0, 1fr);
                 gap: 20px;
             }
         }
@@ -577,62 +577,6 @@
             </div>
 
             <div class="card">
-                <span class="card-title">Tampilan TV Cepat</span>
-                <div class="grid-3" style="margin-bottom:10px;">
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label>Layout</label>
-                        <select id="selLayout" onchange="sendCommand('set_layout', { position: this.value })">
-                            <option value="horizontal">Horizontal</option>
-                            <option value="vertical-left">Vertikal Kiri</option>
-                            <option value="vertical-right">Vertikal Kanan</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label>Gaya Jam</label>
-                        <select id="selClock" onchange="sendCommand('set_clock_style', { style: this.value })">
-                            <option value="classic">Classic</option>
-                            <option value="golden">Golden</option>
-                            <option value="glass">Glass</option>
-                            <option value="wood">Wood</option>
-                            <option value="neon">Neon</option>
-                            <option value="segmented">LED 7-Seg</option>
-                            <option value="emerald">Emerald</option>
-                            <option value="monochrome">Monochrome</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label>Tema</label>
-                        <select id="selTheme" onchange="sendCommand('set_theme', { themeId: this.value })">
-                            <option value="emerald">Emerald</option>
-                            <option value="default">Slate</option>
-                            <option value="midnight">Midnight</option>
-                            <option value="sunset">Sunset</option>
-                            <option value="ocean">Ocean</option>
-                            <option value="earth">Earth</option>
-                            <option value="luxury">Luxury</option>
-                            <option value="royal">Royal</option>
-                            <option value="forest">Forest</option>
-                            <option value="desert">Desert</option>
-                            <option value="dawn">Dawn</option>
-                            <option value="light_clean">Light</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="grid-2">
-                    <button class="action-btn" onclick="sendCommand('next_theme')">🎨 TEMA BERIKUTNYA</button>
-                    <button class="action-btn" onclick="sendCommand('next_layout')">📐 GANTI LAYOUT</button>
-                </div>
-                <hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">
-                <div class="grid-2" style="align-items:end;">
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label>Durasi Standby Slideshow (Detik)</label>
-                        <input type="number" min="5" max="120" id="standbySlideDur" value="15">
-                    </div>
-                    <button class="submit-btn secondary" style="margin-top:0;" onclick="saveStandbySlideshow()">💾 SIMPAN STANDBY</button>
-                </div>
-            </div>
-
-            <div class="card">
                 <span class="card-title">Aksi Cepat, Live & Simulasi</span>
                 <div class="grid-2">
                     <button id="btn-infaq" class="action-btn" onclick="sendCommand('play_infaq')">🪙 QR INFAQ</button>
@@ -678,34 +622,6 @@
                 <button class="submit-btn danger" style="margin-top:12px;" onclick="sendCommand('stop')">⏹ KEMBALI KE STANDBY OTOMATIS</button>
             </div>
 
-            <div class="card">
-                <span class="card-title">Preset ID / URL YouTube Live</span>
-                <div class="form-group">
-                    <label>Makkah Live (ID / URL YouTube)</label>
-                    <div style="display:flex; gap:8px;">
-                        <input type="text" id="liveMakkahId" placeholder="Cm1v4bteXbI" style="flex:1;">
-                        <button class="action-btn" style="padding:10px 14px;" onclick="playLivePreset('makkah')">▶ Putar</button>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Madinah Live (ID / URL YouTube)</label>
-                    <div style="display:flex; gap:8px;">
-                        <input type="text" id="liveMadinahId" placeholder="9A1S0xAPVIs" style="flex:1;">
-                        <button class="action-btn" style="padding:10px 14px;" onclick="playLivePreset('madinah')">▶ Putar</button>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Custom Live (ID / URL YouTube)</label>
-                    <div style="display:flex; gap:8px;">
-                        <input type="text" id="liveCustomId" placeholder="Masukkan Video ID atau URL YouTube" style="flex:1;">
-                        <button class="action-btn" style="padding:10px 14px;" onclick="playLivePreset('custom')">▶ Putar</button>
-                    </div>
-                </div>
-                <div class="grid-2" style="margin-top:6px;">
-                    <button id="liveAudioBtn" class="toggle-btn" onclick="toggleLiveAudio()">🔊 AUDIO LIVE: AKTIF</button>
-                    <button class="submit-btn" style="margin-top:0;" onclick="saveLivePresets()">💾 SIMPAN PRESET</button>
-                </div>
-            </div>
         </div>
 
         <!-- TAB 2: MASJID & TEKS -->
@@ -733,42 +649,6 @@
                     <div id="currentLogoPath" style="font-size:11px;color:var(--text-secondary);margin-top:6px;"></div>
                 </div>
                 <button class="submit-btn secondary" onclick="uploadLogoFile()">📤 UNGGAH & PASANG LOGO</button>
-            </div>
-
-            <div class="card">
-                <span class="card-title">Running Text / Pengumuman Bawah</span>
-                <div id="overlayListBox" class="list-box"></div>
-                <div class="form-group">
-                    <label>Tambah Pesan Baru</label>
-                    <textarea id="runningText" rows="2" placeholder="Tulis pesan berjalan..."></textarea>
-                </div>
-                <div class="grid-2">
-                    <button class="submit-btn" onclick="addRunningText()">+ TAMBAH PESAN</button>
-                    <button class="submit-btn danger" onclick="clearRunningText()">KOSONGKAN</button>
-                </div>
-            </div>
-
-            <div class="card">
-                <span class="card-title">Kartu Info Masjid (Card 1)</span>
-                <div id="infoListBox" class="list-box"></div>
-                <div class="grid-2">
-                    <div class="form-group">
-                        <label>Label Judul</label>
-                        <input type="text" id="infoTitle" placeholder="INFO KAJIAN">
-                    </div>
-                    <div class="form-group">
-                        <label>Badge Sub-judul</label>
-                        <input type="text" id="infoSubtitle" placeholder="Ba'da Maghrib">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Isi Pengumuman Utama</label>
-                    <input type="text" id="infoContent" placeholder="Kajian Tafsir & Fiqih Rutin">
-                </div>
-                <div class="grid-2">
-                    <button class="submit-btn" onclick="addInfoCard()">+ TAMBAH INFO</button>
-                    <button class="submit-btn danger" onclick="clearInfoCard()">KOSONGKAN</button>
-                </div>
             </div>
 
             <div class="card">
@@ -930,10 +810,117 @@
                 <button class="submit-btn" onclick="uploadAudioFile()">📤 UNGGAH AUDIO KE TV</button>
 
                 <div style="margin-top:14px;">
+                    <label>Unduh Paket Audio 1-Klik (HTTPS)</label>
+                    <div class="grid-2" style="margin-top:6px;">
+                        <button class="action-btn accent" onclick="sendCommand('download_audio_pack', { packId: 'standard_pack' }, '⏳ Mengunduh Paket Audio Standar...')">⬇ PAKET STANDAR</button>
+                        <button class="action-btn accent" onclick="sendCommand('download_audio_pack', { packId: 'haramain_pack' }, '⏳ Mengunduh Adzan Makkah &amp; Madinah...')">⬇ MAKKAH &amp; MADINAH</button>
+                    </div>
+                </div>
+
+                <div style="margin-top:14px;">
                     <label>Audio Terpasang di TV</label>
                     <div id="audioInventoryBox" class="list-box"></div>
                 </div>
             </div>
+
+        </div>
+
+        <!-- TAB 3B: TAMPILAN -->
+        <div id="tab-tampilan" class="tab-content">
+            <div class="card">
+                <span class="card-title">Tampilan TV Cepat</span>
+                <div class="grid-3" style="margin-bottom:10px;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Layout</label>
+                        <select id="selLayout" onchange="sendCommand('set_layout', { position: this.value })">
+                            <option value="horizontal">Horizontal</option>
+                            <option value="vertical-left">Vertikal Kiri</option>
+                            <option value="vertical-right">Vertikal Kanan</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Gaya Jam</label>
+                        <select id="selClock" onchange="sendCommand('set_clock_style', { style: this.value })">
+                            <option value="classic">Classic</option>
+                            <option value="golden">Golden</option>
+                            <option value="glass">Glass</option>
+                            <option value="wood">Wood</option>
+                            <option value="neon">Neon</option>
+                            <option value="segmented">LED 7-Seg</option>
+                            <option value="emerald">Emerald</option>
+                            <option value="monochrome">Monochrome</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Tema</label>
+                        <select id="selTheme" onchange="sendCommand('set_theme', { themeId: this.value })">
+                            <option value="emerald">Emerald</option>
+                            <option value="default">Slate</option>
+                            <option value="midnight">Midnight</option>
+                            <option value="sunset">Sunset</option>
+                            <option value="ocean">Ocean</option>
+                            <option value="earth">Earth</option>
+                            <option value="luxury">Luxury</option>
+                            <option value="royal">Royal</option>
+                            <option value="forest">Forest</option>
+                            <option value="desert">Desert</option>
+                            <option value="dawn">Dawn</option>
+                            <option value="light_clean">Light</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <button class="action-btn" onclick="sendCommand('next_theme')">🎨 TEMA BERIKUTNYA</button>
+                    <button class="action-btn" onclick="sendCommand('next_layout')">📐 GANTI LAYOUT</button>
+                </div>
+                <hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">
+                <div class="grid-2" style="align-items:end;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Durasi Standby Slideshow (Detik)</label>
+                        <input type="number" min="5" max="120" id="standbySlideDur" value="15">
+                    </div>
+                    <button class="submit-btn secondary" style="margin-top:0;" onclick="saveStandbySlideshow()">💾 SIMPAN STANDBY</button>
+                </div>
+            </div>
+
+
+            <div class="card">
+                <span class="card-title">Running Text / Pengumuman Bawah</span>
+                <div id="overlayListBox" class="list-box"></div>
+                <div class="form-group">
+                    <label>Tambah Pesan Baru</label>
+                    <textarea id="runningText" rows="2" placeholder="Tulis pesan berjalan..."></textarea>
+                </div>
+                <div class="grid-2">
+                    <button class="submit-btn" onclick="addRunningText()">+ TAMBAH PESAN</button>
+                    <button class="submit-btn danger" onclick="clearRunningText()">KOSONGKAN</button>
+                </div>
+            </div>
+
+
+            <div class="card">
+                <span class="card-title">Kartu Info Masjid (Card 1)</span>
+                <div id="infoListBox" class="list-box"></div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Label Judul</label>
+                        <input type="text" id="infoTitle" placeholder="INFO KAJIAN">
+                    </div>
+                    <div class="form-group">
+                        <label>Badge Sub-judul</label>
+                        <input type="text" id="infoSubtitle" placeholder="Ba'da Maghrib">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Isi Pengumuman Utama</label>
+                    <input type="text" id="infoContent" placeholder="Kajian Tafsir & Fiqih Rutin">
+                </div>
+                <div class="grid-2">
+                    <button class="submit-btn" onclick="addInfoCard()">+ TAMBAH INFO</button>
+                    <button class="submit-btn danger" onclick="clearInfoCard()">KOSONGKAN</button>
+                </div>
+            </div>
+
 
             <div class="card">
                 <span class="card-title">
@@ -1029,6 +1016,7 @@
                 </div>
             </div>
 
+
             <div class="card">
                 <span class="card-title">Konten Slide Tartil &amp; Tarhim</span>
                 <div class="grid-2">
@@ -1071,6 +1059,7 @@
                     <div id="ttMediaListBox" class="list-box"></div>
                 </div>
             </div>
+
 
             <div class="card">
                 <span class="card-title">Upload Latar Media Ibadah (Auto-Optimasi 1080p)</span>
@@ -1342,6 +1331,48 @@
                 </div>
                 <div id="switchChannelEditor"></div>
             </div>
+
+            <div class="card">
+                <span class="card-title">Preset Live Streaming (YouTube &amp; HLS .m3u8)</span>
+                <div class="form-group">
+                    <label>Makkah Live (ID / URL YouTube)</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="liveMakkahId" placeholder="Cm1v4bteXbI" style="flex:1;">
+                        <button class="action-btn" style="padding:10px 14px;" onclick="playLivePreset('makkah')">▶ Putar</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Makkah HLS (.m3u8 — Opsional, Prioritas Native)</label>
+                    <input type="text" id="liveMakkahHls" placeholder="https://.../saudi_quran/hls_roku/index.m3u8">
+                </div>
+                <div class="form-group">
+                    <label>Madinah Live (ID / URL YouTube)</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="liveMadinahId" placeholder="9A1S0xAPVIs" style="flex:1;">
+                        <button class="action-btn" style="padding:10px 14px;" onclick="playLivePreset('madinah')">▶ Putar</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Madinah HLS (.m3u8 — Opsional, Prioritas Native)</label>
+                    <input type="text" id="liveMadinahHls" placeholder="https://.../saudi_sunnah/hls_roku/index.m3u8">
+                </div>
+                <div class="form-group">
+                    <label>Custom Live (ID / URL YouTube)</label>
+                    <div style="display:flex; gap:8px;">
+                        <input type="text" id="liveCustomId" placeholder="Masukkan Video ID atau URL YouTube" style="flex:1;">
+                        <button class="action-btn" style="padding:10px 14px;" onclick="playLivePreset('custom')">▶ Putar</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Custom HLS (.m3u8 — Opsional, Prioritas Native)</label>
+                    <input type="text" id="liveCustomHls" placeholder="https://.../stream.m3u8">
+                </div>
+                <div class="grid-2" style="margin-top:6px;">
+                    <button id="liveAudioBtn" class="toggle-btn" onclick="toggleLiveAudio()">🔊 AUDIO LIVE: AKTIF</button>
+                    <button id="liveHlsToggleBtn" class="toggle-btn" onclick="togglePreferHls()">📡 HLS NATIVE: AKTIF</button>
+                </div>
+                <button class="submit-btn" style="margin-top:10px;" onclick="saveLivePresets()">💾 SIMPAN PRESET LIVE &amp; HLS</button>
+            </div>
         </div>
 
         <!-- TAB 5: SISTEM -->
@@ -1362,6 +1393,21 @@
                         📥 BACKUP JSON
                     </button>
                 </div>
+            </div>
+
+            <div class="card">
+                <span class="card-title">OTA Self-Updater (Pembaruan Aplikasi)</span>
+                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">
+                    Perbarui aplikasi Al-Gaffar TV secara online (HTTPS + SHA-256) atau unggah file <b>.apk</b> langsung dari HP/PC (khusus Superadmin).
+                </div>
+                <button class="action-btn accent" style="width:100%;margin-bottom:12px;" onclick="sendCommand('check_ota_update', {}, '🔄 Memeriksa pembaruan online di TV...')">
+                    🔄 CEK PEMBARUAN ONLINE (OTA)
+                </button>
+                <div class="form-group">
+                    <label>Unggah APK Pembaruan Offline (.apk, Maks 180 MB)</label>
+                    <input type="file" id="otaApkInput" accept=".apk,application/vnd.android.package-archive">
+                </div>
+                <button class="submit-btn" onclick="uploadOtaApk()">📲 UNGGAH &amp; INSTALL APK KE TV</button>
             </div>
 
             <div class="card">
@@ -1417,6 +1463,10 @@
         <button class="nav-item" onclick="switchTab('sholat', event)">
             <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
             <span>Sholat</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('tampilan', event)">
+            <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+            <span>Tampilan</span>
         </button>
         <button class="nav-item" onclick="switchTab('acara', event)">
             <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
@@ -1570,6 +1620,7 @@
             if (!AUTH_TOKEN) { showAuthModal(true); return; }
             if (!file) { showToast('Pilih file terlebih dahulu!', true); return; }
             const maxMb = (category === 'slide_video' || category === 'video' || category === 'tartil_video' || category === 'tarhim_video') ? 250
+                : (category === 'ota_apk') ? 180
                 : (category === 'tartil' || category === 'tarhim' || category === 'adzan' || category === 'custom') ? 50
                 : 25;
             if (file.size > maxMb * 1024 * 1024) { showToast(`Ukuran file melebihi batas ${maxMb} MB!`, true); return; }
@@ -1629,6 +1680,12 @@
             const slot = document.getElementById('mediaBgSlot').value;
             if (!inp.files || !inp.files[0]) { showToast('Pilih gambar latar dulu!', true); return; }
             uploadBinaryFile('media_bg', slot, inp.files[0]).then(() => { inp.value = ''; });
+        }
+
+        function uploadOtaApk() {
+            const inp = document.getElementById('otaApkInput');
+            if (!inp.files || !inp.files[0]) { showToast('Pilih file .apk terlebih dahulu!', true); return; }
+            uploadBinaryFile('ota_apk', '', inp.files[0]).then(() => { inp.value = ''; });
         }
 
         function uploadAudioFile() {
@@ -2134,10 +2191,17 @@
                     setInputSafely('liveMakkahId', status.liveConfig.makkahVideoId || 'Cm1v4bteXbI');
                     setInputSafely('liveMadinahId', status.liveConfig.madinahVideoId || '9A1S0xAPVIs');
                     setInputSafely('liveCustomId', status.liveConfig.customVideoId || '');
+                    setInputSafely('liveMakkahHls', status.liveConfig.makkahHlsUrl || '');
+                    setInputSafely('liveMadinahHls', status.liveConfig.madinahHlsUrl || '');
+                    setInputSafely('liveCustomHls', status.liveConfig.customStreamUrl || '');
                     const isAudioOn = !status.liveConfig.muted;
                     syncToggleFlag('liveAudioBtn', isAudioOn);
                     const lab = document.getElementById('liveAudioBtn');
                     if (lab) lab.textContent = isAudioOn ? '🔊 AUDIO LIVE: AKTIF' : '🔇 AUDIO LIVE: BISU';
+                    const isHlsOn = status.liveConfig.preferNativeHls !== false;
+                    syncToggleFlag('liveHlsToggleBtn', isHlsOn);
+                    const hlsLab = document.getElementById('liveHlsToggleBtn');
+                    if (hlsLab) hlsLab.textContent = isHlsOn ? '📡 HLS NATIVE: AKTIF' : '📡 HLS NATIVE: NONAKTIF';
                 }
 
                 if (status.prayerSettings) {
@@ -2213,13 +2277,21 @@
                 madinah: 'liveMadinahId',
                 custom: 'liveCustomId'
             };
+            const hlsMap = {
+                makkah: 'liveMakkahHls',
+                madinah: 'liveMadinahHls',
+                custom: 'liveCustomHls'
+            };
             const el = document.getElementById(inputMap[source]);
+            const hlsEl = document.getElementById(hlsMap[source]);
             const videoId = el ? el.value.trim() : '';
-            if (source === 'custom' && !videoId) {
-                showToast('Masukkan ID atau URL YouTube untuk Custom Live terlebih dahulu.', true);
-                if (el) el.focus();
+            const hlsUrl = hlsEl ? hlsEl.value.trim() : '';
+            if (source === 'custom' && !videoId && !hlsUrl) {
+                showToast('Masukkan ID/URL YouTube atau URL HLS (.m3u8) untuk Custom Live.', true);
+                if (hlsEl) hlsEl.focus();
                 return;
             }
+            saveLivePresets();
             sendCommand('set_live_source', { source, videoId });
         }
 
@@ -2227,7 +2299,28 @@
             const makkahVideoId = (document.getElementById('liveMakkahId')?.value || '').trim();
             const madinahVideoId = (document.getElementById('liveMadinahId')?.value || '').trim();
             const customVideoId = (document.getElementById('liveCustomId')?.value || '').trim();
-            sendCommand('save_live_presets', { makkahVideoId, madinahVideoId, customVideoId });
+            const makkahHlsUrl = (document.getElementById('liveMakkahHls')?.value || '').trim();
+            const madinahHlsUrl = (document.getElementById('liveMadinahHls')?.value || '').trim();
+            const customStreamUrl = (document.getElementById('liveCustomHls')?.value || '').trim();
+            const preferNativeHls = document.getElementById('liveHlsToggleBtn')?.classList.contains('on') ?? true;
+            sendCommand('save_live_presets', {
+                makkahVideoId,
+                madinahVideoId,
+                customVideoId,
+                makkahHlsUrl,
+                madinahHlsUrl,
+                customStreamUrl,
+                preferNativeHls
+            });
+        }
+
+        function togglePreferHls() {
+            const btn = document.getElementById('liveHlsToggleBtn');
+            const nextOn = !(btn?.classList.contains('on'));
+            pendingUpdates['liveHlsToggleBtn'] = Date.now();
+            btn?.classList.toggle('on', nextOn);
+            if (btn) btn.textContent = nextOn ? '📡 HLS NATIVE: AKTIF' : '📡 HLS NATIVE: NONAKTIF';
+            sendCommand('toggle_prefer_hls', { preferNativeHls: nextOn }, nextOn ? '📡 Player HLS Native diaktifkan!' : '📡 Fallback ke YouTube WebView');
         }
 
         function toggleLiveAudio() {

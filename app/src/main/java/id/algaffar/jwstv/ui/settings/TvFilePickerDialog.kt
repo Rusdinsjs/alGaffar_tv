@@ -5,7 +5,9 @@ import android.os.Environment
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,12 +53,15 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
 import java.io.File
 import java.util.Locale
@@ -204,27 +209,37 @@ fun TvFilePickerDialog(
     }
 
     val firstItemFocus = remember { FocusRequester() }
-    LaunchedEffect(currentDir, entries.size) {
-        runCatching { firstItemFocus.requestFocus() }
+    val closeButtonFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        if (entries.isNotEmpty()) {
+            runCatching { firstItemFocus.requestFocus() }
+        } else {
+            runCatching { closeButtonFocus.requestFocus() }
+        }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f))
-            .clickable { onDismiss() },
-        contentAlignment = Alignment.Center
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .size(width = 1360.dp, height = 880.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(palette.bgPrimary)
-                .border(2.dp, palette.accent, RoundedCornerShape(24.dp))
-                .clickable(enabled = false) {}
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.85f))
+                .pointerInput(Unit) { detectTapGestures { onDismiss() } },
+            contentAlignment = Alignment.Center
         ) {
+            Column(
+                modifier = Modifier
+                    .size(width = 1360.dp, height = 880.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(palette.bgPrimary)
+                    .border(2.dp, palette.accent, RoundedCornerShape(24.dp))
+                    .pointerInput(Unit) { detectTapGestures { } }
+                    .focusGroup()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
             // Header Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -285,7 +300,8 @@ fun TvFilePickerDialog(
                         label = "Tutup",
                         icon = Icons.Default.Close,
                         isDanger = true,
-                        onClick = onDismiss
+                        onClick = onDismiss,
+                        modifier = Modifier.focusRequester(closeButtonFocus)
                     )
                 }
             }
@@ -422,6 +438,7 @@ fun TvFilePickerDialog(
                 },
                 accentColor = Color(0xFF10B981)
             )
+            }
         }
     }
 }

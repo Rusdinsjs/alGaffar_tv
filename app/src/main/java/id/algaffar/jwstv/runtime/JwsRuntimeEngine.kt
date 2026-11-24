@@ -1279,20 +1279,44 @@ class JwsRuntimeEngine(
                     val makkahId = payload.stringArg("makkahVideoId")?.trim()
                     val madinahId = payload.stringArg("madinahVideoId")?.trim()
                     val customId = payload.stringArg("customVideoId")?.trim()
+                    val makkahHls = payload.stringArg("makkahHlsUrl")?.trim()
+                    val madinahHls = payload.stringArg("madinahHlsUrl")?.trim()
+                    val customHls = payload.stringArg("customStreamUrl")?.trim()
+                    val preferHls = payload.booleanArg("preferNativeHls")
                     updateSettings { prev ->
                         prev.copy(
                             live = prev.live.copy(
                                 makkahVideoId = makkahId?.ifBlank { prev.live.makkahVideoId } ?: prev.live.makkahVideoId,
                                 madinahVideoId = madinahId?.ifBlank { prev.live.madinahVideoId } ?: prev.live.madinahVideoId,
-                                customVideoId = customId ?: prev.live.customVideoId
+                                customVideoId = customId ?: prev.live.customVideoId,
+                                makkahHlsUrl = makkahHls ?: prev.live.makkahHlsUrl,
+                                madinahHlsUrl = madinahHls ?: prev.live.madinahHlsUrl,
+                                customStreamUrl = customHls ?: prev.live.customStreamUrl,
+                                preferNativeHls = preferHls ?: prev.live.preferNativeHls
                             )
                         )
+                    }
+                }
+
+                "toggle_prefer_hls" -> {
+                    val prefer = payload.booleanArg("preferNativeHls")
+                    updateSettings { prev ->
+                        prev.copy(live = prev.live.copy(preferNativeHls = prefer ?: !prev.live.preferNativeHls))
                     }
                 }
 
                 "toggle_live_mute" -> {
                     val muted = payload.booleanArg("muted")
                     updateSettings { prev -> prev.copy(live = prev.live.copy(muted = muted ?: !prev.live.muted)) }
+                }
+
+                "download_audio_pack" -> {
+                    val packId = payload.stringArg("packId")?.trim().orEmpty().ifBlank { "standard_pack" }
+                    downloadAudioPack(packId)
+                }
+
+                "check_ota_update" -> {
+                    checkOtaUpdate()
                 }
 
                 "toggle_mode" -> {

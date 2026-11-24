@@ -15,22 +15,31 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.ToggleOff
 import androidx.compose.material.icons.filled.ToggleOn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.Dialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -287,6 +296,200 @@ fun HybridSegmentedRow(
                 isPrimary = (id == selectedId),
                 onClick = { onSelect(id) }
             )
+        }
+    }
+}
+
+data class HybridSelectOption(
+    val id: String,
+    val label: String,
+    val subtitle: String = ""
+)
+
+/**
+ * TV D-Pad & Touch friendly select/dropdown control.
+ * Renders a compact select box that opens a scrollable modal picker dialog on click/Enter.
+ */
+@Composable
+fun HybridSelectDropdown(
+    label: String,
+    selectedId: String,
+    options: List<HybridSelectOption>,
+    onSelect: (String) -> Unit,
+    placeholder: String = "Pilih...",
+    dialogTitle: String = label,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalJwsTheme.current
+    var isFocused by remember { mutableStateOf(false) }
+    var showDialog by remember { mutableStateOf(false) }
+
+    val selectedOption = remember(selectedId, options) {
+        options.firstOrNull { it.id == selectedId }
+    }
+
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            text = label.uppercase(Locale.getDefault()),
+            color = palette.textSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (isFocused) palette.accent.copy(alpha = 0.22f)
+                    else palette.bgPrimary.copy(alpha = 0.85f)
+                )
+                .border(
+                    width = if (isFocused) 3.dp else 1.5.dp,
+                    color = if (isFocused) TvFocusAmber else palette.border,
+                    shape = RoundedCornerShape(12.dp)
+                )
+                .onFocusChanged { isFocused = it.isFocused }
+                .focusable()
+                .clickable { showDialog = true }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = selectedOption?.label ?: placeholder,
+                    color = if (selectedOption != null) palette.textPrimary else palette.textSecondary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (!selectedOption?.subtitle.isNullOrBlank()) {
+                    Text(
+                        text = selectedOption!!.subtitle,
+                        color = palette.textSecondary,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                tint = if (isFocused) TvFocusAmber else palette.accentSecondary,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+
+    if (showDialog) {
+        val initialIdx = remember(selectedId, options) {
+            options.indexOfFirst { it.id == selectedId }.coerceAtLeast(0)
+        }
+        val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIdx)
+
+        Dialog(onDismissRequest = { showDialog = false }) {
+            Column(
+                modifier = Modifier
+                    .widthIn(min = 420.dp, max = 640.dp)
+                    .heightIn(max = 520.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(palette.bgSecondary)
+                    .border(2.dp, palette.accentSecondary.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = dialogTitle,
+                        color = palette.textPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    HybridButton(
+                        label = "Tutup",
+                        isPrimary = false,
+                        onClick = { showDialog = false }
+                    )
+                }
+
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(options, key = { it.id }) { opt ->
+                        val isSelected = opt.id == selectedId
+                        var itemFocused by remember { mutableStateOf(false) }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    when {
+                                        itemFocused -> palette.accent.copy(alpha = 0.28f)
+                                        isSelected -> palette.accent.copy(alpha = 0.16f)
+                                        else -> palette.bgPrimary.copy(alpha = 0.72f)
+                                    }
+                                )
+                                .border(
+                                    width = if (itemFocused) 3.dp else 1.dp,
+                                    color = when {
+                                        itemFocused -> TvFocusAmber
+                                        isSelected -> palette.accent
+                                        else -> palette.border
+                                    },
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .onFocusChanged { itemFocused = it.isFocused }
+                                .focusable()
+                                .clickable {
+                                    onSelect(opt.id)
+                                    showDialog = false
+                                }
+                                .padding(horizontal = 14.dp, vertical = 11.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = opt.label,
+                                    color = if (isSelected) palette.accentSecondary else palette.textPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold
+                                )
+                                if (opt.subtitle.isNotBlank()) {
+                                    Text(
+                                        text = opt.subtitle,
+                                        color = palette.textSecondary,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = palette.accentSecondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

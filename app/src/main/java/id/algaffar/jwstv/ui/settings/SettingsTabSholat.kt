@@ -108,6 +108,20 @@ fun PrayerAndStagesSettingsTab(
 
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         // 0. Pemilih Cepat 38 Provinsi & Kota/Kabupaten Indonesia (Offline)
+        val provinceOptions = remember(provinces) {
+            provinces.map { HybridSelectOption(id = it, label = it) }
+        }
+        val cityOptions = remember(citiesInProvince) {
+            citiesInProvince.map { city ->
+                HybridSelectOption(
+                    id = city.city,
+                    label = city.city,
+                    subtitle = "${city.timezone} • Lat ${city.latitude}, Lng ${city.longitude}"
+                )
+            }
+        }
+        val activeCityId = if (p.provinceName == selectedProvince) p.cityName else ""
+
         HybridSectionCard(
             title = "Pemilih Cepat Kota / Kabupaten Indonesia (Offline)",
             subtitle = if (p.cityName.isNotBlank()) {
@@ -116,44 +130,41 @@ fun PrayerAndStagesSettingsTab(
                 "Pilih provinsi & kota untuk mengisi otomatis Latitude, Longitude, dan Zona Waktu tanpa mengetik manual"
             }
         ) {
-            Text("PILIH PROVINSI", color = palette.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                provinces.forEach { prov ->
-                    HybridButton(
-                        label = prov,
-                        isPrimary = (selectedProvince == prov),
-                        onClick = { selectedProvince = prov }
-                    )
-                }
-            }
-
-            Text("PILIH KABUPATEN / KOTA ($selectedProvince)", color = palette.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                citiesInProvince.forEach { city ->
-                    HybridButton(
-                        label = city.city,
-                        isPrimary = (p.cityName == city.city),
-                        onClick = {
-                            actions.onUpdateSettings { prev ->
-                                prev.copy(
-                                    prayerSettings = prev.prayerSettings.copy(
-                                        provinceName = city.province,
-                                        cityName = city.city,
-                                        latitude = city.latitude,
-                                        longitude = city.longitude,
-                                        timezone = city.timezone
-                                    )
+                HybridSelectDropdown(
+                    label = "Provinsi",
+                    selectedId = selectedProvince,
+                    options = provinceOptions,
+                    onSelect = { prov -> selectedProvince = prov },
+                    placeholder = "Pilih Provinsi...",
+                    dialogTitle = "Pilih Provinsi (38 Provinsi & ASEAN)",
+                    modifier = Modifier.weight(1f)
+                )
+                HybridSelectDropdown(
+                    label = "Kabupaten / Kota",
+                    selectedId = activeCityId,
+                    options = cityOptions,
+                    onSelect = { cityName ->
+                        val city = citiesInProvince.firstOrNull { it.city == cityName } ?: return@HybridSelectDropdown
+                        actions.onUpdateSettings { prev ->
+                            prev.copy(
+                                prayerSettings = prev.prayerSettings.copy(
+                                    provinceName = city.province,
+                                    cityName = city.city,
+                                    latitude = city.latitude,
+                                    longitude = city.longitude,
+                                    timezone = city.timezone
                                 )
-                            }
+                            )
                         }
-                    )
-                }
+                    },
+                    placeholder = "Pilih Kabupaten / Kota...",
+                    dialogTitle = "Pilih Kabupaten / Kota ($selectedProvince)",
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
 
