@@ -884,14 +884,21 @@
 
 
             <div class="card">
-                <span class="card-title">Running Text / Pengumuman Bawah</span>
+                <span class="card-title">Floating Overlay (Statis)</span>
+                <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">
+                    Atur Judul &amp; Isi Floating Overlay. Posisi sudut, durasi tampil (Total Durasi Slide ÷ Jumlah Overlay), dan pemanggilan diatur di masing-masing Group Slideshow.
+                </div>
                 <div id="overlayListBox" class="list-box"></div>
                 <div class="form-group">
-                    <label>Tambah Pesan Baru</label>
-                    <textarea id="runningText" rows="2" placeholder="Tulis pesan berjalan..."></textarea>
+                    <label>Judul Floating Overlay</label>
+                    <input type="text" id="overlayTitleInput" placeholder="Contoh: Adab & Ketertiban Shaf">
+                </div>
+                <div class="form-group">
+                    <label>Isi Pesan Floating Overlay</label>
+                    <textarea id="runningText" rows="2" placeholder="Tulis isi pesan overlay statis..."></textarea>
                 </div>
                 <div class="grid-2">
-                    <button class="submit-btn" onclick="addRunningText()">+ TAMBAH PESAN</button>
+                    <button class="submit-btn" onclick="addRunningText()">+ TAMBAH OVERLAY</button>
                     <button class="submit-btn danger" onclick="clearRunningText()">KOSONGKAN</button>
                 </div>
             </div>
@@ -923,44 +930,28 @@
 
             <div class="card">
                 <span class="card-title">
-                    <span>Manajemen Slide, Poster & Video</span>
-                    <button class="mini-btn" onclick="resetDefaultSlides()">Reset Default</button>
+                    <span>Group Slideshow, Poster &amp; Video</span>
+                    <div style="display:flex;gap:6px;">
+                        <button class="mini-btn on" onclick="addSlideGroup()">+ Group Baru</button>
+                        <button class="mini-btn" onclick="resetDefaultSlides()">Reset Default</button>
+                    </div>
                 </span>
                 <div class="form-group">
-                    <label>Mode Tampil Slide Baru (Multi-Pilih)</label>
-                    <div id="newSlideModes" style="display:flex;flex-wrap:wrap;gap:6px;">
-                        <label style="display:inline-flex;align-items:center;gap:5px;background:var(--card-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin:0;cursor:pointer;text-transform:none;">
-                            <input type="checkbox" value="main" checked> Standby Utama
-                        </label>
-                        <label style="display:inline-flex;align-items:center;gap:5px;background:var(--card-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin:0;cursor:pointer;text-transform:none;">
-                            <input type="checkbox" value="slideshow" checked> Slideshow
-                        </label>
-                        <label style="display:inline-flex;align-items:center;gap:5px;background:var(--card-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin:0;cursor:pointer;text-transform:none;">
-                            <input type="checkbox" value="jumat"> Jum'at
-                        </label>
-                        <label style="display:inline-flex;align-items:center;gap:5px;background:var(--card-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin:0;cursor:pointer;text-transform:none;">
-                            <input type="checkbox" value="ramadhan"> Ramadhan
-                        </label>
-                        <label style="display:inline-flex;align-items:center;gap:5px;background:var(--card-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin:0;cursor:pointer;text-transform:none;">
-                            <input type="checkbox" value="idul_fitri"> Idul Fitri
-                        </label>
-                        <label style="display:inline-flex;align-items:center;gap:5px;background:var(--card-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;margin:0;cursor:pointer;text-transform:none;">
-                            <input type="checkbox" value="idul_adha"> Idul Adha
-                        </label>
-                    </div>
+                    <label>Target Group untuk Slide Baru</label>
+                    <select id="targetSlideGroupSelect"></select>
                 </div>
                 <div class="form-group">
                     <label>Upload Poster Gambar Baru (PNG / JPG — Auto-Optimasi 1080p)</label>
                     <input type="file" id="slideImageInput" accept="image/*">
                 </div>
-                <button class="submit-btn" onclick="uploadSlideImageFile()">📤 UNGGAH POSTER KE SLIDESHOW</button>
+                <button class="submit-btn" onclick="uploadSlideImageFile()">📤 UNGGAH POSTER KE GROUP</button>
 
                 <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
                 <div class="form-group">
                     <label>Upload Video Slide Baru (MP4 / WEBM — Maks 250 MB)</label>
                     <input type="file" id="slideVideoInput" accept="video/mp4,video/webm,video/x-matroska,.mp4,.webm,.mkv,.mov">
                 </div>
-                <button class="submit-btn secondary" onclick="uploadSlideVideoFile()">🎬 UNGGAH VIDEO KE SLIDESHOW</button>
+                <button class="submit-btn secondary" onclick="uploadSlideVideoFile()">🎬 UNGGAH VIDEO KE GROUP</button>
 
                 <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
                 <div class="grid-2">
@@ -977,7 +968,7 @@
                     <label>Isi Slide Teks</label>
                     <textarea id="newSlideContent" rows="2" placeholder="Tulis pesan slide..."></textarea>
                 </div>
-                <button class="submit-btn secondary" onclick="addTextSlide()">+ TAMBAH SLIDE TEKS</button>
+                <button class="submit-btn secondary" onclick="addTextSlide()">+ TAMBAH SLIDE TEKS KE GROUP</button>
 
                 <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
                 <div class="grid-2">
@@ -1006,10 +997,10 @@
                         <input type="number" min="4" max="120" id="newSystemSlideDur" value="15">
                     </div>
                 </div>
-                <button class="submit-btn secondary" onclick="addSystemSlide()">+ TAMBAH SLIDE SYSTEM</button>
+                <button class="submit-btn secondary" onclick="addSystemSlide()">+ TAMBAH SLIDE SYSTEM KE GROUP</button>
 
                 <div style="margin-top:14px;">
-                    <label>Daftar Slide Aktif di TV</label>
+                    <label>Daftar Group Slideshow Aktif di TV</label>
                     <div id="slidesListBox" class="list-box"></div>
                 </div>
             </div>
@@ -1655,22 +1646,21 @@
             uploadBinaryFile('logo', '', inp.files[0]).then(() => { inp.value = ''; });
         }
 
-        function getSelectedSlideModes() {
-            const boxes = document.querySelectorAll('#newSlideModes input[type="checkbox"]:checked');
-            const modes = Array.from(boxes).map(b => b.value);
-            return modes.length ? modes : ['main', 'slideshow'];
+        function getSelectedTargetGroupId() {
+            const sel = document.getElementById('targetSlideGroupSelect');
+            return sel ? (sel.value || '') : '';
         }
 
         function uploadSlideImageFile() {
             const inp = document.getElementById('slideImageInput');
             if (!inp.files || !inp.files[0]) { showToast('Pilih gambar poster dulu!', true); return; }
-            uploadBinaryFile('slide_image', getSelectedSlideModes().join(','), inp.files[0]).then(() => { inp.value = ''; });
+            uploadBinaryFile('slide_image', getSelectedTargetGroupId(), inp.files[0]).then(() => { inp.value = ''; });
         }
 
         function uploadSlideVideoFile() {
             const inp = document.getElementById('slideVideoInput');
             if (!inp.files || !inp.files[0]) { showToast('Pilih file video MP4/WEBM dulu!', true); return; }
-            uploadBinaryFile('slide_video', getSelectedSlideModes().join(','), inp.files[0]).then(() => { inp.value = ''; });
+            uploadBinaryFile('slide_video', getSelectedTargetGroupId(), inp.files[0]).then(() => { inp.value = ''; });
         }
 
         function uploadMediaBgFile() {
@@ -1711,15 +1701,24 @@
         }
 
         function addRunningText() {
+            const titleEl = document.getElementById('overlayTitleInput');
             const el = document.getElementById('runningText');
+            const title = titleEl ? titleEl.value.trim() : '';
             const text = el.value.trim();
-            if (!text) { showToast('Tulis pesan terlebih dahulu!', true); return; }
-            sendCommand('add_overlay_text', { text }, '✅ Running text ditambahkan!');
+            if (!title && !text) { showToast('Isi judul atau pesan Floating Overlay terlebih dahulu!', true); return; }
+            sendCommand('add_overlay_text', { title, text }, '✅ Floating Overlay ditambahkan!');
+            if (titleEl) titleEl.value = '';
             el.value = '';
         }
 
         function clearRunningText() {
-            if (confirm('Hapus semua pesan running text?')) sendCommand('clear_overlay_text', {}, 'Running text dikosongkan');
+            if (confirm('Hapus semua Floating Overlay?')) sendCommand('clear_overlay_text', {}, 'Floating Overlay dikosongkan');
+        }
+
+        function addSlideGroup() {
+            const name = prompt('Nama Group Slideshow baru (kosongkan untuk default Group 1/2/3...):', '');
+            if (name === null) return;
+            sendCommand('add_slide_group', { name: name.trim() }, '✅ Group Slideshow baru ditambahkan!');
         }
 
         function addInfoCard() {
@@ -1777,17 +1776,11 @@
             const title = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : type;
             const duration = parseInt(document.getElementById('newSystemSlideDur').value, 10) || 15;
             if (!type) return;
-            const modes = getSelectedSlideModes();
             sendCommand('add_system_slide', {
                 type,
                 title,
                 duration,
-                showInMain: modes.includes('main'),
-                showInSlideshow: modes.includes('slideshow'),
-                showInJumat: modes.includes('jumat'),
-                showInRamadhan: modes.includes('ramadhan'),
-                showInIdulFitri: modes.includes('idul_fitri'),
-                showInIdulAdha: modes.includes('idul_adha')
+                groupId: getSelectedTargetGroupId()
             }, `✅ Slide System "${title}" ditambahkan!`);
         }
 
@@ -1882,17 +1875,11 @@
             const content = document.getElementById('newSlideContent').value.trim();
             const duration = parseInt(document.getElementById('newSlideDur').value, 10) || 12;
             if (!content) { showToast('Isi slide teks wajib diisi!', true); return; }
-            const modes = getSelectedSlideModes();
             sendCommand('add_text_slide', {
                 title: title || 'Pengumuman Masjid',
                 content,
                 duration,
-                showInMain: modes.includes('main'),
-                showInSlideshow: modes.includes('slideshow'),
-                showInJumat: modes.includes('jumat'),
-                showInRamadhan: modes.includes('ramadhan'),
-                showInIdulFitri: modes.includes('idul_fitri'),
-                showInIdulAdha: modes.includes('idul_adha')
+                groupId: getSelectedTargetGroupId()
             }, '✅ Slide teks ditambahkan!');
             document.getElementById('newSlideTitle').value = '';
             document.getElementById('newSlideContent').value = '';
@@ -1914,15 +1901,18 @@
         }
 
         function renderDynamicLists(status) {
-            // Overlay Running Text list
+            // Floating Overlay list (Title + Message)
             const ovBox = document.getElementById('overlayListBox');
-            const ovList = status.overlayTextList || [];
-            ovBox.innerHTML = ovList.length === 0
-                ? '<div style="font-size:12px;color:var(--text-secondary);">Belum ada pesan running text.</div>'
-                : ovList.map((txt, idx) => `
+            const ovItems = status.floatingOverlays || (status.overlayTextList || []).map((txt, i) => ({ id: String(i), title: `Overlay ${i + 1}`, message: txt }));
+            ovBox.innerHTML = ovItems.length === 0
+                ? '<div style="font-size:12px;color:var(--text-secondary);">Belum ada Floating Overlay.</div>'
+                : ovItems.map((ov, idx) => `
                     <div class="list-item">
-                        <div class="list-item-text"><div class="list-item-title">${escapeHtml(txt)}</div></div>
-                        <button class="mini-btn del" onclick="sendCommand('remove_overlay_text', { index: ${idx} }, 'Pesan dihapus')">Hapus</button>
+                        <div class="list-item-text">
+                            <div class="list-item-title">${escapeHtml(ov.title || ('Overlay ' + (idx + 1)))}</div>
+                            <div class="list-item-sub">${escapeHtml(ov.message || '')}</div>
+                        </div>
+                        <button class="mini-btn del" onclick="sendCommand('remove_overlay_text', { id: '${escapeHtml(ov.id)}', index: ${idx} }, 'Floating Overlay dihapus')">Hapus</button>
                     </div>
                 `).join('');
 
@@ -1942,40 +1932,111 @@
                     </div>
                 `).join('');
 
-            // Slides list with multi-select mode checklist
+            // Group Slideshow list & Target Group selector
+            const groups = status.slideGroups || [];
+            const targetSel = document.getElementById('targetSlideGroupSelect');
+            if (targetSel) {
+                const prevVal = targetSel.value;
+                targetSel.innerHTML = groups.length === 0
+                    ? '<option value="">(Group 1 otomatis)</option>'
+                    : groups.map(g => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)} (${(g.slides || []).length} slide • ${g.totalDuration || 0} dtk)</option>`).join('');
+                if (prevVal && groups.some(g => g.id === prevVal)) targetSel.value = prevVal;
+            }
+
             const slideBox = document.getElementById('slidesListBox');
-            const slides = status.slides || [];
             const modeDefs = [
-                { key: 'main', field: 'showInMain', label: 'Utama' },
-                { key: 'slideshow', field: 'showInSlideshow', label: 'Slideshow' },
+                { key: 'main', field: 'showInMain', label: 'MainSlideContainer' },
+                { key: 'slideshow', field: 'showInSlideshow', label: 'Slide Fullscreen' },
                 { key: 'jumat', field: 'showInJumat', label: 'Jum\'at' },
                 { key: 'ramadhan', field: 'showInRamadhan', label: 'Ramadhan' },
                 { key: 'idul_fitri', field: 'showInIdulFitri', label: 'Idul Fitri' },
                 { key: 'idul_adha', field: 'showInIdulAdha', label: 'Idul Adha' }
             ];
-            slideBox.innerHTML = slides.length === 0
-                ? '<div style="font-size:12px;color:var(--text-secondary);">Belum ada slide.</div>'
-                : slides.map(s => {
-                    const sid = escapeHtml(s.id);
-                    const checks = modeDefs.map(m => {
-                        const checked = !!s[m.field];
+            const posLabels = {
+                'top-left': 'Kiri Atas',
+                'bottom-left': 'Kiri Bawah',
+                'top-right': 'Kanan Atas',
+                'bottom-right': 'Kanan Bawah'
+            };
+
+            slideBox.innerHTML = groups.length === 0
+                ? '<div style="font-size:12px;color:var(--text-secondary);">Belum ada Group Slideshow.</div>'
+                : groups.map(g => {
+                    const gid = escapeHtml(g.id);
+                    const totalDur = g.totalDuration || 0;
+                    const gSlides = g.slides || [];
+                    const gOvIds = g.overlayIds || [];
+                    const activeOvCount = ovItems.filter(o => gOvIds.includes(o.id)).length;
+                    const perOvTxt = activeOvCount > 0 ? `${(totalDur / activeOvCount).toFixed(totalDur % activeOvCount === 0 ? 0 : 1)} dtk/overlay` : 'Tidak dipilih';
+                    const qrPosLabel = posLabels[g.qrCardPosition || 'bottom-right'] || 'Kanan Bawah';
+
+                    const stateChecks = modeDefs.map(m => {
+                        const checked = !!g[m.field];
                         return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:10px;background:${checked ? 'rgba(16,185,129,0.16)' : 'rgba(255,255,255,0.03)'};border:1px solid ${checked ? 'rgba(16,185,129,0.45)' : 'var(--border)'};color:${checked ? '#6ee7b7' : 'var(--text-secondary)'};border-radius:6px;padding:3px 7px;margin:0;cursor:pointer;text-transform:none;">
-                            <input type="checkbox" ${checked ? 'checked' : ''} onchange="sendCommand('toggle_slide_mode', { id: '${sid}', mode: '${m.key}' })" style="width:12px;height:12px;margin:0;accent-color:var(--accent);"> ${m.label}
+                            <input type="checkbox" ${checked ? 'checked' : ''} onchange="sendCommand('toggle_slide_group_state', { id: '${gid}', mode: '${m.key}' })" style="width:12px;height:12px;margin:0;accent-color:var(--accent);"> ${m.label}
                         </label>`;
                     }).join('');
-                    return `
-                        <div class="list-item" style="flex-direction:column;align-items:stretch;gap:8px;">
-                            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+
+                    const ovChecks = ovItems.length === 0
+                        ? '<span style="font-size:10px;color:var(--text-secondary);">Tambahkan Floating Overlay di kartu atas terlebih dahulu.</span>'
+                        : ovItems.map(o => {
+                            const checked = gOvIds.includes(o.id);
+                            return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:10px;background:${checked ? 'rgba(56,189,248,0.16)' : 'rgba(255,255,255,0.03)'};border:1px solid ${checked ? 'rgba(56,189,248,0.45)' : 'var(--border)'};color:${checked ? '#7dd3fc' : 'var(--text-secondary)'};border-radius:6px;padding:3px 7px;margin:0;cursor:pointer;text-transform:none;">
+                                <input type="checkbox" ${checked ? 'checked' : ''} onchange="sendCommand('toggle_slide_group_overlay', { id: '${gid}', overlayId: '${escapeHtml(o.id)}' })" style="width:12px;height:12px;margin:0;accent-color:#38bdf8;"> ${escapeHtml(o.title || o.id)}
+                            </label>`;
+                        }).join('');
+
+                    const slideRows = gSlides.length === 0
+                        ? '<div style="font-size:11px;color:var(--text-secondary);">Belum ada slide di group ini.</div>'
+                        : gSlides.map(s => {
+                            const sid = escapeHtml(s.id);
+                            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:6px 8px;">
                                 <div class="list-item-text">
-                                    <div class="list-item-title">[${escapeHtml(s.type).toUpperCase()}] ${escapeHtml(s.title || s.id)}</div>
-                                    <div class="list-item-sub">Durasi: ${s.duration} dtk</div>
+                                    <div style="font-size:12px;font-weight:700;">[${escapeHtml(s.type).toUpperCase()}] ${escapeHtml(s.title || s.id)}</div>
+                                    <div style="font-size:10px;color:var(--text-secondary);">${s.duration} dtk</div>
                                 </div>
-                                <div style="display:flex;gap:6px;">
-                                    <button class="mini-btn ${s.enabled ? 'on' : ''}" onclick="sendCommand('toggle_slide', { id: '${sid}' })">${s.enabled ? 'AKTIF' : 'OFF'}</button>
+                                <div style="display:flex;gap:5px;">
+                                    <button class="mini-btn ${s.enabled ? 'on' : ''}" onclick="sendCommand('toggle_slide', { id: '${sid}' })">${s.enabled ? 'ON' : 'OFF'}</button>
                                     <button class="mini-btn del" onclick="sendCommand('delete_slide', { id: '${sid}' }, 'Slide dihapus')">Hapus</button>
                                 </div>
+                            </div>`;
+                        }).join('');
+
+                    return `
+                        <div class="list-item" style="flex-direction:column;align-items:stretch;gap:10px;padding:12px;">
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                                <div class="list-item-text">
+                                    <div class="list-item-title">${escapeHtml(g.name)} <span class="chip-badge" style="margin-left:6px;">⏱ Total: ${totalDur} dtk</span></div>
+                                    <div class="list-item-sub">${gSlides.length} Slide • Overlay: ${perOvTxt} • QR: ${g.showQrCard ? ('Tampil di ' + qrPosLabel) : 'Sembunyi'}</div>
+                                </div>
+                                <div style="display:flex;gap:6px;">
+                                    <button class="mini-btn ${g.enabled ? 'on' : ''}" onclick="sendCommand('update_slide_group', { id: '${gid}', enabled: ${!g.enabled} })">${g.enabled ? 'AKTIF' : 'OFF'}</button>
+                                    <button class="mini-btn del" onclick="sendCommand('delete_slide_group', { id: '${gid}' }, 'Group dihapus')">Hapus</button>
+                                </div>
                             </div>
-                            <div style="display:flex;flex-wrap:wrap;gap:5px;">${checks}</div>
+                            <div class="grid-2" style="gap:8px;align-items:center;">
+                                <select onchange="sendCommand('update_slide_group', { id: '${gid}', overlayPosition: this.value })" style="padding:8px;font-size:12px;">
+                                    <option value="top-left" ${g.overlayPosition === 'top-left' ? 'selected' : ''}>Overlay: Kiri Atas (QR: Kanan Atas)</option>
+                                    <option value="bottom-left" ${g.overlayPosition === 'bottom-left' ? 'selected' : ''}>Overlay: Kiri Bawah (QR: Kanan Bawah)</option>
+                                    <option value="top-right" ${g.overlayPosition === 'top-right' ? 'selected' : ''}>Overlay: Kanan Atas (QR: Kiri Atas)</option>
+                                    <option value="bottom-right" ${g.overlayPosition === 'bottom-right' ? 'selected' : ''}>Overlay: Kanan Bawah (QR: Kiri Bawah)</option>
+                                </select>
+                                <label style="display:flex;align-items:center;gap:6px;background:var(--card-2);border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin:0;cursor:pointer;text-transform:none;font-size:11px;">
+                                    <input type="checkbox" ${g.showQrCard ? 'checked' : ''} onchange="sendCommand('update_slide_group', { id: '${gid}', showQrCard: this.checked })" style="width:14px;height:14px;margin:0;accent-color:var(--accent);"> Tampilkan Card QR Infaq &amp; Kas
+                                </label>
+                            </div>
+                            <div>
+                                <div style="font-size:10px;color:var(--text-secondary);font-weight:700;margin-bottom:4px;">FLOATING OVERLAY TERPILIH (STATIS):</div>
+                                <div style="display:flex;flex-wrap:wrap;gap:5px;">${ovChecks}</div>
+                            </div>
+                            <div>
+                                <div style="font-size:10px;color:var(--text-secondary);font-weight:700;margin-bottom:4px;">STATE PENAYANGAN GROUP:</div>
+                                <div style="display:flex;flex-wrap:wrap;gap:5px;">${stateChecks}</div>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:6px;">
+                                <div style="font-size:10px;color:var(--text-secondary);font-weight:700;">SLIDE DALAM GROUP:</div>
+                                ${slideRows}
+                            </div>
                         </div>
                     `;
                 }).join('');

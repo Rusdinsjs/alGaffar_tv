@@ -216,33 +216,17 @@ fun MasjidQrSettingsTab(
             title = "QR Code Infaq Digital Masjid",
             subtitle = "Kelola tautan QRIS/donasi, label tampilan, dan detail rekening bank masjid"
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                HybridToggleRow(
-                    label = "Aktifkan QR Infaq Masjid",
-                    checked = qr.enabled,
-                    onCheckedChange = { v -> actions.onUpdateSettings { it.copy(masjidQr = it.masjidQr.copy(enabled = v)) } },
-                    modifier = Modifier.weight(1f)
-                )
-                HybridToggleRow(
-                    label = "Tampilkan Lencana Floating di Slide Utama",
-                    checked = qr.showFloatingOnMain,
-                    onCheckedChange = { v -> actions.onUpdateSettings { it.copy(masjidQr = it.masjidQr.copy(showFloatingOnMain = v)) } },
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            HybridToggleRow(
+                label = "Aktifkan QR Infaq Masjid",
+                description = "Tampil bergiliran dengan QR Kas Online di sudut berlawanan dari Floating Overlay pada Group Slideshow yang mencentang Card QR",
+                checked = qr.enabled,
+                onCheckedChange = { v -> actions.onUpdateSettings { it.copy(masjidQr = it.masjidQr.copy(enabled = v)) } }
+            )
 
-            if (qr.showFloatingOnMain) {
-                HybridSegmentedRow(
-                    options = listOf(
-                        "top-left" to "Kiri-Atas",
-                        "bottom-left" to "Kiri-Bawah",
-                        "top-right" to "Kanan-Atas",
-                        "bottom-right" to "Kanan-Bawah"
-                    ),
-                    selectedId = qr.floatingPosition,
-                    onSelect = { pos -> actions.onUpdateSettings { it.copy(masjidQr = it.masjidQr.copy(floatingPosition = pos)) } }
-                )
-            }
+            HybridInfoBanner(
+                text = "Pengaturan tampil/sembunyi dan posisi Card QR Infaq & QR Kas Online kini diatur otomatis per Group Slideshow (menu Tampilan → Slideshow Info) berlawanan kiri/kanan dengan posisi Floating Overlay.",
+                accentColor = Color(0xFF10B981)
+            )
 
             HybridTextInput(
                 label = "Tautan / Payload QRIS Infaq",

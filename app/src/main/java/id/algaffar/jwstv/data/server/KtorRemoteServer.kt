@@ -612,7 +612,17 @@ class KtorRemoteServer(
             }
 
             putJsonArray("overlayTextList") {
-                settings.overlayTextList.forEach { add(it) }
+                settings.floatingOverlays.forEach { add(it.message) }
+            }
+
+            putJsonArray("floatingOverlays") {
+                settings.floatingOverlays.forEach { ov ->
+                    addJsonObject {
+                        put("id", ov.id)
+                        put("title", ov.title)
+                        put("message", ov.message)
+                    }
+                }
             }
 
             putJsonArray("mosqueInfoList") {
@@ -627,8 +637,42 @@ class KtorRemoteServer(
                 }
             }
 
+            putJsonArray("slideGroups") {
+                settings.slideGroups.forEach { grp ->
+                    addJsonObject {
+                        put("id", grp.id)
+                        put("name", grp.name)
+                        put("enabled", grp.enabled)
+                        put("totalDuration", grp.totalDurationSeconds)
+                        put("overlayPosition", grp.normalizedOverlayPosition)
+                        put("qrCardPosition", grp.qrCardPosition)
+                        put("showQrCard", grp.showQrCard)
+                        put("showInMain", grp.showInMain)
+                        put("showInSlideshow", grp.showInSlideshow)
+                        put("showInJumat", grp.showInJumat)
+                        put("showInRamadhan", grp.showInRamadhan)
+                        put("showInIdulFitri", grp.showInIdulFitri)
+                        put("showInIdulAdha", grp.showInIdulAdha)
+                        putJsonArray("overlayIds") {
+                            grp.overlayIds.forEach { add(it) }
+                        }
+                        putJsonArray("slides") {
+                            grp.slides.forEach { s ->
+                                addJsonObject {
+                                    put("id", s.id)
+                                    put("title", s.title)
+                                    put("type", s.type)
+                                    put("duration", s.duration)
+                                    put("enabled", s.enabled)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             putJsonArray("slides") {
-                settings.slides.forEach { s ->
+                settings.slideGroups.flatMap { it.slides }.ifEmpty { settings.slides }.forEach { s ->
                     addJsonObject {
                         put("id", s.id)
                         put("title", s.title)

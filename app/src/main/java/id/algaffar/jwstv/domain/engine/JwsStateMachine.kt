@@ -667,11 +667,18 @@ class JwsStateMachine(
         settings: AppStateSettings
     ): StateMachineTickResult {
         val slideshowSettings = settings.standbySlideshow
-        val slideshowSlides = settings.slides.filter { it.enabled && it.showInSlideshow }
+        val fullscreenGroups = settings.resolveGroupsForState(
+            id.algaffar.jwstv.domain.model.SlideshowTargetState.FULLSCREEN
+        )
+        val singleCycleSec = if (fullscreenGroups.isNotEmpty()) {
+            fullscreenGroups.sumOf { it.totalDurationSeconds.toLong().coerceAtLeast(4L) }
+        } else {
+            val legacySlides = settings.slides.filter { it.enabled && it.showInSlideshow }
+            legacySlides.sumOf { it.duration.toLong().coerceAtLeast(3L) }
+        }
 
-        if (slideshowSettings.enabled && slideshowSlides.isNotEmpty()) {
+        if (slideshowSettings.enabled && singleCycleSec > 0L) {
             val mainSec = slideshowSettings.durationMain.toLong().coerceAtLeast(10L)
-            val singleCycleSec = slideshowSlides.sumOf { it.duration.toLong().coerceAtLeast(3L) }
             val slideshowSec = (singleCycleSec * slideshowSettings.repeatCount.toLong().coerceAtLeast(1L))
                 .coerceAtLeast(5L)
 

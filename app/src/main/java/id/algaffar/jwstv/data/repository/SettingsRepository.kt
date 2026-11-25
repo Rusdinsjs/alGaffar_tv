@@ -103,6 +103,54 @@ class SettingsRepository(
         if (current.slides.any { it.type == "qr_jumat" }) {
             current = current.copy(slides = current.slides.filterNot { it.type == "qr_jumat" })
         }
+        if (current.schemaVersion < 5) {
+            val migratedOverlays = if (current.overlayTextList.isNotEmpty() &&
+                current.floatingOverlays == id.algaffar.jwstv.domain.model.FloatingOverlayItem.defaultItems()
+            ) {
+                current.overlayTextList
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .mapIndexed { idx, txt ->
+                        id.algaffar.jwstv.domain.model.FloatingOverlayItem(
+                            id = "overlay-migrated-${idx + 1}",
+                            title = "Overlay ${idx + 1}",
+                            message = txt
+                        )
+                    }
+                    .ifEmpty { id.algaffar.jwstv.domain.model.FloatingOverlayItem.defaultItems() }
+            } else {
+                current.floatingOverlays
+            }
+
+            val legacySlides = current.slides.filterNot { it.type == "qr_jumat" }
+            val migratedGroups = if (legacySlides.isNotEmpty()) {
+                listOf(
+                    id.algaffar.jwstv.domain.model.SlideshowGroup(
+                        id = "group-1",
+                        name = "Group 1",
+                        enabled = true,
+                        slides = legacySlides,
+                        overlayIds = migratedOverlays.map { it.id },
+                        overlayPosition = id.algaffar.jwstv.domain.model.SlideshowGroup.normalizeCornerPosition(current.overlayPosition),
+                        showQrCard = current.masjidQr.showFloatingOnMain,
+                        showInMain = legacySlides.any { it.showInMain },
+                        showInSlideshow = legacySlides.any { it.showInSlideshow },
+                        showInJumat = legacySlides.any { it.showInJumat },
+                        showInRamadhan = legacySlides.any { it.showInRamadhan },
+                        showInIdulFitri = legacySlides.any { it.showInIdulFitri },
+                        showInIdulAdha = legacySlides.any { it.showInIdulAdha }
+                    )
+                )
+            } else {
+                current.slideGroups.ifEmpty { id.algaffar.jwstv.domain.model.SlideshowGroup.defaultGroups() }
+            }
+
+            current = current.copy(
+                schemaVersion = 5,
+                floatingOverlays = migratedOverlays,
+                slideGroups = migratedGroups
+            )
+        }
         return current
     }
 

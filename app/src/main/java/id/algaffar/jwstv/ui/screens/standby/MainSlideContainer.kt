@@ -87,6 +87,8 @@ import id.algaffar.jwstv.domain.model.MasjidQrSettings
 import id.algaffar.jwstv.domain.model.QurbanGroup
 import id.algaffar.jwstv.domain.model.RamadhanSettings
 import id.algaffar.jwstv.domain.model.SlideItem
+import id.algaffar.jwstv.domain.model.SlideshowGroup
+import id.algaffar.jwstv.domain.model.SlideshowTargetState
 import id.algaffar.jwstv.ui.JwsRuntimeSnapshot
 import id.algaffar.jwstv.ui.components.clock.BigAnalogClock
 import id.algaffar.jwstv.ui.screens.fullscreen.EidPetugasSlideView
@@ -108,32 +110,6 @@ import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.ZonedDateTime
 import java.util.Locale
-
-private sealed interface MainDeckSlide {
-    val durationSeconds: Int
-
-    data class CustomSlide(
-        val item: SlideItem,
-        override val durationSeconds: Int = item.duration.coerceIn(4, 120)
-    ) : MainDeckSlide
-
-    data class JumatPetugas(
-        val fridayDate: String,
-        val record: JumatPetugasRecord,
-        override val durationSeconds: Int = 10
-    ) : MainDeckSlide
-
-    data class JumatKeuangan(
-        val fridayDate: String,
-        val record: JumatKeuanganRecord,
-        override val durationSeconds: Int = 12
-    ) : MainDeckSlide
-
-    data class RamadhanOverview(
-        val ramadhan: RamadhanSettings,
-        override val durationSeconds: Int = 12
-    ) : MainDeckSlide
-}
 
 internal data class WelcomeMasjidLines(
     val line1: String,
@@ -188,10 +164,136 @@ internal fun parseWelcomeMasjidLines(
 }
 
 /**
+ * Reusable Grouped Slideshow Player driving all 6 target states:
+ * `MainSlideContainer`, `Slide Fullscreen`, `Jum'at`, `Ramadhan`, `Idul Fitri`, and `Idul Adha`.
+ *
+ * For each active [SlideshowGroup]:
+ * - Plays all enabled slides sequentially using each slide's configured duration.
+ * - Displays selected Floating Overlays statically (no running text) with equal duration:
+ *   `totalDurationSeconds / activeOverlayCount`.
+ * - Positions Floating Overlay at the group's configured corner (`top-left`, `bottom-left`, `top-right`, `bottom-right`).
+ * - Shows/hides rotating Card QR Infaq & QR Kas Online on the horizontally opposite corner.
+ */
+@Composable
+fun GroupedSlideshowPlayer(
+    groups: List<SlideshowGroup>,
+    snapshot: JwsRuntimeSnapshot,
+    assetsRootDir: File?,
+    isExpanded: Boolean,
+    wrapSystemSlideWithHeader: Boolean = false,
+    onActiveGroupChanged: ((SlideshowGroup) -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    if (groups.isEmpty()) return
+
+    val settings = snapshot.settings
+    val isPerformanceMode = LocalPerformanceMode.current
+
+    var groupIdx by remember { mutableIntStateOf(0) }
+    var slideIdx by remember { mutableIntStateOf(0) }
+    var groupCycleCount by remember { mutableIntStateOf(0) }
+    var overlayIdx by remember { mutableIntStateOf(0) }
+
+    val safeGroupIdx = groupIdx.mod(groups.size)
+    val activeGroup = groups[safeGroupIdx]
+    val activeSlides = remember(activeGroup) {
+        activeGroup.activeSlides.ifEmpty { SlideItem.defaultSystemSlides() }
+    }
+    val safeSlideIdx = slideIdx.mod(activeSlides.size)
+    val activeSlide = activeSlides[safeSlideIdx]
+
+    val activeOverlays = remember(activeGroup.overlayIds, settings.floatingOverlays) {
+        activeGroup.resolveActiveOverlays(settings.floatingOverlays)
+    }
+    val totalGroupDurationMs = remember(activeGroup) {
+        activeGroup.totalDurationSeconds.coerceAtLeast(4) * 1000L
+    }
+    val groupTurnKey = "${activeGroup.id}_$groupCycleCount"
+
+    LaunchedEffect(activeGroup) {
+        onActiveGroupChanged?.invoke(activeGroup)
+    }
+
+    // Drive slide sequence for the active group, then advance to the next group
+    LaunchedEffect(groupTurnKey, activeGroup.id, activeSlides, settings.slideConfig.autoPlay, groups.size) {
+        slideIdx = 0
+        if (!settings.slideConfig.autoPlay || activeSlides.isEmpty()) return@LaunchedEffect
+        for (i in activeSlides.indices) {
+            slideIdx = i
+            val durMs = activeSlides[i].duration.coerceIn(4, 120) * 1000L
+            delay(durMs)
+        }
+        if (groups.size > 1) {
+            groupIdx = (safeGroupIdx + 1) % groups.size
+        }
+        groupCycleCount += 1
+    }
+
+    // Drive static Floating Overlays evenly across the group's total slide duration:
+    // duration per Floating Overlay = totalDuration / overlayCount
+    LaunchedEffect(groupTurnKey, activeOverlays, totalGroupDurationMs, settings.slideConfig.autoPlay) {
+        overlayIdx = 0
+        if (!settings.slideConfig.autoPlay || activeOverlays.size <= 1) return@LaunchedEffect
+        val perOverlayMs = activeGroup.overlayDurationMillis(activeOverlays.size)
+        for (i in activeOverlays.indices) {
+            overlayIdx = i
+            delay(perOverlayMs)
+        }
+    }
+
+    val currentOverlay = activeOverlays.getOrNull(overlayIdx.coerceIn(0, activeOverlays.lastIndex.coerceAtLeast(0)))
+    val overlayAlignment = cornerAlignmentOf(activeGroup.normalizedOverlayPosition)
+    val qrAlignment = cornerAlignmentOf(activeGroup.qrCardPosition)
+
+    Box(modifier = modifier) {
+        AnimatedContent(
+            targetState = "${activeGroup.id}_${activeSlide.id}_$safeSlideIdx",
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                if (isPerformanceMode) {
+                    EnterTransition.None togetherWith ExitTransition.None
+                } else {
+                    fadeIn(tween(650)) togetherWith fadeOut(tween(450))
+                }
+            },
+            label = "GroupedSlideTransition"
+        ) { _ ->
+            CustomSlideView(
+                slide = activeSlide,
+                snapshot = snapshot,
+                assetsRootDir = assetsRootDir,
+                isExpanded = isExpanded,
+                wrapSystemSlideWithHeader = wrapSystemSlideWithHeader
+            )
+        }
+
+        // Card QR Infaq & QR Kas Online (rotating automatically, positioned opposite left/right of Floating Overlay)
+        FloatingRotatingQrCard(
+            masjidQr = settings.masjidQr,
+            onlineFinance = settings.onlineFinance,
+            brandName = settings.brand.name,
+            assetsRootDir = assetsRootDir,
+            groupTotalDurationMs = totalGroupDurationMs,
+            groupTurnKey = groupTurnKey,
+            visible = activeGroup.showQrCard,
+            isFullscreen = isExpanded,
+            modifier = Modifier.align(qrAlignment)
+        )
+
+        // Static Floating Overlay (no running text, original accent pill style, positioned at group's chosen corner)
+        StaticFloatingOverlayBanner(
+            overlay = currentOverlay,
+            position = activeGroup.normalizedOverlayPosition,
+            isFullscreen = isExpanded,
+            modifier = Modifier.align(overlayAlignment)
+        )
+    }
+}
+
+/**
  * Main Slide Showcase Container (occupies the 75% main visual area on `StandbyScreen`).
- * Automatically rotates default system slides (System Greeting `welcome` & Big Analog Clock `analog_clock`),
- * user slides, Friday Petugas & Finance reports, Ramadhan cards, and overlays the Floating Masjid QR Infaq badge.
- * Mirrors `jws-android-algaffar/src/components/Screens/Main/Slide/index.tsx`.
+ * Plays all enabled [SlideshowGroup]s configured for [SlideshowTargetState.MAIN],
+ * together with their static Floating Overlays and opposite-side rotating QR Cards.
  */
 @Composable
 fun MainSlideContainer(
@@ -201,73 +303,28 @@ fun MainSlideContainer(
 ) {
     val palette = LocalJwsTheme.current
     val settings = snapshot.settings
-    val today = snapshot.schedule.date
 
-    val deck: List<MainDeckSlide> = remember(today, settings) {
-        buildList {
-            // 1. Configured & Default System Slides
-            val configuredMainSlides = settings.slides.filter { it.enabled && it.showInMain }
-            val configuredTypes = configuredMainSlides.map { it.type }.toSet()
-            configuredMainSlides.forEach { slide ->
-                add(MainDeckSlide.CustomSlide(slide))
-            }
-
-            // 2. Auto Ramadhan slides when Ramadhan mode is active and no explicit ramadhan slide added
-            val hasExplicitRamadhanSlide = configuredTypes.any { it.startsWith("ramadhan_") }
-            if (settings.ramadhan.isRamadhan && !hasExplicitRamadhanSlide) {
-                val dur = settings.ramadhan.slideshow.slideDuration.coerceIn(5, 60)
-                if (settings.ramadhan.slideshow.showPetugas) {
-                    add(MainDeckSlide.CustomSlide(SlideItem(id = "auto-ramadhan-petugas", type = "ramadhan_petugas", duration = dur)))
-                }
-                if (settings.ramadhan.slideshow.showKeuangan) {
-                    add(MainDeckSlide.CustomSlide(SlideItem(id = "auto-ramadhan-keuangan", type = "ramadhan_keuangan", duration = dur)))
-                }
-                if (settings.ramadhan.slideshow.showJadwal) {
-                    add(MainDeckSlide.CustomSlide(SlideItem(id = "auto-ramadhan-jadwal", type = "ramadhan_jadwal", duration = dur)))
-                }
-                if (settings.ramadhan.slideshow.showTakjil) {
-                    add(MainDeckSlide.CustomSlide(SlideItem(id = "auto-ramadhan-takjil", type = "ramadhan_takjil", duration = dur)))
-                }
-            }
-
-            // 3. Fallback so main container is never blank if user disabled all slides
-            if (isEmpty()) {
-                SlideItem.defaultSystemSlides().forEach { add(MainDeckSlide.CustomSlide(it)) }
-            }
+    val effectiveGroups: List<SlideshowGroup> = remember(settings) {
+        val configured = settings.resolveGroupsForState(SlideshowTargetState.MAIN)
+        if (configured.isNotEmpty()) {
+            configured
+        } else {
+            // Fallback so main container is never blank if user disabled all groups
+            listOf(
+                SlideshowGroup(
+                    id = "fallback-main-group",
+                    name = "Default",
+                    enabled = true,
+                    slides = SlideItem.defaultSystemSlides(),
+                    overlayIds = emptyList(),
+                    overlayPosition = SlideshowGroup.POS_BOTTOM_LEFT,
+                    showQrCard = false,
+                    showInMain = true
+                )
+            )
         }
     }
 
-    var currentIndex by remember { mutableIntStateOf(0) }
-    val safeIndex = currentIndex.mod(deck.size.coerceAtLeast(1))
-    val activeSlide = deck[safeIndex]
-
-    val activeCustomSlide = (activeSlide as? MainDeckSlide.CustomSlide)?.item
-    val activeSlideType = when (activeSlide) {
-        is MainDeckSlide.CustomSlide -> activeSlide.item.type
-        is MainDeckSlide.JumatPetugas -> "jumat_petugas"
-        is MainDeckSlide.JumatKeuangan -> "jumat_keuangan"
-        is MainDeckSlide.RamadhanOverview -> "ramadhan_petugas"
-    }
-    val isDenseInfoSlide = activeSlideType in DENSE_INFO_SLIDE_TYPES
-    val isSystemDefaultSlide = activeSlideType == "welcome" || activeSlideType == "analog_clock"
-    val shouldHideOverlayText = isSystemDefaultSlide || isDenseInfoSlide || (activeCustomSlide?.hideOverlayText == true)
-    val shouldHideQrCard = isDenseInfoSlide || (activeCustomSlide?.hideQrCard == true)
-
-    val overlayAlignment = if (settings.overlayPosition == "top") Alignment.TopStart else Alignment.BottomStart
-    val qrAlignment = when (settings.masjidQr.floatingPosition) {
-        "top-left" -> Alignment.TopStart
-        "bottom-left" -> Alignment.BottomStart
-        "top-right" -> Alignment.TopEnd
-        else -> Alignment.BottomEnd
-    }
-
-    LaunchedEffect(safeIndex, activeSlide.durationSeconds, deck.size, settings.slideConfig.autoPlay) {
-        if (!settings.slideConfig.autoPlay || deck.size <= 1) return@LaunchedEffect
-        delay(activeSlide.durationSeconds.coerceIn(4, 120) * 1000L)
-        currentIndex = (safeIndex + 1) % deck.size
-    }
-
-    val isPerformanceMode = LocalPerformanceMode.current
     Box(
         modifier = modifier
             .size(width = 1440.dp, height = 675.dp)
@@ -276,88 +333,16 @@ fun MainSlideContainer(
             .background(palette.bgCard)
             .border(1.5.dp, palette.border, RoundedCornerShape(20.dp))
     ) {
-        AnimatedContent(
-            targetState = activeSlide,
-            modifier = Modifier.fillMaxSize(),
-            transitionSpec = {
-                if (isPerformanceMode) {
-                    EnterTransition.None togetherWith ExitTransition.None
-                } else {
-                    fadeIn(tween(700)) togetherWith fadeOut(tween(500))
-                }
-            },
-            label = "MainDeckSlideTransition"
-        ) { slide ->
-            when (slide) {
-                is MainDeckSlide.CustomSlide -> CustomSlideView(
-                    slide = slide.item,
-                    snapshot = snapshot,
-                    assetsRootDir = assetsRootDir
-                )
-                is MainDeckSlide.JumatPetugas -> JumatPetugasSlideView(
-                    fridayDate = slide.fridayDate,
-                    record = slide.record,
-                    isRowLayout = true,
-                    isExpanded = false
-                )
-                is MainDeckSlide.JumatKeuangan -> JumatKeuanganSlideView(
-                    fridayDate = slide.fridayDate,
-                    record = slide.record,
-                    isExpanded = false
-                )
-                is MainDeckSlide.RamadhanOverview -> {
-                    val nightIdx = (slide.ramadhan.currentNight - 1).coerceIn(0, 29)
-                    val p = slide.ramadhan.petugas.getOrNull(nightIdx)
-                    TarawihPetugasSlideView(
-                        night = slide.ramadhan.currentNight,
-                        hijriYear = slide.ramadhan.hijriYear,
-                        penceramah = p?.penceramah ?: "-",
-                        imamTarawih = p?.imamTarawih ?: "-",
-                        imamWitir = p?.imamWitir ?: "-",
-                        isExpanded = false
-                    )
-                }
-            }
-        }
-
-        // Smart Floating Masjid QR Infaq Badge (configurable 4-corner position, auto-hidden on dense slides & per-slide)
-        AnimatedVisibility(
-            visible = settings.masjidQr.enabled && settings.masjidQr.showFloatingOnMain && !shouldHideQrCard,
-            enter = if (isPerformanceMode) EnterTransition.None else fadeIn(tween(350)),
-            exit = if (isPerformanceMode) ExitTransition.None else fadeOut(tween(250)),
-            modifier = Modifier
-                .align(qrAlignment)
-                .padding(20.dp)
-        ) {
-            FloatingMasjidQrBadge(
-                masjidQr = settings.masjidQr
-            )
-        }
-
-        // Smart Floating Overlay Running Text (single-line marquee, Peek & Clear sync, auto-hidden on dense slides & per-slide)
-        OverlayRunningText(
-            messages = settings.overlayTextList,
-            visibleDurationSeconds = settings.overlayVisibleDuration,
-            hiddenDurationSeconds = settings.overlayHiddenDuration,
-            speed = settings.overlaySpeed,
-            slideTriggerKey = safeIndex,
-            slideClearDelaySeconds = settings.overlaySlideClearSeconds,
-            shouldHide = shouldHideOverlayText,
-            modifier = Modifier.align(overlayAlignment)
+        GroupedSlideshowPlayer(
+            groups = effectiveGroups,
+            snapshot = snapshot,
+            assetsRootDir = assetsRootDir,
+            isExpanded = false,
+            wrapSystemSlideWithHeader = false,
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
-
-private val DENSE_INFO_SLIDE_TYPES = setOf(
-    "jumat_keuangan",
-    "ramadhan_keuangan",
-    "ramadhan_takjil",
-    "ramadhan_jadwal",
-    "iduladha_qurban",
-    "online_finance",
-    "qr_infaq",
-    "qr_finance"
-)
 
 /**
  * System Greeting Slide ("Ucapan Selamat Datang di Masjid").
@@ -711,6 +696,7 @@ fun RenderSystemDataSlideIfApplicable(
     snapshot: JwsRuntimeSnapshot,
     assetsRootDir: File? = null,
     isExpanded: Boolean = false,
+    wrapSystemSlideWithHeader: Boolean = isExpanded,
     modifier: Modifier = Modifier
 ): Boolean {
     val settings = snapshot.settings
@@ -718,7 +704,7 @@ fun RenderSystemDataSlideIfApplicable(
 
     when (slide.type) {
         "online_finance" -> {
-            if (isExpanded) {
+            if (isExpanded && wrapSystemSlideWithHeader) {
                 OnlineFinanceFullscreen(
                     snapshot = snapshot,
                     assetsRootDir = assetsRootDir,
@@ -727,7 +713,7 @@ fun RenderSystemDataSlideIfApplicable(
             } else {
                 OnlineFinanceCardContent(
                     snapshot = snapshot,
-                    isExpanded = false,
+                    isExpanded = isExpanded,
                     modifier = modifier.fillMaxSize()
                 )
             }
@@ -737,7 +723,7 @@ fun RenderSystemDataSlideIfApplicable(
             MasjidQrFullscreen(
                 snapshot = snapshot,
                 assetsRootDir = assetsRootDir,
-                isCompactSlide = !isExpanded,
+                isCompactSlide = !(isExpanded && wrapSystemSlideWithHeader),
                 modifier = modifier
             )
             return true
@@ -746,7 +732,7 @@ fun RenderSystemDataSlideIfApplicable(
             FinanceQrFullscreen(
                 snapshot = snapshot,
                 assetsRootDir = assetsRootDir,
-                isCompactSlide = !isExpanded,
+                isCompactSlide = !(isExpanded && wrapSystemSlideWithHeader),
                 modifier = modifier
             )
             return true
@@ -764,7 +750,7 @@ fun RenderSystemDataSlideIfApplicable(
             SystemDataSlideContainer(
                 snapshot = snapshot,
                 assetsRootDir = assetsRootDir,
-                isExpanded = isExpanded,
+                isExpanded = isExpanded && wrapSystemSlideWithHeader,
                 modifier = modifier
             ) {
                 when (slide.type) {
@@ -980,7 +966,9 @@ private fun SystemDataSlideContainer(
 private fun CustomSlideView(
     slide: SlideItem,
     snapshot: JwsRuntimeSnapshot,
-    assetsRootDir: File?
+    assetsRootDir: File?,
+    isExpanded: Boolean = false,
+    wrapSystemSlideWithHeader: Boolean = false
 ) {
     val settings = snapshot.settings
     val brand = settings.brand
@@ -989,7 +977,7 @@ private fun CustomSlideView(
         WelcomeMasjidSlideView(
             slide = slide,
             brand = brand,
-            isSmall = true,
+            isSmall = !isExpanded,
             modifier = Modifier.fillMaxSize()
         )
         return
@@ -998,7 +986,7 @@ private fun CustomSlideView(
     if (slide.type == "analog_clock") {
         BigAnalogClock(
             now = snapshot.now,
-            isSmall = true,
+            isSmall = !isExpanded,
             modifier = Modifier.fillMaxSize()
         )
         return
@@ -1008,7 +996,8 @@ private fun CustomSlideView(
             slide = slide,
             snapshot = snapshot,
             assetsRootDir = assetsRootDir,
-            isExpanded = false
+            isExpanded = isExpanded,
+            wrapSystemSlideWithHeader = wrapSystemSlideWithHeader
         )
     ) {
         return
@@ -1629,64 +1618,6 @@ fun FinanceMetricBox(
             overflow = TextOverflow.Ellipsis,
             style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
         )
-    }
-}
-
-@Composable
-private fun FloatingMasjidQrBadge(
-    masjidQr: MasjidQrSettings,
-    modifier: Modifier = Modifier
-) {
-    val palette = LocalJwsTheme.current
-    val qrBitmap = remember(masjidQr.link) {
-        generateQrBitmap(masjidQr.link.ifBlank { "https://masjidalgaffar.id/infaq" }, 220)
-    }
-
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(palette.bgPrimary.copy(alpha = 0.9f))
-            .border(2.dp, palette.accentSecondary, RoundedCornerShape(18.dp))
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        if (qrBitmap != null) {
-            Image(
-                bitmap = qrBitmap.asImageBitmap(),
-                contentDescription = masjidQr.label,
-                modifier = Modifier
-                    .size(76.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color.White)
-                    .padding(4.dp)
-            )
-        } else {
-            Icon(
-                imageVector = Icons.Default.QrCode2,
-                contentDescription = null,
-                tint = palette.accentSecondary,
-                modifier = Modifier.size(64.dp)
-            )
-        }
-
-        Column(modifier = Modifier.width(170.dp)) {
-            Text(
-                text = "INFAQ & QRIS MASJID",
-                color = palette.accentSecondary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = masjidQr.label,
-                color = palette.textPrimary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
     }
 }
 

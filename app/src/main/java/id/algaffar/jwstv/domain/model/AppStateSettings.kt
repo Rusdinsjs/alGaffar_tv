@@ -450,6 +450,152 @@ data class SlideItem(
 }
 
 @Serializable
+data class FloatingOverlayItem(
+    val id: String = "",
+    val title: String = "",
+    val message: String = ""
+) {
+    companion object {
+        fun defaultItems(): List<FloatingOverlayItem> = listOf(
+            FloatingOverlayItem(
+                id = "overlay-default-1",
+                title = "Adab & Ketertiban Shaf",
+                message = "Selamat datang — Mohon luruskan dan rapatkan shaf serta nonaktifkan dering HP saat sholat berlangsung."
+            ),
+            FloatingOverlayItem(
+                id = "overlay-default-2",
+                title = "Ajakan Makmurkan Masjid",
+                message = "Mari makmurkan masjid dengan sholat berjamaah tepat waktu dan infaq terbaik."
+            )
+        )
+    }
+}
+
+enum class SlideshowTargetState(val key: String, val label: String) {
+    MAIN("main", "MainSlideContainer"),
+    FULLSCREEN("slideshow", "Slide Fullscreen"),
+    JUMAT("jumat", "Jum'at"),
+    RAMADHAN("ramadhan", "Ramadhan"),
+    IDUL_FITRI("idul_fitri", "Idul Fitri"),
+    IDUL_ADHA("idul_adha", "Idul Adha")
+}
+
+@Serializable
+data class SlideshowGroup(
+    val id: String = "",
+    val name: String = "Group 1",
+    val enabled: Boolean = true,
+    val slides: List<SlideItem> = emptyList(),
+    val overlayIds: List<String> = emptyList(),
+    val overlayPosition: String = "bottom-left", // "top-left" | "bottom-left" | "top-right" | "bottom-right"
+    val showQrCard: Boolean = true,
+    val showInMain: Boolean = true,
+    val showInSlideshow: Boolean = true,
+    val showInJumat: Boolean = false,
+    val showInRamadhan: Boolean = false,
+    val showInIdulFitri: Boolean = false,
+    val showInIdulAdha: Boolean = false
+) {
+    val activeSlides: List<SlideItem>
+        get() = slides.filter { it.enabled }
+
+    val totalDurationSeconds: Int
+        get() = activeSlides.sumOf { it.duration.coerceIn(4, 120) }
+
+    val totalAllSlidesDurationSeconds: Int
+        get() = slides.sumOf { it.duration.coerceIn(4, 120) }
+
+    val normalizedOverlayPosition: String
+        get() = normalizeCornerPosition(overlayPosition)
+
+    /**
+     * Card QR Infaq & QR Kas Online selalu ditampilkan berlawanan kiri/kanan
+     * dengan posisi Floating Overlay pada baris vertikal yang sama.
+     */
+    val qrCardPosition: String
+        get() = oppositeHorizontalPosition(normalizedOverlayPosition)
+
+    fun matchesState(state: SlideshowTargetState): Boolean = when (state) {
+        SlideshowTargetState.MAIN -> showInMain
+        SlideshowTargetState.FULLSCREEN -> showInSlideshow
+        SlideshowTargetState.JUMAT -> showInJumat
+        SlideshowTargetState.RAMADHAN -> showInRamadhan
+        SlideshowTargetState.IDUL_FITRI -> showInIdulFitri
+        SlideshowTargetState.IDUL_ADHA -> showInIdulAdha
+    }
+
+    fun resolveActiveOverlays(allOverlays: List<FloatingOverlayItem>): List<FloatingOverlayItem> {
+        if (overlayIds.isEmpty()) return emptyList()
+        val byId = allOverlays.associateBy { it.id }
+        return overlayIds.mapNotNull { byId[it] }
+            .filter { it.title.isNotBlank() || it.message.isNotBlank() }
+    }
+
+    fun overlayDurationMillis(activeOverlayCount: Int): Long {
+        if (activeOverlayCount <= 0) return 0L
+        val totalMs = totalDurationSeconds.coerceAtLeast(1) * 1000L
+        return (totalMs / activeOverlayCount).coerceAtLeast(1000L)
+    }
+
+    companion object {
+        const val POS_TOP_LEFT = "top-left"
+        const val POS_BOTTOM_LEFT = "bottom-left"
+        const val POS_TOP_RIGHT = "top-right"
+        const val POS_BOTTOM_RIGHT = "bottom-right"
+
+        fun normalizeCornerPosition(raw: String): String = when (raw.lowercase().trim()) {
+            "top-left", "top" -> POS_TOP_LEFT
+            "top-right" -> POS_TOP_RIGHT
+            "bottom-right" -> POS_BOTTOM_RIGHT
+            else -> POS_BOTTOM_LEFT
+        }
+
+        fun oppositeHorizontalPosition(pos: String): String = when (normalizeCornerPosition(pos)) {
+            POS_TOP_LEFT -> POS_TOP_RIGHT
+            POS_TOP_RIGHT -> POS_TOP_LEFT
+            POS_BOTTOM_LEFT -> POS_BOTTOM_RIGHT
+            POS_BOTTOM_RIGHT -> POS_BOTTOM_LEFT
+            else -> POS_BOTTOM_RIGHT
+        }
+
+        fun cornerPositionLabel(pos: String): String = when (normalizeCornerPosition(pos)) {
+            POS_TOP_LEFT -> "Kiri Atas"
+            POS_TOP_RIGHT -> "Kanan Atas"
+            POS_BOTTOM_LEFT -> "Kiri Bawah"
+            POS_BOTTOM_RIGHT -> "Kanan Bawah"
+            else -> "Kiri Bawah"
+        }
+
+        fun nextDefaultGroupName(existing: List<SlideshowGroup>): String {
+            val used = existing.map { it.name.trim().lowercase() }.toSet()
+            var n = 1
+            while ("group $n" in used) {
+                n++
+            }
+            return "Group $n"
+        }
+
+        fun defaultGroups(): List<SlideshowGroup> = listOf(
+            SlideshowGroup(
+                id = "group-default-1",
+                name = "Group 1",
+                enabled = true,
+                slides = SlideItem.defaultSystemSlides(),
+                overlayIds = FloatingOverlayItem.defaultItems().map { it.id },
+                overlayPosition = POS_BOTTOM_LEFT,
+                showQrCard = true,
+                showInMain = true,
+                showInSlideshow = true,
+                showInJumat = false,
+                showInRamadhan = false,
+                showInIdulFitri = false,
+                showInIdulAdha = false
+            )
+        )
+    }
+}
+
+@Serializable
 data class StandbySlideshowSettings(
     val enabled: Boolean = false,
     val durationMain: Int = 60, // seconds staying in `standby` before entering `standby_slideshow`
@@ -834,7 +980,7 @@ data class MediaDisplaySettings(
 
 @Serializable
 data class AppStateSettings(
-    val schemaVersion: Int = 4,
+    val schemaVersion: Int = 5,
     val onboardingCompleted: Boolean = false,
     val currentState: AppState = AppState.STANDBY,
     val brand: BrandSettings = BrandSettings(),
@@ -847,6 +993,7 @@ data class AppStateSettings(
     val infoQurban: InfoQurbanSettings = InfoQurbanSettings(),
     val slideConfig: SlideGlobalConfig = SlideGlobalConfig(),
     val slides: List<SlideItem> = SlideItem.defaultSystemSlides(),
+    val slideGroups: List<SlideshowGroup> = SlideshowGroup.defaultGroups(),
     val standbySlideshow: StandbySlideshowSettings = StandbySlideshowSettings(),
     val screensaver: ScreenSaverSettings = ScreenSaverSettings(),
     val live: LiveSettings = LiveSettings(),
@@ -861,15 +1008,16 @@ data class AppStateSettings(
     val globalVolume: Float = 1.0f,
     val performanceMode: Boolean = true,
     val virtualKeyboardMode: String = "auto", // "auto" | "enabled" | "disabled"
+    val floatingOverlays: List<FloatingOverlayItem> = FloatingOverlayItem.defaultItems(),
     val overlayTextList: List<String> = listOf(
         "Selamat datang — Mohon luruskan dan rapatkan shaf serta nonaktifkan dering HP saat sholat berlangsung.",
         "Mari makmurkan masjid dengan sholat berjamaah tepat waktu dan infaq terbaik."
     ),
-    val overlayVisibleDuration: Int = 45, // seconds visible
-    val overlayHiddenDuration: Int = 10,  // seconds hidden
-    val overlaySpeed: Int = 50,
-    val overlayPosition: String = "bottom", // "bottom" | "top"
-    val overlaySlideClearSeconds: Int = 5,  // seconds slide stays clean before overlay appears
+    val overlayVisibleDuration: Int = 45, // legacy field kept for JSON compatibility
+    val overlayHiddenDuration: Int = 10,  // legacy field kept for JSON compatibility
+    val overlaySpeed: Int = 50,           // legacy field kept for JSON compatibility
+    val overlayPosition: String = "bottom", // legacy field kept for JSON compatibility
+    val overlaySlideClearSeconds: Int = 5,  // legacy field kept for JSON compatibility
     val mosqueInfoList: List<InfoCardItem> = listOf(
         InfoCardItem(
             id = "info-1",
@@ -885,4 +1033,11 @@ data class AppStateSettings(
         )
     ),
     val users: List<UserAccount> = listOf(UserAccount())
-)
+) {
+    /**
+     * Resolves enabled [SlideshowGroup]s targeting the specified [state] that contain at least one enabled slide.
+     */
+    fun resolveGroupsForState(state: SlideshowTargetState): List<SlideshowGroup> {
+        return slideGroups.filter { it.enabled && it.matchesState(state) && it.activeSlides.isNotEmpty() }
+    }
+}

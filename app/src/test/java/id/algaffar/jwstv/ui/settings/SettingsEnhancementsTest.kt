@@ -1,11 +1,19 @@
 package id.algaffar.jwstv.ui.settings
 
 import id.algaffar.jwstv.data.media.MediaStorageManager
+import id.algaffar.jwstv.domain.engine.JwsStateMachine
+import id.algaffar.jwstv.domain.model.AppState
 import id.algaffar.jwstv.domain.model.AppStateSettings
+import id.algaffar.jwstv.domain.model.FloatingOverlayItem
 import id.algaffar.jwstv.domain.model.MediaDisplaySettings
 import id.algaffar.jwstv.domain.model.SlideGlobalConfig
 import id.algaffar.jwstv.domain.model.SlideItem
 import id.algaffar.jwstv.domain.model.SlideTextStyle
+import id.algaffar.jwstv.domain.model.SlideshowGroup
+import id.algaffar.jwstv.domain.model.SlideshowTargetState
+import id.algaffar.jwstv.domain.model.StandbySlideshowSettings
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -145,5 +153,83 @@ class SettingsEnhancementsTest {
         assertEquals(VirtualKeyboardPolicy.MODE_AUTO, legacyParsed.virtualKeyboardMode)
         assertTrue(legacyParsed.slideConfig.autoPlay)
         assertEquals("1080p", legacyParsed.slideConfig.maxVideoResolution)
+    }
+
+    @Test
+    fun `SlideshowGroup computes total duration, equal static overlay durations, opposite QR corner, default names, and multi-state filters`() {
+        // 1. Default naming sequence: Group 1, Group 2, Group 3
+        val g1 = SlideshowGroup(id = "g1", name = SlideshowGroup.nextDefaultGroupName(emptyList()))
+        assertEquals("Group 1", g1.name)
+        val g2 = SlideshowGroup(id = "g2", name = SlideshowGroup.nextDefaultGroupName(listOf(g1)))
+        assertEquals("Group 2", g2.name)
+        val g3 = SlideshowGroup(id = "g3", name = SlideshowGroup.nextDefaultGroupName(listOf(g1, g2)))
+        assertEquals("Group 3", g3.name)
+
+        // 2. Opposite left/right QR Card corner mapping
+        assertEquals(SlideshowGroup.POS_TOP_RIGHT, SlideshowGroup.oppositeHorizontalPosition(SlideshowGroup.POS_TOP_LEFT))
+        assertEquals(SlideshowGroup.POS_TOP_LEFT, SlideshowGroup.oppositeHorizontalPosition(SlideshowGroup.POS_TOP_RIGHT))
+        assertEquals(SlideshowGroup.POS_BOTTOM_RIGHT, SlideshowGroup.oppositeHorizontalPosition(SlideshowGroup.POS_BOTTOM_LEFT))
+        assertEquals(SlideshowGroup.POS_BOTTOM_LEFT, SlideshowGroup.oppositeHorizontalPosition(SlideshowGroup.POS_BOTTOM_RIGHT))
+
+        // 3. Total slide duration & equal Floating Overlay duration division
+        val overlays = listOf(
+            FloatingOverlayItem(id = "ov1", title = "Adab Masjid", message = "Luruskan shaf"),
+            FloatingOverlayItem(id = "ov2", title = "Kajian Rutin", message = "Ba'da Maghrib"),
+            FloatingOverlayItem(id = "ov3", title = "Infaq Digital", message = "Scan QRIS")
+        )
+        val group = SlideshowGroup(
+            id = "grp-kajian",
+            name = "Group 1",
+            enabled = true,
+            slides = listOf(
+                SlideItem(id = "s1", type = "image", imageUrl = "jws-assets/images/slides/poster1.jpg", duration = 10, enabled = true),
+                SlideItem(id = "s2", type = "video", videoUrl = "jws-assets/videos/profil.mp4", duration = 20, enabled = true),
+                SlideItem(id = "s3", type = "text", content = "Nonaktif", duration = 15, enabled = false)
+            ),
+            overlayIds = listOf("ov1", "ov2", "ov3"),
+            overlayPosition = SlideshowGroup.POS_TOP_LEFT,
+            showQrCard = true,
+            showInMain = true,
+            showInSlideshow = true,
+            showInJumat = true,
+            showInRamadhan = false,
+            showInIdulFitri = true,
+            showInIdulAdha = false
+        )
+
+        assertEquals(30, group.totalDurationSeconds)
+        assertEquals(SlideshowGroup.POS_TOP_RIGHT, group.qrCardPosition)
+        val resolvedOverlays = group.resolveActiveOverlays(overlays)
+        assertEquals(3, resolvedOverlays.size)
+        assertEquals(10_000L, group.overlayDurationMillis(resolvedOverlays.size))
+
+        // 4. Multi-state filtering & MediaStorageManager protection
+        val settings = AppStateSettings(
+            floatingOverlays = overlays,
+            slideGroups = listOf(group),
+            standbySlideshow = StandbySlideshowSettings(enabled = true, durationMain = 60, repeatCount = 1)
+        )
+        assertEquals(1, settings.resolveGroupsForState(SlideshowTargetState.MAIN).size)
+        assertEquals(1, settings.resolveGroupsForState(SlideshowTargetState.FULLSCREEN).size)
+        assertEquals(1, settings.resolveGroupsForState(SlideshowTargetState.JUMAT).size)
+        assertEquals(0, settings.resolveGroupsForState(SlideshowTargetState.RAMADHAN).size)
+        assertEquals(1, settings.resolveGroupsForState(SlideshowTargetState.IDUL_FITRI).size)
+        assertEquals(0, settings.resolveGroupsForState(SlideshowTargetState.IDUL_ADHA).size)
+
+        val refs = MediaStorageManager.collectReferencedMediaPaths(settings)
+        assertTrue("images/slides/poster1.jpg" in refs)
+        assertTrue("videos/profil.mp4" in refs)
+
+        // 5. JwsStateMachine STANDBY_SLIDESHOW cycle uses group total duration (60s standby + 30s slideshow = 90s cycle)
+        val sm = JwsStateMachine()
+        val zone = ZoneId.of("Asia/Makassar")
+        // 09:00:30 -> 32430 % 90 = 30 (< 60 -> STANDBY)
+        val tickMain = sm.evaluateTick(ZonedDateTime.of(2026, 3, 10, 9, 0, 30, 0, zone), settings)
+        assertEquals(AppState.STANDBY, tickMain.state)
+        // 09:01:10 -> 32470 % 90 = 70 (>= 60 -> STANDBY_SLIDESHOW with 20s remaining)
+        val tickFs = sm.evaluateTick(ZonedDateTime.of(2026, 3, 10, 9, 1, 10, 0, zone), settings)
+        assertEquals(AppState.STANDBY_SLIDESHOW, tickFs.state)
+        assertEquals(30L, tickFs.totalStageSeconds)
+        assertEquals(20L, tickFs.countdownSeconds)
     }
 }

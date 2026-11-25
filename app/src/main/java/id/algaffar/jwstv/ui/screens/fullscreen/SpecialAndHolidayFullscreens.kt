@@ -42,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -69,11 +70,14 @@ import id.algaffar.jwstv.domain.model.PrayerId
 import id.algaffar.jwstv.domain.model.QurbanGroup
 import id.algaffar.jwstv.domain.model.RamadhanJadwalItem
 import id.algaffar.jwstv.domain.model.RamadhanSettings
+import id.algaffar.jwstv.domain.model.SlideshowGroup
+import id.algaffar.jwstv.domain.model.SlideshowTargetState
 import id.algaffar.jwstv.ui.JwsRuntimeSnapshot
 import id.algaffar.jwstv.ui.components.clock.ArtisticClock
 import id.algaffar.jwstv.ui.components.clock.BigAnalogClock
 import id.algaffar.jwstv.ui.components.clock.ClockVariant
 import id.algaffar.jwstv.ui.screens.standby.FinanceMetricBox
+import id.algaffar.jwstv.ui.screens.standby.GroupedSlideshowPlayer
 import id.algaffar.jwstv.ui.screens.standby.HeaderBar
 import id.algaffar.jwstv.ui.screens.standby.HeaderClockCard
 import id.algaffar.jwstv.ui.screens.standby.JumatKeuanganSlideView
@@ -171,6 +175,9 @@ fun WaktuJumatFullscreen(
         }
 
         // Main Rotating Slide Area
+        val jumatGroups = remember(snapshot.settings) {
+            snapshot.settings.resolveGroupsForState(SlideshowTargetState.JUMAT)
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -179,23 +186,34 @@ fun WaktuJumatFullscreen(
                 .background(palette.bgCard)
                 .border(1.5.dp, palette.border, RoundedCornerShape(24.dp))
         ) {
-            AnimatedContent(
-                targetState = slidePage,
-                transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(400)) },
-                label = "WaktuJumatSlide"
-            ) { page ->
-                if (page == 0) {
-                    JumatPetugasSlideView(
-                        fridayDate = effPetugasDate,
-                        record = petugasRec,
-                        isRowLayout = true
-                    )
-                } else {
-                    JumatKeuanganSlideView(
-                        fridayDate = effKeuDate,
-                        record = keuRec,
-                        isExpanded = true
-                    )
+            if (jumatGroups.isNotEmpty()) {
+                GroupedSlideshowPlayer(
+                    groups = jumatGroups,
+                    snapshot = snapshot,
+                    assetsRootDir = assetsRootDir,
+                    isExpanded = true,
+                    wrapSystemSlideWithHeader = false,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                AnimatedContent(
+                    targetState = slidePage,
+                    transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(400)) },
+                    label = "WaktuJumatSlide"
+                ) { page ->
+                    if (page == 0) {
+                        JumatPetugasSlideView(
+                            fridayDate = effPetugasDate,
+                            record = petugasRec,
+                            isRowLayout = true
+                        )
+                    } else {
+                        JumatKeuanganSlideView(
+                            fridayDate = effKeuDate,
+                            record = keuRec,
+                            isExpanded = true
+                        )
+                    }
                 }
             }
         }
@@ -349,6 +367,9 @@ fun TarawihFullscreen(
         }
 
         // Main Rotating Slide Area
+        val ramadhanGroups = remember(snapshot.settings) {
+            snapshot.settings.resolveGroupsForState(SlideshowTargetState.RAMADHAN)
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -357,42 +378,53 @@ fun TarawihFullscreen(
                 .background(palette.bgCard)
                 .border(1.5.dp, palette.border, RoundedCornerShape(24.dp))
         ) {
-            AnimatedContent(
-                targetState = slideKinds[page.coerceIn(0, slideKinds.lastIndex)],
-                transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(400)) },
-                label = "TarawihSlide"
-            ) { (kind, subIdx) ->
-                when (kind) {
-                    "petugas" -> TarawihPetugasSlideView(
-                        night = ramadhan.currentNight,
-                        hijriYear = ramadhan.hijriYear,
-                        penceramah = petugas?.penceramah ?: "-",
-                        imamTarawih = petugas?.imamTarawih ?: "-",
-                        imamWitir = petugas?.imamWitir ?: "-"
-                    )
-                    "keuangan" -> TarawihKeuanganSlideView(
-                        night = ramadhan.currentNight,
-                        hijriYear = ramadhan.hijriYear,
-                        penerimaanPria = keuangan?.penerimaanPria ?: 0L,
-                        penerimaanWanita = keuangan?.penerimaanWanita ?: 0L,
-                        jumlahInfaqMalamIni = keuangan?.totalPenerimaan ?: 0L,
-                        saldoAkhir = keuangan?.saldoAkhir ?: 0L
-                    )
-                    "jadwal" -> RamadhanJadwalSlideView(
-                        ramadhan = ramadhan,
-                        schedule = snapshot.schedule,
-                        isExpanded = true
-                    )
-                    else -> {
-                        val takjilPageIdx = subIdx.coerceIn(0, takjilPages.lastIndex)
-                        TarawihTakjilSlideView(
+            if (ramadhanGroups.isNotEmpty()) {
+                GroupedSlideshowPlayer(
+                    groups = ramadhanGroups,
+                    snapshot = snapshot,
+                    assetsRootDir = assetsRootDir,
+                    isExpanded = true,
+                    wrapSystemSlideWithHeader = false,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                AnimatedContent(
+                    targetState = slideKinds[page.coerceIn(0, slideKinds.lastIndex)],
+                    transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(400)) },
+                    label = "TarawihSlide"
+                ) { (kind, subIdx) ->
+                    when (kind) {
+                        "petugas" -> TarawihPetugasSlideView(
                             night = ramadhan.currentNight,
                             hijriYear = ramadhan.hijriYear,
-                            donors = takjilPages[takjilPageIdx],
-                            startNumber = takjilPageIdx * 10 + 1,
-                            pageNumber = takjilPageIdx + 1,
-                            totalTakjilPages = takjilPages.size
+                            penceramah = petugas?.penceramah ?: "-",
+                            imamTarawih = petugas?.imamTarawih ?: "-",
+                            imamWitir = petugas?.imamWitir ?: "-"
                         )
+                        "keuangan" -> TarawihKeuanganSlideView(
+                            night = ramadhan.currentNight,
+                            hijriYear = ramadhan.hijriYear,
+                            penerimaanPria = keuangan?.penerimaanPria ?: 0L,
+                            penerimaanWanita = keuangan?.penerimaanWanita ?: 0L,
+                            jumlahInfaqMalamIni = keuangan?.totalPenerimaan ?: 0L,
+                            saldoAkhir = keuangan?.saldoAkhir ?: 0L
+                        )
+                        "jadwal" -> RamadhanJadwalSlideView(
+                            ramadhan = ramadhan,
+                            schedule = snapshot.schedule,
+                            isExpanded = true
+                        )
+                        else -> {
+                            val takjilPageIdx = subIdx.coerceIn(0, takjilPages.lastIndex)
+                            TarawihTakjilSlideView(
+                                night = ramadhan.currentNight,
+                                hijriYear = ramadhan.hijriYear,
+                                donors = takjilPages[takjilPageIdx],
+                                startNumber = takjilPageIdx * 10 + 1,
+                                pageNumber = takjilPageIdx + 1,
+                                totalTakjilPages = takjilPages.size
+                            )
+                        }
                     }
                 }
             }
@@ -1038,6 +1070,14 @@ fun HolidayAndQurbanFullscreen(
         }
 
         // Main Rotating Slide Area
+        val holidayTargetState = when {
+            isInfoQurbanOnly -> null
+            isIdulFitri -> SlideshowTargetState.IDUL_FITRI
+            else -> SlideshowTargetState.IDUL_ADHA
+        }
+        val holidayGroups = remember(settings, holidayTargetState) {
+            holidayTargetState?.let { settings.resolveGroupsForState(it) }.orEmpty()
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1046,53 +1086,64 @@ fun HolidayAndQurbanFullscreen(
                 .background(palette.bgCard)
                 .border(1.5.dp, palette.border, RoundedCornerShape(24.dp))
         ) {
-            AnimatedContent(
-                targetState = page,
-                transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(400)) },
-                label = "HolidayQurbanSlide"
-            ) { idx ->
-                when {
-                    isInfoQurbanOnly -> {
-                        val gIdx = idx.coerceIn(0, qurbanGroups.lastIndex)
-                        QurbanGroupSlideView(
-                            group = qurbanGroups[gIdx],
-                            groupNumber = gIdx + 1,
-                            totalGroups = qurbanGroups.size
-                        )
-                    }
-                    isIdulFitri && idx == 0 -> {
-                        EidPetugasSlideView(
-                            title = "PETUGAS SHOLAT HARI RAYA IDUL FITRI",
-                            subtitle = "1 Syawal ${settings.idulFitri.hijriYear} H • ${settings.brand.name}",
-                            khotib = petugas.khotib.ifBlank { "Ust. H. Ahmad Fauzi, Lc." },
-                            imam = petugas.imam.ifBlank { "Ust. Muhammad Ridwan" },
-                            bilal = petugas.bilal.ifBlank { "Sdr. Abdullah" }
-                        )
-                    }
-                    isIdulFitri -> {
-                        IdulFitriKeuanganSlideView(
-                            hijriYear = settings.idulFitri.hijriYear,
-                            brandName = settings.brand.name,
-                            ramadhan = settings.ramadhan,
-                            fallbackEidKeuangan = settings.idulFitri.keuangan
-                        )
-                    }
-                    idx == 0 -> {
-                        EidPetugasSlideView(
-                            title = "PETUGAS SHOLAT HARI RAYA IDUL ADHA",
-                            subtitle = "10 Dzulhijjah ${settings.idulAdha.hijriYear} H • ${settings.brand.name}",
-                            khotib = petugas.khotib.ifBlank { "Ust. H. Ahmad Fauzi, Lc." },
-                            imam = petugas.imam.ifBlank { "Ust. Muhammad Ridwan" },
-                            bilal = petugas.bilal.ifBlank { "Sdr. Abdullah" }
-                        )
-                    }
-                    else -> {
-                        val gIdx = (idx - 1).coerceIn(0, qurbanGroups.lastIndex)
-                        QurbanGroupSlideView(
-                            group = qurbanGroups[gIdx],
-                            groupNumber = gIdx + 1,
-                            totalGroups = qurbanGroups.size
-                        )
+            if (holidayGroups.isNotEmpty()) {
+                GroupedSlideshowPlayer(
+                    groups = holidayGroups,
+                    snapshot = snapshot,
+                    assetsRootDir = assetsRootDir,
+                    isExpanded = true,
+                    wrapSystemSlideWithHeader = false,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                AnimatedContent(
+                    targetState = page,
+                    transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(400)) },
+                    label = "HolidayQurbanSlide"
+                ) { idx ->
+                    when {
+                        isInfoQurbanOnly -> {
+                            val gIdx = idx.coerceIn(0, qurbanGroups.lastIndex)
+                            QurbanGroupSlideView(
+                                group = qurbanGroups[gIdx],
+                                groupNumber = gIdx + 1,
+                                totalGroups = qurbanGroups.size
+                            )
+                        }
+                        isIdulFitri && idx == 0 -> {
+                            EidPetugasSlideView(
+                                title = "PETUGAS SHOLAT HARI RAYA IDUL FITRI",
+                                subtitle = "1 Syawal ${settings.idulFitri.hijriYear} H • ${settings.brand.name}",
+                                khotib = petugas.khotib.ifBlank { "Ust. H. Ahmad Fauzi, Lc." },
+                                imam = petugas.imam.ifBlank { "Ust. Muhammad Ridwan" },
+                                bilal = petugas.bilal.ifBlank { "Sdr. Abdullah" }
+                            )
+                        }
+                        isIdulFitri -> {
+                            IdulFitriKeuanganSlideView(
+                                hijriYear = settings.idulFitri.hijriYear,
+                                brandName = settings.brand.name,
+                                ramadhan = settings.ramadhan,
+                                fallbackEidKeuangan = settings.idulFitri.keuangan
+                            )
+                        }
+                        idx == 0 -> {
+                            EidPetugasSlideView(
+                                title = "PETUGAS SHOLAT HARI RAYA IDUL ADHA",
+                                subtitle = "10 Dzulhijjah ${settings.idulAdha.hijriYear} H • ${settings.brand.name}",
+                                khotib = petugas.khotib.ifBlank { "Ust. H. Ahmad Fauzi, Lc." },
+                                imam = petugas.imam.ifBlank { "Ust. Muhammad Ridwan" },
+                                bilal = petugas.bilal.ifBlank { "Sdr. Abdullah" }
+                            )
+                        }
+                        else -> {
+                            val gIdx = (idx - 1).coerceIn(0, qurbanGroups.lastIndex)
+                            QurbanGroupSlideView(
+                                group = qurbanGroups[gIdx],
+                                groupNumber = gIdx + 1,
+                                totalGroups = qurbanGroups.size
+                            )
+                        }
                     }
                 }
             }
@@ -1501,111 +1552,55 @@ fun StandbySlideshowFullscreen(
     assetsRootDir: File?,
     modifier: Modifier = Modifier
 ) {
-    val slides = snapshot.settings.slides.filter { it.enabled && it.showInSlideshow }
-
-    var idx by remember { mutableIntStateOf(0) }
-    val activeSlide = slides.getOrNull(idx % slides.size.coerceAtLeast(1))
-
-    LaunchedEffect(activeSlide?.id, slides.size, snapshot.settings.slideConfig.autoPlay) {
-        if (!snapshot.settings.slideConfig.autoPlay || slides.size <= 1) return@LaunchedEffect
-        val dur = (activeSlide?.duration ?: 10).coerceIn(3, 120) * 1000L
-        delay(dur)
-        if (slides.isNotEmpty()) {
-            idx = (idx + 1) % slides.size
-        }
+    val fullscreenGroups = remember(snapshot.settings) {
+        snapshot.settings.resolveGroupsForState(SlideshowTargetState.FULLSCREEN)
+    }
+    var activeGroup by remember(fullscreenGroups) {
+        mutableStateOf(fullscreenGroups.firstOrNull())
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-
-        when {
-            activeSlide?.type == "welcome" -> {
-                WelcomeMasjidSlideView(
-                    slide = activeSlide,
-                    brand = snapshot.settings.brand,
-                    isSmall = false,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            activeSlide?.type == "analog_clock" -> {
-                BigAnalogClock(
-                    now = snapshot.now,
-                    isSmall = false,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            activeSlide?.type == "text" -> {
-                id.algaffar.jwstv.ui.screens.standby.StyledTextSlideView(
-                    slide = activeSlide,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            activeSlide?.type == "video" && activeSlide.videoUrl.isNotBlank() -> {
-                val clean = activeSlide.videoUrl.removePrefix("jws-assets/").removePrefix("/")
-                val resolvedUri = remember(activeSlide.videoUrl, assetsRootDir) {
-                    if (activeSlide.videoUrl.startsWith("http://") ||
-                        activeSlide.videoUrl.startsWith("https://") ||
-                        activeSlide.videoUrl.startsWith("file://") ||
-                        activeSlide.videoUrl.startsWith("content://")
-                    ) {
-                        android.net.Uri.parse(activeSlide.videoUrl)
-                    } else {
-                        assetsRootDir?.let { File(it, clean).takeIf { f -> f.exists() } }
-                            ?.let { android.net.Uri.fromFile(it) }
-                    }
-                }
-                if (resolvedUri != null) {
-                    LocalSlideVideoPlayer(
-                        videoUri = resolvedUri,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
-            activeSlide != null && activeSlide.type == "image" && activeSlide.imageUrl.isNotBlank() -> {
-                val clean = activeSlide.imageUrl.removePrefix("jws-assets/").removePrefix("/")
-                val fileModel = assetsRootDir?.let { File(it, clean).takeIf { f -> f.exists() } }
-                    ?: activeSlide.imageUrl
-                AsyncImage(
-                    model = fileModel,
-                    contentDescription = activeSlide.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            activeSlide != null -> {
-                val handled = id.algaffar.jwstv.ui.screens.standby.RenderSystemDataSlideIfApplicable(
-                    slide = activeSlide,
-                    snapshot = snapshot,
-                    assetsRootDir = assetsRootDir,
-                    isExpanded = true,
-                    modifier = Modifier.fillMaxSize()
-                )
-                if (!handled) {
-                    WelcomeMasjidSlideView(
-                        slide = null,
-                        brand = snapshot.settings.brand,
-                        isSmall = false,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
-            else -> {
-                WelcomeMasjidSlideView(
-                    slide = null,
-                    brand = snapshot.settings.brand,
-                    isSmall = false,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+        if (fullscreenGroups.isNotEmpty()) {
+            GroupedSlideshowPlayer(
+                groups = fullscreenGroups,
+                snapshot = snapshot,
+                assetsRootDir = assetsRootDir,
+                isExpanded = true,
+                wrapSystemSlideWithHeader = true,
+                onActiveGroupChanged = { activeGroup = it },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            WelcomeMasjidSlideView(
+                slide = null,
+                brand = snapshot.settings.brand,
+                isSmall = false,
+                modifier = Modifier.fillMaxSize()
+            )
         }
 
-        // Optional floating Next Prayer Card in bottom-right when nearing Adzan
+        // Optional floating Next Prayer Card when nearing Adzan (moves to BottomCenter if bottom-right is occupied)
         val standbyCfg = snapshot.settings.standbySlideshow
         val thresholdSec = standbyCfg.nextPrayerThresholdMinutes.coerceIn(5, 120) * 60L
         if (standbyCfg.showNextPrayerCard && snapshot.schedule.secondsToNextPrayer in 1L..thresholdSec) {
+            val g = activeGroup
+            val hasBottomRightOverlay = g != null &&
+                g.resolveActiveOverlays(snapshot.settings.floatingOverlays).isNotEmpty() &&
+                g.normalizedOverlayPosition == SlideshowGroup.POS_BOTTOM_RIGHT
+            val hasBottomRightQr = g != null &&
+                g.showQrCard &&
+                (snapshot.settings.masjidQr.enabled || snapshot.settings.onlineFinance.enabled) &&
+                g.qrCardPosition == SlideshowGroup.POS_BOTTOM_RIGHT
+            val nextPrayerAlign = if (hasBottomRightOverlay || hasBottomRightQr) {
+                Alignment.BottomCenter
+            } else {
+                Alignment.BottomEnd
+            }
+
             NextPrayerCountdownCard(
                 schedule = snapshot.schedule,
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
+                    .align(nextPrayerAlign)
                     .padding(24.dp)
             )
         }

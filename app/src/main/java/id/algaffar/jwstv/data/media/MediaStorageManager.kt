@@ -192,6 +192,12 @@ object MediaStorageManager {
             rawPaths.add(slide.imageUrl)
             rawPaths.add(slide.videoUrl)
         }
+        settings.slideGroups.forEach { group ->
+            group.slides.forEach { slide ->
+                rawPaths.add(slide.imageUrl)
+                rawPaths.add(slide.videoUrl)
+            }
+        }
 
         val m = settings.media
         rawPaths.add(m.tartilVideo)

@@ -28,12 +28,14 @@ import id.algaffar.jwstv.domain.engine.JwsStateMachine
 import id.algaffar.jwstv.domain.engine.PrayerTimeCalculator
 import id.algaffar.jwstv.domain.model.AppState
 import id.algaffar.jwstv.domain.model.AppStateSettings
+import id.algaffar.jwstv.domain.model.FloatingOverlayItem
 import id.algaffar.jwstv.domain.model.InfoCardItem
 import id.algaffar.jwstv.domain.model.JumatPetugasRecord
 import id.algaffar.jwstv.domain.model.LayoutPosition
 import id.algaffar.jwstv.domain.model.PrayerId
 import id.algaffar.jwstv.domain.model.PrayerStageConfig
 import id.algaffar.jwstv.domain.model.SlideItem
+import id.algaffar.jwstv.domain.model.SlideshowGroup
 import id.algaffar.jwstv.domain.model.UserAccount
 import id.algaffar.jwstv.ui.JwsRuntimeSnapshot
 import id.algaffar.jwstv.ui.theme.ThemeEngine
@@ -845,13 +847,15 @@ class JwsRuntimeEngine(
             res.onSuccess { summary ->
                 if (summary.updatedLogoPath != null || summary.createdSlides.isNotEmpty()) {
                     updateSettings { prev ->
+                        val updatedGroups = if (summary.createdSlides.isNotEmpty()) {
+                            appendSlidesToGroup(prev.slideGroups, null, summary.createdSlides)
+                        } else prev.slideGroups
                         prev.copy(
                             brand = if (summary.updatedLogoPath != null) {
                                 prev.brand.copy(logo = summary.updatedLogoPath)
                             } else prev.brand,
-                            slides = if (summary.createdSlides.isNotEmpty()) {
-                                prev.slides + summary.createdSlides
-                            } else prev.slides
+                            slideGroups = updatedGroups,
+                            slides = updatedGroups.flatMap { it.slides }
                         )
                     }
                 }
@@ -1024,22 +1028,19 @@ class JwsRuntimeEngine(
                         inputStream = inputStream
                     ).getOrThrow()
                     val title = cleanName.substringBeforeLast('.').replace('_', ' ').ifBlank { "Poster Masjid" }
-                    val modeSet = if (slot.isNotBlank()) slot.split(',').map { it.trim().lowercase() }.toSet() else setOf("main", "slideshow")
+                    val targetGroupId = slot.trim().takeIf { it.isNotBlank() && !it.contains(',') }
                     val newSlide = SlideItem(
                         id = "slide_${System.currentTimeMillis()}",
                         title = title,
                         type = "image",
                         imageUrl = saved.relativePath,
                         duration = 12,
-                        enabled = true,
-                        showInMain = "main" in modeSet,
-                        showInSlideshow = "slideshow" in modeSet,
-                        showInJumat = "jumat" in modeSet,
-                        showInRamadhan = "ramadhan" in modeSet,
-                        showInIdulFitri = "idul_fitri" in modeSet,
-                        showInIdulAdha = "idul_adha" in modeSet
+                        enabled = true
                     )
-                    updateSettings { prev -> prev.copy(slides = prev.slides + newSlide) }
+                    updateSettings { prev ->
+                        val updatedGroups = appendSlidesToGroup(prev.slideGroups, targetGroupId, listOf(newSlide))
+                        prev.copy(slideGroups = updatedGroups, slides = updatedGroups.flatMap { it.slides })
+                    }
                     "Poster '$title' berhasil ditambahkan (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
                 }
 
@@ -1055,22 +1056,19 @@ class JwsRuntimeEngine(
                         maxBytes = MediaStorageManager.MAX_VIDEO_UPLOAD_BYTES
                     ).getOrThrow()
                     val title = base.replace('_', ' ').ifBlank { "Video Masjid" }
-                    val modeSet = if (slot.isNotBlank()) slot.split(',').map { it.trim().lowercase() }.toSet() else setOf("main", "slideshow")
+                    val targetGroupId = slot.trim().takeIf { it.isNotBlank() && !it.contains(',') }
                     val newSlide = SlideItem(
                         id = "slide_vid_${System.currentTimeMillis()}",
                         title = title,
                         type = "video",
                         videoUrl = saved.relativePath,
                         duration = 30,
-                        enabled = true,
-                        showInMain = "main" in modeSet,
-                        showInSlideshow = "slideshow" in modeSet,
-                        showInJumat = "jumat" in modeSet,
-                        showInRamadhan = "ramadhan" in modeSet,
-                        showInIdulFitri = "idul_fitri" in modeSet,
-                        showInIdulAdha = "idul_adha" in modeSet
+                        enabled = true
                     )
-                    updateSettings { prev -> prev.copy(slides = prev.slides + newSlide) }
+                    updateSettings { prev ->
+                        val updatedGroups = appendSlidesToGroup(prev.slideGroups, targetGroupId, listOf(newSlide))
+                        prev.copy(slideGroups = updatedGroups, slides = updatedGroups.flatMap { it.slides })
+                    }
                     "Video slide '$title' berhasil ditambahkan (${MediaStorageManager.formatByteSize(saved.savedBytes)})!"
                 }
 
@@ -1428,16 +1426,52 @@ class JwsRuntimeEngine(
                 }
 
                 "add_overlay_text" -> {
-                    val text = payload.stringArg("text")
-                    if (!text.isNullOrBlank()) updateSettings { prev -> prev.copy(overlayTextList = prev.overlayTextList + text) }
+                    val title = payload.stringArg("title")?.trim().orEmpty()
+                    val text = payload.stringArg("text")?.trim().orEmpty()
+                    if (title.isNotBlank() || text.isNotBlank()) {
+                        updateSettings { prev ->
+                            val nextNum = prev.floatingOverlays.size + 1
+                            val item = FloatingOverlayItem(
+                                id = "overlay_${System.currentTimeMillis()}",
+                                title = title.ifBlank { "Overlay $nextNum" },
+                                message = text
+                            )
+                            val updated = prev.floatingOverlays + item
+                            prev.copy(
+                                floatingOverlays = updated,
+                                overlayTextList = updated.map { it.message }
+                            )
+                        }
+                    }
                 }
 
                 "remove_overlay_text" -> {
+                    val id = payload.stringArg("id")?.trim().orEmpty()
                     val idx = payload.intArg("index")
-                    if (idx != null) updateSettings { prev -> prev.copy(overlayTextList = prev.overlayTextList.filterIndexed { i, _ -> i != idx }) }
+                    updateSettings { prev ->
+                        val updated = when {
+                            id.isNotBlank() -> prev.floatingOverlays.filterNot { it.id == id }
+                            idx != null -> prev.floatingOverlays.filterIndexed { i, _ -> i != idx }
+                            else -> prev.floatingOverlays
+                        }
+                        val validIds = updated.map { it.id }.toSet()
+                        prev.copy(
+                            floatingOverlays = updated,
+                            overlayTextList = updated.map { it.message },
+                            slideGroups = prev.slideGroups.map { grp ->
+                                grp.copy(overlayIds = grp.overlayIds.filter { it in validIds })
+                            }
+                        )
+                    }
                 }
 
-                "clear_overlay_text" -> updateSettings { prev -> prev.copy(overlayTextList = emptyList()) }
+                "clear_overlay_text" -> updateSettings { prev ->
+                    prev.copy(
+                        floatingOverlays = emptyList(),
+                        overlayTextList = emptyList(),
+                        slideGroups = prev.slideGroups.map { it.copy(overlayIds = emptyList()) }
+                    )
+                }
 
                 "add_info" -> {
                     val title = payload.stringArg("title").orEmpty().ifBlank { "INFO MASJID" }
@@ -1558,19 +1592,34 @@ class JwsRuntimeEngine(
 
                 "toggle_slide" -> {
                     val id = payload.stringArg("id").orEmpty()
-                    if (id.isNotBlank()) updateSettings { prev -> prev.copy(slides = prev.slides.map { if (it.id == id) it.copy(enabled = !it.enabled) else it }) }
+                    if (id.isNotBlank()) {
+                        updateSettings { prev ->
+                            val updatedGroups = prev.slideGroups.map { grp ->
+                                grp.copy(slides = grp.slides.map { if (it.id == id) it.copy(enabled = !it.enabled) else it })
+                            }
+                            prev.copy(slideGroups = updatedGroups, slides = updatedGroups.flatMap { it.slides })
+                        }
+                    }
                 }
 
                 "delete_slide" -> {
                     val id = payload.stringArg("id").orEmpty()
                     if (id.isNotBlank()) {
-                        updateSettings { prev -> prev.copy(slides = prev.slides.filterNot { it.id == id }) }
+                        updateSettings { prev ->
+                            val updatedGroups = prev.slideGroups.map { grp ->
+                                grp.copy(slides = grp.slides.filterNot { it.id == id })
+                            }
+                            prev.copy(slideGroups = updatedGroups, slides = updatedGroups.flatMap { it.slides })
+                        }
                         refreshStorageHealth()
                     }
                 }
 
                 "reset_default_slides" -> {
-                    updateSettings { prev -> prev.copy(slides = SlideItem.defaultSystemSlides()) }
+                    updateSettings { prev ->
+                        val defaults = SlideshowGroup.defaultGroups()
+                        prev.copy(slideGroups = defaults, slides = defaults.flatMap { it.slides })
+                    }
                     refreshStorageHealth()
                 }
 
@@ -1578,24 +1627,19 @@ class JwsRuntimeEngine(
                     val title = payload.stringArg("title").orEmpty().ifBlank { "Pengumuman Masjid" }
                     val content = payload.stringArg("content").orEmpty()
                     val duration = payload.intArg("duration")?.coerceIn(4, 120) ?: 12
+                    val groupId = payload.stringArg("groupId")?.trim()
                     if (content.isNotBlank()) {
+                        val newSlide = SlideItem(
+                            id = "slide_${System.currentTimeMillis()}",
+                            title = title,
+                            content = content,
+                            type = "text",
+                            duration = duration,
+                            enabled = true
+                        )
                         updateSettings { prev ->
-                            prev.copy(
-                                slides = prev.slides + SlideItem(
-                                    id = "slide_${System.currentTimeMillis()}",
-                                    title = title,
-                                    content = content,
-                                    type = "text",
-                                    duration = duration,
-                                    enabled = true,
-                                    showInMain = payload.booleanArg("showInMain") ?: true,
-                                    showInSlideshow = payload.booleanArg("showInSlideshow") ?: true,
-                                    showInJumat = payload.booleanArg("showInJumat") ?: false,
-                                    showInRamadhan = payload.booleanArg("showInRamadhan") ?: false,
-                                    showInIdulFitri = payload.booleanArg("showInIdulFitri") ?: false,
-                                    showInIdulAdha = payload.booleanArg("showInIdulAdha") ?: false
-                                )
-                            )
+                            val updatedGroups = appendSlidesToGroup(prev.slideGroups, groupId, listOf(newSlide))
+                            prev.copy(slideGroups = updatedGroups, slides = updatedGroups.flatMap { it.slides })
                         }
                     }
                 }
@@ -1604,22 +1648,115 @@ class JwsRuntimeEngine(
                     val type = payload.stringArg("type").orEmpty().trim()
                     val title = payload.stringArg("title").orEmpty()
                     val duration = payload.intArg("duration")?.coerceIn(4, 120) ?: 15
+                    val groupId = payload.stringArg("groupId")?.trim()
                     if (type.isNotBlank() && type != "qr_jumat") {
-                        val isUniversalDefault = type in setOf("welcome", "analog_clock", "qr_infaq", "qr_finance", "online_finance")
                         val newSlide = SlideItem(
                             id = "slide_${type}_${System.currentTimeMillis()}",
                             type = type,
                             title = title.ifBlank { type.replace('_', ' ').uppercase() },
                             duration = duration,
-                            enabled = true,
-                            showInMain = payload.booleanArg("showInMain") ?: true,
-                            showInSlideshow = payload.booleanArg("showInSlideshow") ?: true,
-                            showInJumat = payload.booleanArg("showInJumat") ?: (isUniversalDefault || type in setOf("jumat_petugas", "jumat_keuangan")),
-                            showInRamadhan = payload.booleanArg("showInRamadhan") ?: (isUniversalDefault || type.startsWith("ramadhan_")),
-                            showInIdulFitri = payload.booleanArg("showInIdulFitri") ?: (isUniversalDefault || type in setOf("idulfitri_petugas", "ramadhan_laporan_akhir")),
-                            showInIdulAdha = payload.booleanArg("showInIdulAdha") ?: (isUniversalDefault || type in setOf("iduladha_petugas", "iduladha_qurban"))
+                            enabled = true
                         )
-                        updateSettings { prev -> prev.copy(slides = prev.slides + newSlide) }
+                        updateSettings { prev ->
+                            val updatedGroups = appendSlidesToGroup(prev.slideGroups, groupId, listOf(newSlide))
+                            prev.copy(slideGroups = updatedGroups, slides = updatedGroups.flatMap { it.slides })
+                        }
+                    }
+                }
+
+                "add_slide_group" -> {
+                    val reqName = payload.stringArg("name")?.trim().orEmpty()
+                    updateSettings { prev ->
+                        val nextName = reqName.ifBlank { SlideshowGroup.nextDefaultGroupName(prev.slideGroups) }
+                        val newGroup = SlideshowGroup(
+                            id = "group_${System.currentTimeMillis()}",
+                            name = nextName,
+                            enabled = true,
+                            slides = emptyList(),
+                            overlayIds = emptyList(),
+                            overlayPosition = SlideshowGroup.POS_BOTTOM_LEFT,
+                            showQrCard = true,
+                            showInMain = true,
+                            showInSlideshow = true
+                        )
+                        prev.copy(slideGroups = prev.slideGroups + newGroup)
+                    }
+                }
+
+                "update_slide_group" -> {
+                    val groupId = payload.stringArg("id").orEmpty()
+                    if (groupId.isNotBlank()) {
+                        val name = payload.stringArg("name")?.trim()
+                        val enabled = payload.booleanArg("enabled")
+                        val overlayPos = payload.stringArg("overlayPosition")?.trim()
+                        val showQr = payload.booleanArg("showQrCard")
+                        updateSettings { prev ->
+                            prev.copy(
+                                slideGroups = prev.slideGroups.map { grp ->
+                                    if (grp.id != groupId) grp
+                                    else grp.copy(
+                                        name = name?.ifBlank { grp.name } ?: grp.name,
+                                        enabled = enabled ?: grp.enabled,
+                                        overlayPosition = overlayPos?.let { SlideshowGroup.normalizeCornerPosition(it) } ?: grp.overlayPosition,
+                                        showQrCard = showQr ?: grp.showQrCard
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+
+                "delete_slide_group" -> {
+                    val groupId = payload.stringArg("id").orEmpty()
+                    if (groupId.isNotBlank()) {
+                        updateSettings { prev ->
+                            val updatedGroups = prev.slideGroups.filterNot { it.id == groupId }
+                            prev.copy(slideGroups = updatedGroups, slides = updatedGroups.flatMap { it.slides })
+                        }
+                        refreshStorageHealth()
+                    }
+                }
+
+                "toggle_slide_group_state" -> {
+                    val groupId = payload.stringArg("id").orEmpty()
+                    val mode = payload.stringArg("mode").orEmpty().lowercase()
+                    if (groupId.isNotBlank() && mode.isNotBlank()) {
+                        updateSettings { prev ->
+                            prev.copy(
+                                slideGroups = prev.slideGroups.map { grp ->
+                                    if (grp.id != groupId) grp else when (mode) {
+                                        "main" -> grp.copy(showInMain = !grp.showInMain)
+                                        "slideshow" -> grp.copy(showInSlideshow = !grp.showInSlideshow)
+                                        "jumat" -> grp.copy(showInJumat = !grp.showInJumat)
+                                        "ramadhan" -> grp.copy(showInRamadhan = !grp.showInRamadhan)
+                                        "idul_fitri" -> grp.copy(showInIdulFitri = !grp.showInIdulFitri)
+                                        "idul_adha" -> grp.copy(showInIdulAdha = !grp.showInIdulAdha)
+                                        else -> grp
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                "toggle_slide_group_overlay" -> {
+                    val groupId = payload.stringArg("id").orEmpty()
+                    val overlayId = payload.stringArg("overlayId").orEmpty()
+                    if (groupId.isNotBlank() && overlayId.isNotBlank()) {
+                        updateSettings { prev ->
+                            prev.copy(
+                                slideGroups = prev.slideGroups.map { grp ->
+                                    if (grp.id != groupId) grp else {
+                                        val nextIds = if (overlayId in grp.overlayIds) {
+                                            grp.overlayIds.filterNot { it == overlayId }
+                                        } else {
+                                            grp.overlayIds + overlayId
+                                        }
+                                        grp.copy(overlayIds = nextIds)
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -1629,15 +1766,15 @@ class JwsRuntimeEngine(
                     if (id.isNotBlank() && mode.isNotBlank()) {
                         updateSettings { prev ->
                             prev.copy(
-                                slides = prev.slides.map { s ->
-                                    if (s.id != id) s else when (mode) {
-                                        "main" -> s.copy(showInMain = !s.showInMain)
-                                        "slideshow" -> s.copy(showInSlideshow = !s.showInSlideshow)
-                                        "jumat" -> s.copy(showInJumat = !s.showInJumat)
-                                        "ramadhan" -> s.copy(showInRamadhan = !s.showInRamadhan)
-                                        "idul_fitri" -> s.copy(showInIdulFitri = !s.showInIdulFitri)
-                                        "idul_adha" -> s.copy(showInIdulAdha = !s.showInIdulAdha)
-                                        else -> s
+                                slideGroups = prev.slideGroups.map { grp ->
+                                    if (grp.id != id) grp else when (mode) {
+                                        "main" -> grp.copy(showInMain = !grp.showInMain)
+                                        "slideshow" -> grp.copy(showInSlideshow = !grp.showInSlideshow)
+                                        "jumat" -> grp.copy(showInJumat = !grp.showInJumat)
+                                        "ramadhan" -> grp.copy(showInRamadhan = !grp.showInRamadhan)
+                                        "idul_fitri" -> grp.copy(showInIdulFitri = !grp.showInIdulFitri)
+                                        "idul_adha" -> grp.copy(showInIdulAdha = !grp.showInIdulAdha)
+                                        else -> grp
                                     }
                                 }
                             )
@@ -1997,6 +2134,36 @@ class JwsRuntimeEngine(
 
                 "clear_logs" -> AppLogger.clear()
             }
+        }
+    }
+
+    private fun appendSlidesToGroup(
+        existingGroups: List<SlideshowGroup>,
+        targetGroupId: String?,
+        newSlides: List<SlideItem>
+    ): List<SlideshowGroup> {
+        if (newSlides.isEmpty()) return existingGroups
+        if (existingGroups.isEmpty()) {
+            return listOf(
+                SlideshowGroup(
+                    id = "group_${System.currentTimeMillis()}",
+                    name = "Group 1",
+                    enabled = true,
+                    slides = newSlides,
+                    overlayPosition = SlideshowGroup.POS_BOTTOM_LEFT,
+                    showQrCard = true,
+                    showInMain = true,
+                    showInSlideshow = true
+                )
+            )
+        }
+        val targetIdx = if (!targetGroupId.isNullOrBlank()) {
+            existingGroups.indexOfFirst { it.id == targetGroupId }.takeIf { it >= 0 } ?: 0
+        } else {
+            0
+        }
+        return existingGroups.mapIndexed { idx, grp ->
+            if (idx == targetIdx) grp.copy(slides = grp.slides + newSlides) else grp
         }
     }
 }

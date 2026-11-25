@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.algaffar.jwstv.domain.model.AppStateSettings
 import id.algaffar.jwstv.domain.model.CustomIslamicEventItem
+import id.algaffar.jwstv.domain.model.FloatingOverlayItem
 import id.algaffar.jwstv.domain.model.InfoCardItem
 import id.algaffar.jwstv.domain.model.InfoDisplaySettings
 import id.algaffar.jwstv.domain.model.LayoutPosition
@@ -374,131 +375,135 @@ fun OverlayTextSettingsTab(
     actions: SettingsActions
 ) {
     val palette = LocalJwsTheme.current
-    var newText by remember { mutableStateOf("") }
+    var newTitle by remember { mutableStateOf("") }
+    var newMessage by remember { mutableStateOf("") }
+
+    fun syncOverlays(updated: List<FloatingOverlayItem>) {
+        val validIds = updated.map { it.id }.toSet()
+        actions.onUpdateSettings { prev ->
+            prev.copy(
+                floatingOverlays = updated,
+                overlayTextList = updated.map { it.message },
+                slideGroups = prev.slideGroups.map { grp ->
+                    grp.copy(overlayIds = grp.overlayIds.filter { it in validIds })
+                }
+            )
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         HybridSectionCard(
-            title = "Daftar Pesan Overlay / Running Text (${settings.overlayTextList.size} Pesan)",
-            subtitle = "Pesan pengumuman yang tampil bergantian di pojok kiri bawah slide utama"
+            title = "Daftar Floating Overlay (${settings.floatingOverlays.size} Overlay)",
+            subtitle = "Kelola Judul & Isi Floating Overlay statis. Pemanggilan, posisi sudut, dan durasi tampil otomatis diatur di setiap Group Slideshow."
         ) {
-            Row(
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                HybridTextInput(
-                    label = "Tambah Pesan Pengumuman Baru",
-                    value = newText,
-                    placeholder = "Mohon luruskan dan rapatkan shaf...",
-                    onValueChange = { newText = it },
-                    modifier = Modifier.weight(1f)
-                )
-                HybridButton(
-                    label = "+ Tambah Pesan",
-                    icon = Icons.Default.Add,
-                    isPrimary = true,
-                    onClick = {
-                        if (newText.isNotBlank()) {
-                            actions.onUpdateSettings { prev ->
-                                prev.copy(overlayTextList = prev.overlayTextList + newText.trim())
-                            }
-                            newText = ""
-                        }
-                    }
-                )
-            }
+            HybridInfoBanner(
+                text = "Floating Overlay ditampilkan secara statis (bukan running text). Untuk menampilkannya di layar TV, pilih Judul Floating Overlay di dalam pengaturan Group Slideshow (menu Tampilan → Slideshow Info). Durasi tiap overlay otomatis dibagi rata = Total Durasi Slide Group ÷ Jumlah Floating Overlay.",
+                accentColor = Color(0xFF38BDF8)
+            )
 
-            settings.overlayTextList.forEachIndexed { idx, msg ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(palette.bgPrimary.copy(alpha = 0.72f))
+                    .border(1.dp, palette.accent.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(palette.bgPrimary.copy(alpha = 0.8f))
-                        .border(1.dp, palette.border, RoundedCornerShape(14.dp))
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     HybridTextInput(
-                        label = "Pesan #${idx + 1}",
-                        value = msg,
-                        onValueChange = { updated ->
-                            actions.onUpdateSettings { prev ->
-                                val list = prev.overlayTextList.toMutableList()
-                                list[idx] = updated
-                                prev.copy(overlayTextList = list)
-                            }
-                        },
+                        label = "Judul Floating Overlay Baru",
+                        value = newTitle,
+                        placeholder = "Contoh: Adab & Ketertiban Shaf",
+                        onValueChange = { newTitle = it },
                         modifier = Modifier.weight(1f)
                     )
                     HybridButton(
-                        label = "Hapus",
-                        icon = Icons.Default.Delete,
-                        isDanger = true,
+                        label = "+ Tambah Floating Overlay",
+                        icon = Icons.Default.Add,
+                        isPrimary = true,
                         onClick = {
-                            actions.onUpdateSettings { prev ->
-                                prev.copy(overlayTextList = prev.overlayTextList.filterIndexed { i, _ -> i != idx })
+                            val trimmedTitle = newTitle.trim()
+                            val trimmedMsg = newMessage.trim()
+                            if (trimmedTitle.isNotBlank() || trimmedMsg.isNotBlank()) {
+                                val nextNum = settings.floatingOverlays.size + 1
+                                val item = FloatingOverlayItem(
+                                    id = "overlay_${System.currentTimeMillis()}",
+                                    title = trimmedTitle.ifBlank { "Overlay $nextNum" },
+                                    message = trimmedMsg
+                                )
+                                syncOverlays(settings.floatingOverlays + item)
+                                newTitle = ""
+                                newMessage = ""
                             }
                         }
                     )
                 }
+                HybridTextInput(
+                    label = "Isi Pesan Floating Overlay",
+                    value = newMessage,
+                    placeholder = "Mohon luruskan dan rapatkan shaf serta nonaktifkan dering HP...",
+                    singleLine = false,
+                    onValueChange = { newMessage = it }
+                )
             }
-        }
 
-        HybridSectionCard(
-            title = "Posisi, Siklus Tampilan & Kecepatan Overlay",
-            subtitle = "Pilih posisi melayang, jeda bersih awal slide, dan durasi tampil/sembunyi"
-        ) {
-            HybridSegmentedRow(
-                options = listOf(
-                    "bottom" to "Bawah (Kiri-Bawah)",
-                    "top" to "Atas (Kiri-Atas)"
-                ),
-                selectedId = settings.overlayPosition,
-                onSelect = { pos -> actions.onUpdateSettings { it.copy(overlayPosition = pos) } }
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HybridNumberStepper(
-                    label = "Durasi Tampil",
-                    value = settings.overlayVisibleDuration,
-                    min = 5,
-                    max = 300,
-                    step = 5,
-                    unit = "detik",
-                    onValueChange = { v -> actions.onUpdateSettings { it.copy(overlayVisibleDuration = v) } },
-                    modifier = Modifier.weight(1f)
+            if (settings.floatingOverlays.isEmpty()) {
+                HybridInfoBanner(
+                    text = "Belum ada Floating Overlay. Tambahkan judul dan pesan di atas agar dapat dipanggil oleh Group Slideshow.",
+                    accentColor = Color(0xFFF59E0B)
                 )
-                HybridNumberStepper(
-                    label = "Durasi Sembunyi",
-                    value = settings.overlayHiddenDuration,
-                    min = 0,
-                    max = 300,
-                    step = 5,
-                    unit = "detik",
-                    onValueChange = { v -> actions.onUpdateSettings { it.copy(overlayHiddenDuration = v) } },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HybridNumberStepper(
-                    label = "Jeda Bersih Awal Slide",
-                    value = settings.overlaySlideClearSeconds,
-                    min = 0,
-                    max = 30,
-                    step = 1,
-                    unit = "detik",
-                    onValueChange = { v -> actions.onUpdateSettings { it.copy(overlaySlideClearSeconds = v) } },
-                    modifier = Modifier.weight(1f)
-                )
-                HybridNumberStepper(
-                    label = "Kecepatan Pergantian & Marquee",
-                    value = settings.overlaySpeed,
-                    min = 20,
-                    max = 150,
-                    step = 10,
-                    unit = "lvl",
-                    onValueChange = { v -> actions.onUpdateSettings { it.copy(overlaySpeed = v) } },
-                    modifier = Modifier.weight(1f)
-                )
+            } else {
+                settings.floatingOverlays.forEachIndexed { idx, item ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(palette.bgPrimary.copy(alpha = 0.85f))
+                            .border(1.dp, palette.border, RoundedCornerShape(14.dp))
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Bottom,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            HybridTextInput(
+                                label = "Judul Floating Overlay #${idx + 1}",
+                                value = item.title,
+                                placeholder = "Overlay ${idx + 1}",
+                                onValueChange = { updatedTitle ->
+                                    val list = settings.floatingOverlays.toMutableList()
+                                    list[idx] = item.copy(title = updatedTitle)
+                                    syncOverlays(list)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            HybridButton(
+                                label = "Hapus",
+                                icon = Icons.Default.Delete,
+                                isDanger = true,
+                                onClick = {
+                                    syncOverlays(settings.floatingOverlays.filterIndexed { i, _ -> i != idx })
+                                }
+                            )
+                        }
+                        HybridTextInput(
+                            label = "Isi Pesan",
+                            value = item.message,
+                            singleLine = false,
+                            onValueChange = { updatedMsg ->
+                                val list = settings.floatingOverlays.toMutableList()
+                                list[idx] = item.copy(message = updatedMsg)
+                                syncOverlays(list)
+                            }
+                        )
+                    }
+                }
             }
         }
     }

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -38,10 +39,12 @@ import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
@@ -65,9 +68,13 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.algaffar.jwstv.domain.model.AppStateSettings
+import id.algaffar.jwstv.domain.model.FloatingOverlayItem
 import id.algaffar.jwstv.domain.model.SlideItem
 import id.algaffar.jwstv.domain.model.SlideTextStyle
+import id.algaffar.jwstv.domain.model.SlideshowGroup
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
+import java.io.File
+import java.util.Locale
 
 private data class SlideTypeMeta(
     val type: String,
@@ -196,14 +203,23 @@ internal fun slideTextAlignOf(align: String): TextAlign = when (align.lowercase(
     else -> TextAlign.Center
 }
 
+private fun formatDurationSeconds(ms: Long): String {
+    val sec = ms / 1000.0
+    return if (ms % 1000L == 0L) {
+        "${ms / 1000L} dtk"
+    } else {
+        String.format(Locale.US, "%.1f dtk", sec)
+    }
+}
+
 /**
- * Clean, simple, accordion-based Slide Info Settings Tab (`slides`).
- * Feature-parity with `SlideSettingsForm.tsx` in `jws-android-algaffar`:
- * - Global slideshow controls (Auto-Play, Default Duration, Max Video Resolution)
- * - Add Basic Slides (Text, Image, Video) & 15 System Slides
- * - Compact single-row accordion list with thumbnail previews & single-open editor
- * - Mode visibility toggles (Area Utama, Fullscreen, Jum'at, Ramadhan, Idul Fitri, Idul Adha)
- * - Rich Text formatting toolbar + Live Preview for text slides
+ * Group-based Slideshow Info Settings Tab (`slides`).
+ * Supports creating multiple named Slideshow Groups (`Group 1`, `Group 2`, ...), where each group:
+ * - Contains 1 or more Content/System slides with a live Total Slide Duration badge
+ * - Selects 1 or more Floating Overlays by Title (displayed statically with equal duration = Total / Count)
+ * - Configures Floating Overlay corner position (Kiri Atas / Kiri Bawah / Kanan Atas / Kanan Bawah)
+ * - Toggles Card QR Infaq & QR Kas Online (rotating automatically on the horizontally opposite corner)
+ * - Selects 1 or more target states (`MainSlideContainer`, `Slide Fullscreen`, `Jum'at`, `Ramadhan`, `Idul Fitri`, `Idul Adha`)
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -213,45 +229,46 @@ fun SlideSettingsTab(
 ) {
     val palette = LocalJwsTheme.current
     val slideConfig = settings.slideConfig
-    var expandedSlideId by remember { mutableStateOf<String?>(null) }
+    val groups = settings.slideGroups
 
-    fun addSystemOrTextSlide(type: String) {
-        val meta = slideMetaFor(type)
-        val isUniversalDefault = type == "welcome" || type == "analog_clock"
-        val newId = "slide_${System.currentTimeMillis()}_${type}"
-        val newSlide = SlideItem(
-            id = newId,
-            title = meta.label,
-            content = when (type) {
-                "welcome" -> SlideItem.DEFAULT_WELCOME_TEMPLATE
-                "analog_clock" -> "Jam Analog Besar"
-                "text" -> "Tulis informasi atau pengumuman masjid di sini."
-                else -> ""
-            },
-            type = type,
-            duration = if (type == "analog_clock") 20 else slideConfig.defaultDuration.coerceIn(4, 120),
-            enabled = true,
-            showInMain = true,
-            showInSlideshow = true,
-            showInJumat = isUniversalDefault || type.startsWith("jumat_"),
-            showInRamadhan = isUniversalDefault || type.startsWith("ramadhan_"),
-            showInIdulFitri = isUniversalDefault || type == "idulfitri_petugas" || type == "ramadhan_laporan_akhir",
-            showInIdulAdha = isUniversalDefault || type.startsWith("iduladha_"),
-            textStyle = SlideTextStyle()
-        )
-        actions.onUpdateSettings { prev -> prev.copy(slides = prev.slides + newSlide) }
-        if (type == "text" || type == "welcome") {
-            expandedSlideId = newId
+    var expandedGroupId by remember { mutableStateOf<String?>(groups.firstOrNull()?.id) }
+
+    fun saveGroups(updatedGroups: List<SlideshowGroup>) {
+        actions.onUpdateSettings { prev ->
+            prev.copy(
+                slideGroups = updatedGroups,
+                slides = updatedGroups.flatMap { it.slides }
+            )
         }
     }
 
-    fun updateSlideAt(index: Int, updated: SlideItem) {
-        actions.onUpdateSettings { prev ->
-            if (index !in prev.slides.indices) return@onUpdateSettings prev
-            val list = prev.slides.toMutableList()
-            list[index] = updated
-            prev.copy(slides = list)
-        }
+    fun updateGroupAt(index: Int, updated: SlideshowGroup) {
+        if (index !in groups.indices) return
+        val list = groups.toMutableList()
+        list[index] = updated
+        saveGroups(list)
+    }
+
+    fun addNewGroup() {
+        val nextName = SlideshowGroup.nextDefaultGroupName(groups)
+        val newId = "group_${System.currentTimeMillis()}"
+        val newGroup = SlideshowGroup(
+            id = newId,
+            name = nextName,
+            enabled = true,
+            slides = emptyList(),
+            overlayIds = emptyList(),
+            overlayPosition = SlideshowGroup.POS_BOTTOM_LEFT,
+            showQrCard = true,
+            showInMain = true,
+            showInSlideshow = true,
+            showInJumat = false,
+            showInRamadhan = false,
+            showInIdulFitri = false,
+            showInIdulAdha = false
+        )
+        saveGroups(groups + newGroup)
+        expandedGroupId = newId
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -260,16 +277,23 @@ fun SlideSettingsTab(
             title = "Pengaturan Umum Slideshow",
             subtitle = "Atur auto-play, durasi default slide baru, dan batas resolusi video",
             headerAction = {
-                HybridButton(
-                    label = "Reset Default",
-                    icon = Icons.Default.Refresh,
-                    onClick = {
-                        expandedSlideId = null
-                        actions.onUpdateSettings { prev ->
-                            prev.copy(slides = SlideItem.defaultSystemSlides())
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HybridButton(
+                        label = "Reset Default",
+                        icon = Icons.Default.Refresh,
+                        onClick = {
+                            val defaults = SlideshowGroup.defaultGroups()
+                            expandedGroupId = defaults.firstOrNull()?.id
+                            saveGroups(defaults)
                         }
-                    }
-                )
+                    )
+                    HybridButton(
+                        label = "+ Tambah Group",
+                        icon = Icons.Default.Add,
+                        isPrimary = true,
+                        onClick = { addNewGroup() }
+                    )
+                }
             }
         ) {
             Row(
@@ -278,7 +302,7 @@ fun SlideSettingsTab(
             ) {
                 HybridToggleRow(
                     label = "Auto-Play Slideshow",
-                    description = "Putar bergantian otomatis sesuai durasi tiap slide",
+                    description = "Putar group & slide bergantian otomatis sesuai durasi",
                     checked = slideConfig.autoPlay,
                     onCheckedChange = { v ->
                         actions.onUpdateSettings { it.copy(slideConfig = it.slideConfig.copy(autoPlay = v)) }
@@ -320,158 +344,635 @@ fun SlideSettingsTab(
             }
         }
 
-        // ==================== 2. TAMBAH SLIDE (DASAR & SISTEM) ====================
+        // ==================== 2. DAFTAR GROUP SLIDESHOW ====================
         HybridSectionCard(
-            title = "Tambah Slide Baru",
-            subtitle = "Pilih slide konten (Teks / Gambar / Video) atau slide sistem otomatis dari data masjid"
+            title = "Group Slideshow (${groups.size} Group)",
+            subtitle = "Setiap Group berisi 1+ slide, badge total durasi otomatis, pemilihan Judul Floating Overlay statis, posisi sudut, toggle Card QR berlawanan, dan pilihan State tayang"
         ) {
-            Text(
-                text = "SLIDE KONTEN",
-                color = palette.textSecondary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                HybridButton(
-                    label = "+ Slide Teks",
-                    icon = Icons.Default.TextFields,
-                    isPrimary = true,
-                    onClick = { addSystemOrTextSlide("text") },
-                    modifier = Modifier.weight(1f)
+            if (groups.isEmpty()) {
+                HybridInfoBanner(
+                    text = "Belum ada Group Slideshow. Tekan '+ Tambah Group' di atas untuk membuat Group 1 atau tekan 'Reset Default'.",
+                    accentColor = Color(0xFF38BDF8)
                 )
-                HybridButton(
-                    label = "+ Slide Gambar",
-                    icon = Icons.Default.Image,
-                    isPrimary = true,
-                    onClick = {
-                        actions.onPickImageAsset("slides") { path ->
-                            val newId = "slide_img_${System.currentTimeMillis()}"
-                            val fileNameTitle = path.substringAfterLast('/')
-                                .substringAfter('_')
-                                .substringBeforeLast('.')
-                                .replace('_', ' ')
-                                .ifBlank { "Poster Informasi" }
-                            val newSlide = SlideItem(
-                                id = newId,
-                                title = fileNameTitle,
-                                type = "image",
-                                imageUrl = path,
-                                duration = slideConfig.defaultDuration.coerceIn(4, 120),
-                                enabled = true,
-                                showInMain = true,
-                                showInSlideshow = true
-                            )
-                            actions.onUpdateSettings { prev -> prev.copy(slides = prev.slides + newSlide) }
+            } else {
+                groups.forEachIndexed { idx, group ->
+                    val isExpanded = expandedGroupId == group.id
+                    SlideshowGroupAccordionCard(
+                        groupIndex = idx,
+                        totalGroups = groups.size,
+                        group = group,
+                        allOverlays = settings.floatingOverlays,
+                        defaultSlideDuration = slideConfig.defaultDuration.coerceIn(4, 120),
+                        isExpanded = isExpanded,
+                        assetsRootDir = actions.assetsRootDir,
+                        actions = actions,
+                        onToggleExpand = {
+                            expandedGroupId = if (isExpanded) null else group.id
+                        },
+                        onMoveGroup = { delta ->
+                            val target = idx + delta
+                            if (target in groups.indices) {
+                                val list = groups.toMutableList()
+                                val moved = list.removeAt(idx)
+                                list.add(target, moved)
+                                saveGroups(list)
+                            }
+                        },
+                        onUpdateGroup = { updated -> updateGroupAt(idx, updated) },
+                        onDeleteGroup = {
+                            if (expandedGroupId == group.id) expandedGroupId = null
+                            saveGroups(groups.filterIndexed { i, _ -> i != idx })
                         }
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-                HybridButton(
-                    label = "+ Slide Video",
-                    icon = Icons.Default.Videocam,
-                    isPrimary = true,
-                    onClick = {
-                        actions.onPickVideoAsset { path, title ->
-                            val newId = "slide_vid_${System.currentTimeMillis()}"
-                            val newSlide = SlideItem(
-                                id = newId,
-                                title = title.ifBlank { "Video Masjid" },
-                                type = "video",
-                                videoUrl = path,
-                                duration = 30,
-                                enabled = true,
-                                showInMain = true,
-                                showInSlideshow = true
-                            )
-                            actions.onUpdateSettings { prev -> prev.copy(slides = prev.slides + newSlide) }
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "SLIDE SISTEM OTOMATIS",
-                color = palette.textSecondary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold
-            )
-            val systemTypes = SLIDE_TYPE_CATALOG.filter { it.type !in setOf("text", "image", "video") }
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                systemTypes.forEach { meta ->
-                    SlideQuickAddChip(
-                        meta = meta,
-                        onClick = { addSystemOrTextSlide(meta.type) }
                     )
                 }
             }
         }
+    }
+}
 
-        // ==================== 3. DAFTAR SLIDE (ACCORDION RINGKAS) ====================
-        HybridSectionCard(
-            title = "Daftar Slide Aktif (${settings.slides.size} Slide)",
-            subtitle = "Tekan 'Edit' pada salah satu slide untuk mengatur durasi, konten, format teks, dan mode tayang"
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SlideshowGroupAccordionCard(
+    groupIndex: Int,
+    totalGroups: Int,
+    group: SlideshowGroup,
+    allOverlays: List<FloatingOverlayItem>,
+    defaultSlideDuration: Int,
+    isExpanded: Boolean,
+    assetsRootDir: File?,
+    actions: SettingsActions,
+    onToggleExpand: () -> Unit,
+    onMoveGroup: (Int) -> Unit,
+    onUpdateGroup: (SlideshowGroup) -> Unit,
+    onDeleteGroup: () -> Unit
+) {
+    val palette = LocalJwsTheme.current
+    var expandedSlideId by remember(group.id) { mutableStateOf<String?>(null) }
+
+    val totalDurationSec = group.totalDurationSeconds
+    val activeOverlays = remember(group.overlayIds, allOverlays) {
+        group.resolveActiveOverlays(allOverlays)
+    }
+    val overlayPosLabel = SlideshowGroup.cornerPositionLabel(group.normalizedOverlayPosition)
+    val qrPosLabel = SlideshowGroup.cornerPositionLabel(group.qrCardPosition)
+
+    val stateBadges = remember(group) {
+        buildList {
+            if (group.showInMain) add("MainSlideContainer")
+            if (group.showInSlideshow) add("Slide Fullscreen")
+            if (group.showInJumat) add("Jum'at")
+            if (group.showInRamadhan) add("Ramadhan")
+            if (group.showInIdulFitri) add("Idul Fitri")
+            if (group.showInIdulAdha) add("Idul Adha")
+        }
+    }
+
+    fun addSlideToGroup(type: String) {
+        val meta = slideMetaFor(type)
+        val newId = "slide_${System.currentTimeMillis()}_$type"
+        val newSlide = SlideItem(
+            id = newId,
+            title = meta.label,
+            content = when (type) {
+                "welcome" -> SlideItem.DEFAULT_WELCOME_TEMPLATE
+                "analog_clock" -> "Jam Analog Besar"
+                "text" -> "Tulis informasi atau pengumuman masjid di sini."
+                else -> ""
+            },
+            type = type,
+            duration = if (type == "analog_clock") 20 else defaultSlideDuration,
+            enabled = true,
+            textStyle = SlideTextStyle()
+        )
+        onUpdateGroup(group.copy(slides = group.slides + newSlide))
+        if (type == "text" || type == "welcome") {
+            expandedSlideId = newId
+        }
+    }
+
+    fun updateSlideInGroup(slideIdx: Int, updated: SlideItem) {
+        if (slideIdx !in group.slides.indices) return
+        val list = group.slides.toMutableList()
+        list[slideIdx] = updated
+        onUpdateGroup(group.copy(slides = list))
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (isExpanded) palette.bgPrimary else palette.bgPrimary.copy(alpha = 0.80f))
+            .border(
+                width = if (isExpanded) 2.dp else 1.5.dp,
+                color = if (isExpanded) palette.accent else palette.border,
+                shape = RoundedCornerShape(18.dp)
+            )
+    ) {
+        // ==================== GROUP SUMMARY HEADER ====================
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            if (settings.slides.isEmpty()) {
-                HybridInfoBanner(
-                    text = "Belum ada slide di daftar. Tambahkan slide baru di atas atau tekan 'Reset Default' untuk memulihkan Sambutan Masjid & Jam Analog.",
-                    accentColor = Color(0xFF38BDF8)
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(palette.accent.copy(alpha = 0.18f))
+                    .border(1.5.dp, palette.accent.copy(alpha = 0.55f), RoundedCornerShape(13.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Layers,
+                    contentDescription = null,
+                    tint = palette.accent,
+                    modifier = Modifier.size(24.dp)
                 )
-            } else {
-                settings.slides.forEachIndexed { idx, slide ->
-                    val isExpanded = expandedSlideId == slide.id
-                    SlideAccordionItem(
-                        index = idx,
-                        totalCount = settings.slides.size,
-                        slide = slide,
-                        isExpanded = isExpanded,
-                        assetsRootDir = actions.assetsRootDir,
-                        onToggleExpand = {
-                            expandedSlideId = if (isExpanded) null else slide.id
-                        },
-                        onMove = { delta ->
-                            actions.onUpdateSettings { prev ->
-                                val list = prev.slides.toMutableList()
-                                val target = idx + delta
-                                if (target in list.indices) {
-                                    val moved = list.removeAt(idx)
-                                    list.add(target, moved)
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "#${groupIndex + 1}",
+                        color = palette.textSecondary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = group.name.ifBlank { "Group ${groupIndex + 1}" },
+                        color = if (group.enabled) palette.textPrimary else palette.textSecondary.copy(alpha = 0.55f),
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    // Prominent Total Slide Duration Badge
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF10B981).copy(alpha = 0.20f))
+                            .border(1.dp, Color(0xFF10B981).copy(alpha = 0.65f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 9.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Timer,
+                            contentDescription = null,
+                            tint = Color(0xFF34D399),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = "Total: $totalDurationSec dtk",
+                            color = Color(0xFF6EE7B7),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+
+                val overlaySummary = if (activeOverlays.isEmpty()) {
+                    "Overlay: Tidak dipilih"
+                } else {
+                    val perDur = formatDurationSeconds(group.overlayDurationMillis(activeOverlays.size))
+                    "Overlay: ${activeOverlays.size} ($perDur/overlay • $overlayPosLabel)"
+                }
+                val qrSummary = if (group.showQrCard) "QR: Tampil ($qrPosLabel)" else "QR: Sembunyi"
+                val stateSummary = if (stateBadges.isEmpty()) "Belum ada state dipilih" else stateBadges.joinToString(", ")
+
+                Text(
+                    text = "${group.slides.size} Slide • $overlaySummary • $qrSummary",
+                    color = palette.textSecondary,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "State: $stateSummary",
+                    color = palette.accentSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (groupIndex > 0) {
+                    HybridButton(label = "", icon = Icons.Default.ArrowUpward, onClick = { onMoveGroup(-1) })
+                }
+                if (groupIndex < totalGroups - 1) {
+                    HybridButton(label = "", icon = Icons.Default.ArrowDownward, onClick = { onMoveGroup(1) })
+                }
+                HybridButton(
+                    label = if (group.enabled) "ON" else "OFF",
+                    isPrimary = group.enabled,
+                    onClick = { onUpdateGroup(group.copy(enabled = !group.enabled)) }
+                )
+                HybridButton(
+                    label = if (isExpanded) "Tutup" else "Edit",
+                    icon = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.Edit,
+                    isPrimary = isExpanded,
+                    onClick = onToggleExpand
+                )
+                HybridButton(
+                    label = "",
+                    icon = Icons.Default.Delete,
+                    isDanger = true,
+                    onClick = onDeleteGroup
+                )
+            }
+        }
+
+        // ==================== GROUP EXPANDED EDITOR ====================
+        if (isExpanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(palette.bgSecondary.copy(alpha = 0.42f))
+                    .border(1.dp, palette.border.copy(alpha = 0.6f))
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // --- A. Nama Group & Badge Total Durasi ---
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    HybridTextInput(
+                        label = "Nama Group Slideshow",
+                        value = group.name,
+                        placeholder = "Group ${groupIndex + 1}",
+                        onValueChange = { onUpdateGroup(group.copy(name = it)) },
+                        modifier = Modifier.weight(1.3f)
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFF064E3B).copy(alpha = 0.55f))
+                            .border(1.5.dp, Color(0xFF10B981).copy(alpha = 0.65f), RoundedCornerShape(14.dp))
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = "TOTAL DURASI SLIDE AKTIF",
+                            color = Color(0xFFA7F3D0),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.8.sp
+                        )
+                        Text(
+                            text = "$totalDurationSec Detik (${group.activeSlides.size}/${group.slides.size} Slide ON)",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                        if (activeOverlays.isNotEmpty() && totalDurationSec > 0) {
+                            val perOverlayStr = formatDurationSeconds(group.overlayDurationMillis(activeOverlays.size))
+                            Text(
+                                text = "Durasi/Overlay: $perOverlayStr ($totalDurationSec dtk ÷ ${activeOverlays.size})",
+                                color = Color(0xFF6EE7B7),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // --- B. Pilih State Penayangan Group (Multi-Select) ---
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "TAMPILKAN GROUP INI DI STATE (BISA LEBIH DARI 1 STATE)",
+                        color = palette.textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SlideModeToggleChip(
+                            label = "MainSlideContainer",
+                            checked = group.showInMain,
+                            accent = Color(0xFF38BDF8),
+                            onToggle = { onUpdateGroup(group.copy(showInMain = !group.showInMain)) }
+                        )
+                        SlideModeToggleChip(
+                            label = "Slide Fullscreen",
+                            checked = group.showInSlideshow,
+                            accent = Color(0xFFC084FC),
+                            onToggle = { onUpdateGroup(group.copy(showInSlideshow = !group.showInSlideshow)) }
+                        )
+                        SlideModeToggleChip(
+                            label = "Jum'at",
+                            checked = group.showInJumat,
+                            accent = Color(0xFF22D3EE),
+                            onToggle = { onUpdateGroup(group.copy(showInJumat = !group.showInJumat)) }
+                        )
+                        SlideModeToggleChip(
+                            label = "Ramadhan",
+                            checked = group.showInRamadhan,
+                            accent = Color(0xFF10B981),
+                            onToggle = { onUpdateGroup(group.copy(showInRamadhan = !group.showInRamadhan)) }
+                        )
+                        SlideModeToggleChip(
+                            label = "Idul Fitri",
+                            checked = group.showInIdulFitri,
+                            accent = Color(0xFF818CF8),
+                            onToggle = { onUpdateGroup(group.copy(showInIdulFitri = !group.showInIdulFitri)) }
+                        )
+                        SlideModeToggleChip(
+                            label = "Idul Adha",
+                            checked = group.showInIdulAdha,
+                            accent = Color(0xFFFBBF24),
+                            onToggle = { onUpdateGroup(group.copy(showInIdulAdha = !group.showInIdulAdha)) }
+                        )
+                    }
+                }
+
+                // --- C. Pengaturan Floating Overlay & Card QR Infaq/Kas Online ---
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(palette.bgPrimary.copy(alpha = 0.72f))
+                        .border(1.dp, palette.border, RoundedCornerShape(14.dp))
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Campaign,
+                            contentDescription = null,
+                            tint = palette.accent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "FLOATING OVERLAY STATIS & CARD QR INFAQ / KAS ONLINE",
+                            color = palette.accent,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.8.sp
+                        )
+                    }
+
+                    // C1. Multi-select Judul Floating Overlay
+                    Text(
+                        text = "PILIH JUDUL FLOATING OVERLAY (STATIS • BISA 1 ATAU LEBIH)",
+                        color = palette.textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (allOverlays.isEmpty()) {
+                        HybridInfoBanner(
+                            text = "Belum ada data Floating Overlay. Tambahkan Judul & Pesan terlebih dahulu di menu Tampilan → Overlay Text.",
+                            accentColor = Color(0xFFF59E0B)
+                        )
+                    } else {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            allOverlays.forEachIndexed { ovIdx, ov ->
+                                val isSelected = ov.id in group.overlayIds
+                                val orderNum = if (isSelected) group.overlayIds.indexOf(ov.id) + 1 else null
+                                val chipLabel = buildString {
+                                    if (orderNum != null) append("#$orderNum ")
+                                    append(ov.title.ifBlank { "Overlay ${ovIdx + 1}" })
                                 }
-                                prev.copy(slides = list)
-                            }
-                        },
-                        onUpdate = { updated -> updateSlideAt(idx, updated) },
-                        onDelete = {
-                            if (expandedSlideId == slide.id) expandedSlideId = null
-                            actions.onUpdateSettings { prev ->
-                                prev.copy(slides = prev.slides.filterIndexed { i, _ -> i != idx })
-                            }
-                        },
-                        onReplaceImage = {
-                            actions.onPickImageAsset("slides") { path ->
-                                updateSlideAt(idx, slide.copy(imageUrl = path))
-                            }
-                        },
-                        onReplaceVideo = {
-                            actions.onPickVideoAsset { path, title ->
-                                updateSlideAt(
-                                    idx,
-                                    slide.copy(
-                                        videoUrl = path,
-                                        title = slide.title.ifBlank { title }
-                                    )
+                                SlideModeToggleChip(
+                                    label = chipLabel,
+                                    checked = isSelected,
+                                    accent = Color(0xFF38BDF8),
+                                    onToggle = {
+                                        val nextIds = if (isSelected) {
+                                            group.overlayIds.filterNot { it == ov.id }
+                                        } else {
+                                            group.overlayIds + ov.id
+                                        }
+                                        onUpdateGroup(group.copy(overlayIds = nextIds))
+                                    }
                                 )
                             }
                         }
+                    }
+
+                    // C2. Posisi Floating Overlay (4 Sudut)
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "POSISI FLOATING OVERLAY DITAMPILKAN",
+                            color = palette.textSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        HybridSegmentedRow(
+                            options = listOf(
+                                SlideshowGroup.POS_TOP_LEFT to "Kiri Atas",
+                                SlideshowGroup.POS_BOTTOM_LEFT to "Kiri Bawah",
+                                SlideshowGroup.POS_TOP_RIGHT to "Kanan Atas",
+                                SlideshowGroup.POS_BOTTOM_RIGHT to "Kanan Bawah"
+                            ),
+                            selectedId = group.normalizedOverlayPosition,
+                            onSelect = { pos ->
+                                onUpdateGroup(group.copy(overlayPosition = pos))
+                            }
+                        )
+                    }
+
+                    // C3. Hide / Unhide Card QR Infaq & QR Kas Online (Berlawanan Kiri/Kanan)
+                    HybridToggleRow(
+                        label = "Tampilkan Card QR Infaq & QR Kas Online (Bergiliran)",
+                        description = if (group.showQrCard) {
+                            "Posisi Card QR otomatis di $qrPosLabel (berlawanan kiri/kanan dengan Floating Overlay di $overlayPosLabel)"
+                        } else {
+                            "Card QR Infaq & QR Kas Online disembunyikan saat group ini tayang"
+                        },
+                        checked = group.showQrCard,
+                        onCheckedChange = { show ->
+                            onUpdateGroup(group.copy(showQrCard = show))
+                        }
                     )
+                }
+
+                // --- D. Tambah Slide ke Dalam Group Ini ---
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(palette.bgPrimary.copy(alpha = 0.72f))
+                        .border(1.dp, palette.border, RoundedCornerShape(14.dp))
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "TAMBAH SLIDE KE ${group.name.ifBlank { "GROUP ${groupIndex + 1}" }.uppercase()}",
+                        color = palette.accent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.8.sp
+                    )
+                    Text(
+                        text = "SLIDE KONTEN",
+                        color = palette.textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        HybridButton(
+                            label = "+ Slide Teks",
+                            icon = Icons.Default.TextFields,
+                            isPrimary = true,
+                            onClick = { addSlideToGroup("text") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        HybridButton(
+                            label = "+ Slide Gambar",
+                            icon = Icons.Default.Image,
+                            isPrimary = true,
+                            onClick = {
+                                actions.onPickImageAsset("slides") { path ->
+                                    val newId = "slide_img_${System.currentTimeMillis()}"
+                                    val fileNameTitle = path.substringAfterLast('/')
+                                        .substringAfter('_')
+                                        .substringBeforeLast('.')
+                                        .replace('_', ' ')
+                                        .ifBlank { "Poster Informasi" }
+                                    val newSlide = SlideItem(
+                                        id = newId,
+                                        title = fileNameTitle,
+                                        type = "image",
+                                        imageUrl = path,
+                                        duration = defaultSlideDuration,
+                                        enabled = true
+                                    )
+                                    onUpdateGroup(group.copy(slides = group.slides + newSlide))
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                        HybridButton(
+                            label = "+ Slide Video",
+                            icon = Icons.Default.Videocam,
+                            isPrimary = true,
+                            onClick = {
+                                actions.onPickVideoAsset { path, title ->
+                                    val newId = "slide_vid_${System.currentTimeMillis()}"
+                                    val newSlide = SlideItem(
+                                        id = newId,
+                                        title = title.ifBlank { "Video Masjid" },
+                                        type = "video",
+                                        videoUrl = path,
+                                        duration = 30,
+                                        enabled = true
+                                    )
+                                    onUpdateGroup(group.copy(slides = group.slides + newSlide))
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Text(
+                        text = "SLIDE SYSTEM OTOMATIS",
+                        color = palette.textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    val systemTypes = SLIDE_TYPE_CATALOG.filter { it.type !in setOf("text", "image", "video") }
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        systemTypes.forEach { meta ->
+                            SlideQuickAddChip(
+                                meta = meta,
+                                onClick = { addSlideToGroup(meta.type) }
+                            )
+                        }
+                    }
+                }
+
+                // --- E. Daftar Slide di Dalam Group Ini ---
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "DAFTAR SLIDE DALAM GROUP (${group.slides.size} SLIDE • TOTAL $totalDurationSec DTK)",
+                        color = palette.textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    if (group.slides.isEmpty()) {
+                        HybridInfoBanner(
+                            text = "Group ini belum memiliki slide. Tambahkan minimal 1 Slide Konten atau Slide System di atas agar group dapat ditayangkan.",
+                            accentColor = Color(0xFFF59E0B)
+                        )
+                    } else {
+                        group.slides.forEachIndexed { slideIdx, slide ->
+                            val isSlideExpanded = expandedSlideId == slide.id
+                            SlideAccordionItem(
+                                index = slideIdx,
+                                totalCount = group.slides.size,
+                                slide = slide,
+                                isExpanded = isSlideExpanded,
+                                assetsRootDir = assetsRootDir,
+                                onToggleExpand = {
+                                    expandedSlideId = if (isSlideExpanded) null else slide.id
+                                },
+                                onMove = { delta ->
+                                    val target = slideIdx + delta
+                                    if (target in group.slides.indices) {
+                                        val list = group.slides.toMutableList()
+                                        val moved = list.removeAt(slideIdx)
+                                        list.add(target, moved)
+                                        onUpdateGroup(group.copy(slides = list))
+                                    }
+                                },
+                                onUpdate = { updated -> updateSlideInGroup(slideIdx, updated) },
+                                onDelete = {
+                                    if (expandedSlideId == slide.id) expandedSlideId = null
+                                    onUpdateGroup(
+                                        group.copy(slides = group.slides.filterIndexed { i, _ -> i != slideIdx })
+                                    )
+                                },
+                                onReplaceImage = {
+                                    actions.onPickImageAsset("slides") { path ->
+                                        updateSlideInGroup(slideIdx, slide.copy(imageUrl = path))
+                                    }
+                                },
+                                onReplaceVideo = {
+                                    actions.onPickVideoAsset { path, title ->
+                                        updateSlideInGroup(
+                                            slideIdx,
+                                            slide.copy(
+                                                videoUrl = path,
+                                                title = slide.title.ifBlank { title }
+                                            )
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -517,14 +1018,13 @@ private fun SlideQuickAddChip(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SlideAccordionItem(
     index: Int,
     totalCount: Int,
     slide: SlideItem,
     isExpanded: Boolean,
-    assetsRootDir: java.io.File?,
+    assetsRootDir: File?,
     onToggleExpand: () -> Unit,
     onMove: (Int) -> Unit,
     onUpdate: (SlideItem) -> Unit,
@@ -541,33 +1041,19 @@ private fun SlideAccordionItem(
             else -> meta.label
         }
     }
-    val placementSummary = remember(slide) {
-        buildList {
-            add("${slide.duration} dtk")
-            add(if (slide.enabled) "Aktif" else "Nonaktif")
-            if (slide.showInMain) add("Area Utama")
-            if (slide.showInSlideshow) add("Fullscreen")
-            if (slide.showInJumat) add("Jum'at")
-            if (slide.showInRamadhan) add("Ramadhan")
-            if (slide.showInIdulFitri) add("Idul Fitri")
-            if (slide.showInIdulAdha) add("Idul Adha")
-        }.joinToString(" • ")
-    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (isExpanded) palette.bgPrimary else palette.bgPrimary.copy(alpha = 0.78f)
-            )
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (isExpanded) palette.bgPrimary else palette.bgPrimary.copy(alpha = 0.82f))
             .border(
                 width = if (isExpanded) 2.dp else 1.dp,
                 color = if (isExpanded) meta.accent.copy(alpha = 0.8f) else palette.border,
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(14.dp)
             )
     ) {
-        // ==================== COMPACT SUMMARY HEADER ROW ====================
+        // Compact Summary Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -575,7 +1061,6 @@ private fun SlideAccordionItem(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Leading Thumbnail (image) or Colored Type Icon Badge
             if (slide.type == "image" && slide.imageUrl.isNotBlank()) {
                 MediaPreviewImageBox(
                     rawPath = slide.imageUrl,
@@ -583,31 +1068,30 @@ private fun SlideAccordionItem(
                     contentDescription = displayTitle,
                     emptyLabel = "IMG",
                     modifier = Modifier
-                        .width(76.dp)
-                        .height(44.dp)
+                        .width(72.dp)
+                        .height(42.dp)
                 )
             } else {
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(11.dp))
                         .background(meta.accent.copy(alpha = 0.18f))
-                        .border(1.dp, meta.accent.copy(alpha = 0.45f), RoundedCornerShape(12.dp)),
+                        .border(1.dp, meta.accent.copy(alpha = 0.45f), RoundedCornerShape(11.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = meta.icon,
                         contentDescription = null,
                         tint = meta.accent,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
 
-            // Title + Badge + Compact Metadata Line
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -643,7 +1127,7 @@ private fun SlideAccordionItem(
                     )
                 }
                 Text(
-                    text = placementSummary,
+                    text = "Durasi: ${slide.duration} dtk • ${if (slide.enabled) "Aktif" else "Nonaktif"}",
                     color = palette.textSecondary,
                     fontSize = 12.sp,
                     maxLines = 1,
@@ -651,24 +1135,15 @@ private fun SlideAccordionItem(
                 )
             }
 
-            // Compact Action Controls
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (index > 0) {
-                    HybridButton(
-                        label = "",
-                        icon = Icons.Default.ArrowUpward,
-                        onClick = { onMove(-1) }
-                    )
+                    HybridButton(label = "", icon = Icons.Default.ArrowUpward, onClick = { onMove(-1) })
                 }
                 if (index < totalCount - 1) {
-                    HybridButton(
-                        label = "",
-                        icon = Icons.Default.ArrowDownward,
-                        onClick = { onMove(1) }
-                    )
+                    HybridButton(label = "", icon = Icons.Default.ArrowDownward, onClick = { onMove(1) })
                 }
                 HybridButton(
                     label = if (slide.enabled) "ON" else "OFF",
@@ -681,26 +1156,20 @@ private fun SlideAccordionItem(
                     isPrimary = isExpanded,
                     onClick = onToggleExpand
                 )
-                HybridButton(
-                    label = "",
-                    icon = Icons.Default.Delete,
-                    isDanger = true,
-                    onClick = onDelete
-                )
+                HybridButton(label = "", icon = Icons.Default.Delete, isDanger = true, onClick = onDelete)
             }
         }
 
-        // ==================== EXPANDED DETAIL EDITOR ====================
+        // Expanded Slide Editor
         if (isExpanded) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(palette.bgSecondary.copy(alpha = 0.38f))
+                    .background(palette.bgSecondary.copy(alpha = 0.35f))
                     .border(1.dp, palette.border.copy(alpha = 0.5f))
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Row 1: Title + Duration
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -724,91 +1193,6 @@ private fun SlideAccordionItem(
                     )
                 }
 
-                // Row 2: Where to display (Area Utama, Fullscreen, Mode Khusus)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "TAMPILKAN DI AREA & MODE",
-                        color = palette.textSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        SlideModeToggleChip(
-                            label = "Area Utama",
-                            checked = slide.showInMain,
-                            accent = Color(0xFF38BDF8),
-                            onToggle = { onUpdate(slide.copy(showInMain = !slide.showInMain)) }
-                        )
-                        SlideModeToggleChip(
-                            label = "Fullscreen Standby",
-                            checked = slide.showInSlideshow,
-                            accent = Color(0xFFC084FC),
-                            onToggle = { onUpdate(slide.copy(showInSlideshow = !slide.showInSlideshow)) }
-                        )
-                        if (supportsJumatMode(slide.type)) {
-                            SlideModeToggleChip(
-                                label = "Mode Jum'at",
-                                checked = slide.showInJumat,
-                                accent = Color(0xFF22D3EE),
-                                onToggle = { onUpdate(slide.copy(showInJumat = !slide.showInJumat)) }
-                            )
-                        }
-                        if (supportsRamadhanMode(slide.type)) {
-                            SlideModeToggleChip(
-                                label = "Mode Ramadhan",
-                                checked = slide.showInRamadhan,
-                                accent = Color(0xFF10B981),
-                                onToggle = { onUpdate(slide.copy(showInRamadhan = !slide.showInRamadhan)) }
-                            )
-                        }
-                        if (supportsIdulFitriMode(slide.type)) {
-                            SlideModeToggleChip(
-                                label = "Mode Idul Fitri",
-                                checked = slide.showInIdulFitri,
-                                accent = Color(0xFF818CF8),
-                                onToggle = { onUpdate(slide.copy(showInIdulFitri = !slide.showInIdulFitri)) }
-                            )
-                        }
-                        if (supportsIdulAdhaMode(slide.type)) {
-                            SlideModeToggleChip(
-                                label = "Mode Idul Adha",
-                                checked = slide.showInIdulAdha,
-                                accent = Color(0xFFFBBF24),
-                                onToggle = { onUpdate(slide.copy(showInIdulAdha = !slide.showInIdulAdha)) }
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "SMART OVERLAY & QR DI SLIDE INI",
-                        color = palette.textSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        SlideModeToggleChip(
-                            label = "Sembunyikan Overlay Text",
-                            checked = slide.hideOverlayText,
-                            accent = Color(0xFFF97316),
-                            onToggle = { onUpdate(slide.copy(hideOverlayText = !slide.hideOverlayText)) }
-                        )
-                        SlideModeToggleChip(
-                            label = "Sembunyikan Card QR Code",
-                            checked = slide.hideQrCard,
-                            accent = Color(0xFFEC4899),
-                            onToggle = { onUpdate(slide.copy(hideQrCard = !slide.hideQrCard)) }
-                        )
-                    }
-                }
-
-                // Row 3: Type-specific Content Editor
                 when (slide.type) {
                     "welcome" -> {
                         HybridTextInput(
@@ -937,7 +1321,6 @@ private fun TextSlideContentEditor(
             onValueChange = { onUpdate(slide.copy(content = it)) }
         )
 
-        // Formatting Toolbar (Bold, Italic, Align, Font Size, Color)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1046,7 +1429,6 @@ private fun TextSlideContentEditor(
             }
         }
 
-        // Live Preview Box
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1132,16 +1514,3 @@ private fun SlideModeToggleChip(
         )
     }
 }
-
-private fun supportsRamadhanMode(type: String): Boolean =
-    type in setOf("text", "image", "video", "welcome", "analog_clock", "online_finance", "qr_infaq", "qr_finance") ||
-        type.startsWith("ramadhan_")
-
-private fun supportsIdulFitriMode(type: String): Boolean =
-    type in setOf("text", "image", "video", "welcome", "analog_clock", "idulfitri_petugas", "ramadhan_laporan_akhir", "online_finance", "qr_infaq", "qr_finance")
-
-private fun supportsIdulAdhaMode(type: String): Boolean =
-    type in setOf("text", "image", "video", "welcome", "analog_clock", "iduladha_petugas", "iduladha_qurban", "online_finance", "qr_infaq", "qr_finance")
-
-private fun supportsJumatMode(type: String): Boolean =
-    type in setOf("text", "image", "video", "welcome", "analog_clock", "jumat_petugas", "jumat_keuangan", "online_finance", "qr_infaq", "qr_finance")
