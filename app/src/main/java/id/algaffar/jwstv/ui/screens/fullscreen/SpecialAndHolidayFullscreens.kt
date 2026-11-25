@@ -1501,7 +1501,6 @@ fun StandbySlideshowFullscreen(
     assetsRootDir: File?,
     modifier: Modifier = Modifier
 ) {
-    val palette = LocalJwsTheme.current
     val slides = snapshot.settings.slides.filter { it.enabled && it.showInSlideshow }
 
     var idx by remember { mutableIntStateOf(0) }
@@ -1517,8 +1516,6 @@ fun StandbySlideshowFullscreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        val isCustomFullCanvasSlide = activeSlide == null ||
-            activeSlide.type !in setOf("image", "video")
 
         when {
             activeSlide?.type == "welcome" -> {
@@ -1598,33 +1595,6 @@ fun StandbySlideshowFullscreen(
                     isSmall = false,
                     modifier = Modifier.fillMaxSize()
                 )
-            }
-        }
-
-        if (activeSlide != null && !isCustomFullCanvasSlide && (activeSlide.title.isNotBlank() || activeSlide.content.isNotBlank())) {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .background(palette.bgPrimary.copy(alpha = 0.85f))
-                    .padding(36.dp)
-            ) {
-                if (activeSlide.title.isNotBlank()) {
-                    Text(
-                        text = activeSlide.title,
-                        color = palette.textPrimary,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-                if (activeSlide.content.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = activeSlide.content,
-                        color = palette.textSecondary,
-                        fontSize = 20.sp
-                    )
-                }
             }
         }
 

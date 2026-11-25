@@ -445,9 +445,17 @@ fun OverlayTextSettingsTab(
         }
 
         HybridSectionCard(
-            title = "Siklus Tampilan & Kecepatan Overlay",
-            subtitle = "Set durasi sembunyi ke 0 detik jika ingin overlay tampil terus-menerus"
+            title = "Posisi, Siklus Tampilan & Kecepatan Overlay",
+            subtitle = "Pilih posisi melayang, jeda bersih awal slide, dan durasi tampil/sembunyi"
         ) {
+            HybridSegmentedRow(
+                options = listOf(
+                    "bottom" to "Bawah (Kiri-Bawah)",
+                    "top" to "Atas (Kiri-Atas)"
+                ),
+                selectedId = settings.overlayPosition,
+                onSelect = { pos -> actions.onUpdateSettings { it.copy(overlayPosition = pos) } }
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HybridNumberStepper(
                     label = "Durasi Tampil",
@@ -470,15 +478,28 @@ fun OverlayTextSettingsTab(
                     modifier = Modifier.weight(1f)
                 )
             }
-            HybridNumberStepper(
-                label = "Kecepatan Pergantian Pesan",
-                value = settings.overlaySpeed,
-                min = 20,
-                max = 150,
-                step = 10,
-                unit = "lvl",
-                onValueChange = { v -> actions.onUpdateSettings { it.copy(overlaySpeed = v) } }
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HybridNumberStepper(
+                    label = "Jeda Bersih Awal Slide",
+                    value = settings.overlaySlideClearSeconds,
+                    min = 0,
+                    max = 30,
+                    step = 1,
+                    unit = "detik",
+                    onValueChange = { v -> actions.onUpdateSettings { it.copy(overlaySlideClearSeconds = v) } },
+                    modifier = Modifier.weight(1f)
+                )
+                HybridNumberStepper(
+                    label = "Kecepatan Pergantian & Marquee",
+                    value = settings.overlaySpeed,
+                    min = 20,
+                    max = 150,
+                    step = 10,
+                    unit = "lvl",
+                    onValueChange = { v -> actions.onUpdateSettings { it.copy(overlaySpeed = v) } },
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }

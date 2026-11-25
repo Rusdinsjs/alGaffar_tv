@@ -2,6 +2,7 @@ package id.algaffar.jwstv.ui.screens.standby
 
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
@@ -240,9 +241,25 @@ fun MainSlideContainer(
     val safeIndex = currentIndex.mod(deck.size.coerceAtLeast(1))
     val activeSlide = deck[safeIndex]
 
-    val activeSlideType = (activeSlide as? MainDeckSlide.CustomSlide)?.item?.type.orEmpty()
+    val activeCustomSlide = (activeSlide as? MainDeckSlide.CustomSlide)?.item
+    val activeSlideType = when (activeSlide) {
+        is MainDeckSlide.CustomSlide -> activeSlide.item.type
+        is MainDeckSlide.JumatPetugas -> "jumat_petugas"
+        is MainDeckSlide.JumatKeuangan -> "jumat_keuangan"
+        is MainDeckSlide.RamadhanOverview -> "ramadhan_petugas"
+    }
+    val isDenseInfoSlide = activeSlideType in DENSE_INFO_SLIDE_TYPES
     val isSystemDefaultSlide = activeSlideType == "welcome" || activeSlideType == "analog_clock"
-    val isQrSystemSlide = activeSlideType == "qr_infaq" || activeSlideType == "qr_finance"
+    val shouldHideOverlayText = isSystemDefaultSlide || isDenseInfoSlide || (activeCustomSlide?.hideOverlayText == true)
+    val shouldHideQrCard = isDenseInfoSlide || (activeCustomSlide?.hideQrCard == true)
+
+    val overlayAlignment = if (settings.overlayPosition == "top") Alignment.TopStart else Alignment.BottomStart
+    val qrAlignment = when (settings.masjidQr.floatingPosition) {
+        "top-left" -> Alignment.TopStart
+        "bottom-left" -> Alignment.BottomStart
+        "top-right" -> Alignment.TopEnd
+        else -> Alignment.BottomEnd
+    }
 
     LaunchedEffect(safeIndex, activeSlide.durationSeconds, deck.size, settings.slideConfig.autoPlay) {
         if (!settings.slideConfig.autoPlay || deck.size <= 1) return@LaunchedEffect
@@ -303,28 +320,44 @@ fun MainSlideContainer(
             }
         }
 
-        // Floating Masjid QR Infaq Badge (Bottom-Right, hidden on full QR system slides)
-        if (settings.masjidQr.enabled && settings.masjidQr.showFloatingOnMain && !isQrSystemSlide) {
+        // Smart Floating Masjid QR Infaq Badge (configurable 4-corner position, auto-hidden on dense slides & per-slide)
+        AnimatedVisibility(
+            visible = settings.masjidQr.enabled && settings.masjidQr.showFloatingOnMain && !shouldHideQrCard,
+            enter = if (isPerformanceMode) EnterTransition.None else fadeIn(tween(350)),
+            exit = if (isPerformanceMode) ExitTransition.None else fadeOut(tween(250)),
+            modifier = Modifier
+                .align(qrAlignment)
+                .padding(20.dp)
+        ) {
             FloatingMasjidQrBadge(
-                masjidQr = settings.masjidQr,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(20.dp)
+                masjidQr = settings.masjidQr
             )
         }
 
-        // Floating Overlay Running Text (hidden on default Greeting & Analog Clock slides, matching Slide/index.tsx)
-        if (!isSystemDefaultSlide) {
-            OverlayRunningText(
-                messages = settings.overlayTextList,
-                visibleDurationSeconds = settings.overlayVisibleDuration,
-                hiddenDurationSeconds = settings.overlayHiddenDuration,
-                speed = settings.overlaySpeed,
-                modifier = Modifier.align(Alignment.BottomStart)
-            )
-        }
+        // Smart Floating Overlay Running Text (single-line marquee, Peek & Clear sync, auto-hidden on dense slides & per-slide)
+        OverlayRunningText(
+            messages = settings.overlayTextList,
+            visibleDurationSeconds = settings.overlayVisibleDuration,
+            hiddenDurationSeconds = settings.overlayHiddenDuration,
+            speed = settings.overlaySpeed,
+            slideTriggerKey = safeIndex,
+            slideClearDelaySeconds = settings.overlaySlideClearSeconds,
+            shouldHide = shouldHideOverlayText,
+            modifier = Modifier.align(overlayAlignment)
+        )
     }
 }
+
+private val DENSE_INFO_SLIDE_TYPES = setOf(
+    "jumat_keuangan",
+    "ramadhan_keuangan",
+    "ramadhan_takjil",
+    "ramadhan_jadwal",
+    "iduladha_qurban",
+    "online_finance",
+    "qr_infaq",
+    "qr_finance"
+)
 
 /**
  * System Greeting Slide ("Ucapan Selamat Datang di Masjid").
@@ -949,7 +982,6 @@ private fun CustomSlideView(
     snapshot: JwsRuntimeSnapshot,
     assetsRootDir: File?
 ) {
-    val palette = LocalJwsTheme.current
     val settings = snapshot.settings
     val brand = settings.brand
 
@@ -1032,38 +1064,6 @@ private fun CustomSlideView(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-        }
-
-        if (slide.title.isNotBlank() || slide.content.isNotBlank()) {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, palette.bgPrimary.copy(alpha = 0.92f))
-                        )
-                    )
-                    .padding(horizontal = 36.dp, vertical = 32.dp)
-            ) {
-                if (slide.title.isNotBlank()) {
-                    Text(
-                        text = slide.title,
-                        color = palette.textPrimary,
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-                if (slide.content.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = slide.content,
-                        color = palette.textSecondary,
-                        fontSize = 20.sp,
-                        lineHeight = 28.sp
-                    )
-                }
-            }
         }
     }
 }

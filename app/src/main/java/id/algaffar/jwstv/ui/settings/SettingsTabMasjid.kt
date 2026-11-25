@@ -231,6 +231,19 @@ fun MasjidQrSettingsTab(
                 )
             }
 
+            if (qr.showFloatingOnMain) {
+                HybridSegmentedRow(
+                    options = listOf(
+                        "top-left" to "Kiri-Atas",
+                        "bottom-left" to "Kiri-Bawah",
+                        "top-right" to "Kanan-Atas",
+                        "bottom-right" to "Kanan-Bawah"
+                    ),
+                    selectedId = qr.floatingPosition,
+                    onSelect = { pos -> actions.onUpdateSettings { it.copy(masjidQr = it.masjidQr.copy(floatingPosition = pos)) } }
+                )
+            }
+
             HybridTextInput(
                 label = "Tautan / Payload QRIS Infaq",
                 value = qr.link,

@@ -781,6 +781,31 @@ private fun SlideAccordionItem(
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "SMART OVERLAY & QR DI SLIDE INI",
+                        color = palette.textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SlideModeToggleChip(
+                            label = "Sembunyikan Overlay Text",
+                            checked = slide.hideOverlayText,
+                            accent = Color(0xFFF97316),
+                            onToggle = { onUpdate(slide.copy(hideOverlayText = !slide.hideOverlayText)) }
+                        )
+                        SlideModeToggleChip(
+                            label = "Sembunyikan Card QR Code",
+                            checked = slide.hideQrCard,
+                            accent = Color(0xFFEC4899),
+                            onToggle = { onUpdate(slide.copy(hideQrCard = !slide.hideQrCard)) }
+                        )
+                    }
                 }
 
                 // Row 3: Type-specific Content Editor

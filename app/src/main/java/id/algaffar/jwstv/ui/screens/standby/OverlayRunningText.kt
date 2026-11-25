@@ -15,6 +15,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +41,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
@@ -47,9 +49,9 @@ import id.algaffar.jwstv.ui.theme.LocalPerformanceMode
 import kotlinx.coroutines.delay
 
 /**
- * Floating Overlay Running Text positioned at the bottom-left corner (`Alignment.BottomStart`)
- * of `MainSlideContainer`. Width and height dynamically wrap/adapt to the active text content.
- * Mirrors `src/components/Screens/OverlayText/OverlayText.tsx` (`variant = "overlay"`).
+ * Smart Floating Overlay Running Text positioned at `Alignment.BottomStart` or `Alignment.TopStart`
+ * of `MainSlideContainer`. Constrained to a sleek single-line horizontal marquee and synchronized
+ * with slide transitions (Peek & Clear) so slides remain clean for a configurable initial window.
  */
 @Composable
 fun OverlayRunningText(
@@ -57,6 +59,9 @@ fun OverlayRunningText(
     visibleDurationSeconds: Int,
     hiddenDurationSeconds: Int,
     speed: Int,
+    slideTriggerKey: Any = 0,
+    slideClearDelaySeconds: Int = 5,
+    shouldHide: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
@@ -67,11 +72,20 @@ fun OverlayRunningText(
 
     if (activeMessages.isEmpty()) return
 
-    var isVisible by remember { mutableStateOf(true) }
+    var isVisible by remember { mutableStateOf(false) }
     val visMs = visibleDurationSeconds.coerceIn(5, 600) * 1000L
     val hidMs = hiddenDurationSeconds.coerceIn(0, 300) * 1000L
+    val clearDelayMs = slideClearDelaySeconds.coerceIn(0, 60) * 1000L
 
-    LaunchedEffect(visMs, hidMs) {
+    LaunchedEffect(slideTriggerKey, shouldHide, visMs, hidMs, clearDelayMs) {
+        if (shouldHide) {
+            isVisible = false
+            return@LaunchedEffect
+        }
+        if (clearDelayMs > 0L) {
+            isVisible = false
+            delay(clearDelayMs)
+        }
         if (hidMs <= 0L) {
             isVisible = true
             return@LaunchedEffect
@@ -121,7 +135,7 @@ fun OverlayRunningText(
         animated
     }
 
-    // Quarter-circle top-right curve, flush flat on left and bottom edges (matches diagram)
+    // Quarter-circle top-right & bottom-right curve, flush flat on left edge
     val overlayShape = RoundedCornerShape(
         topStartPercent = 0,
         bottomStartPercent = 0,
@@ -130,7 +144,7 @@ fun OverlayRunningText(
     )
 
     AnimatedVisibility(
-        visible = isVisible,
+        visible = isVisible && !shouldHide,
         enter = if (isPerformanceMode) EnterTransition.None else slideInHorizontally(tween(450)) { -it } + fadeIn(tween(400)),
         exit = if (isPerformanceMode) ExitTransition.None else slideOutHorizontally(tween(350)) { -it } + fadeOut(tween(300)),
         modifier = modifier
@@ -151,7 +165,7 @@ fun OverlayRunningText(
         ) { messageText ->
             Row(
                 modifier = Modifier
-                    .widthIn(min = 360.dp, max = 1120.dp)
+                    .widthIn(min = 360.dp, max = 1080.dp)
                     .wrapContentWidth()
                     .wrapContentHeight()
                     .shadow(elevation = 12.dp, shape = overlayShape)
@@ -162,25 +176,31 @@ fun OverlayRunningText(
                         color = palette.accentSecondary.copy(alpha = 0.65f),
                         shape = overlayShape
                     )
-                    .padding(start = 28.dp, end = 64.dp, top = 18.dp, bottom = 18.dp),
+                    .padding(start = 28.dp, end = 48.dp, top = 14.dp, bottom = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
                     text = messageText.uppercase(),
                     color = palette.bgPrimary,
-                    fontSize = 28.sp,
+                    fontSize = 26.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    lineHeight = 32.sp,
+                    lineHeight = 30.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip,
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .wrapContentWidth()
-                        .wrapContentHeight()
+                        .basicMarquee(
+                            iterations = Int.MAX_VALUE,
+                            velocity = (speed.coerceIn(20, 150) * 1.1f).dp,
+                            initialDelayMillis = 800
+                        )
                 )
 
                 Box(
                     modifier = Modifier
-                        .size(24.dp)
+                        .size(20.dp)
                         .alpha(dotAlpha)
                         .clip(CircleShape)
                         .background(palette.bgPrimary)

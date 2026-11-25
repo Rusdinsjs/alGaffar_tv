@@ -405,6 +405,8 @@ data class SlideItem(
     val showInRamadhan: Boolean = false,
     val showInIdulFitri: Boolean = false,
     val showInIdulAdha: Boolean = false,
+    val hideOverlayText: Boolean = false,
+    val hideQrCard: Boolean = false,
     val textStyle: SlideTextStyle = SlideTextStyle()
 ) {
     companion object {
@@ -527,6 +529,7 @@ data class MasjidQrSettings(
     val link: String = "",
     val customQrImage: String = "",
     val showFloatingOnMain: Boolean = true,
+    val floatingPosition: String = "bottom-right", // "top-left" | "bottom-left" | "top-right" | "bottom-right"
     val bankName: String = "",
     val nomorRekening: String = "",
     val atasNama: String = ""
@@ -865,6 +868,8 @@ data class AppStateSettings(
     val overlayVisibleDuration: Int = 45, // seconds visible
     val overlayHiddenDuration: Int = 10,  // seconds hidden
     val overlaySpeed: Int = 50,
+    val overlayPosition: String = "bottom", // "bottom" | "top"
+    val overlaySlideClearSeconds: Int = 5,  // seconds slide stays clean before overlay appears
     val mosqueInfoList: List<InfoCardItem> = listOf(
         InfoCardItem(
             id = "info-1",
