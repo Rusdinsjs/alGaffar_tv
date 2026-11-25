@@ -372,7 +372,7 @@ fun SettingsModal(
                     "network" -> RemoteNetworkSettingsTab(actions)
                     "keyboard" -> KeyboardInputSettingsTab(settings, actions)
                     "userManagement" -> UserManagementSettingsTab(settings, actions)
-                    "backup" -> BackupRestoreSettingsTab(actions)
+                    "backup" -> BackupRestoreSettingsTab(settings, actions)
                     "logs" -> LogViewerSettingsTab()
                     "remote_help" -> RemoteHelpSettingsTab()
                 }

@@ -92,6 +92,11 @@ class MainViewModel(
     fun checkOtaUpdate() = engine.checkOtaUpdate()
     fun installOfflineApk(inputStream: InputStream) = engine.installOfflineApk(inputStream)
     fun downloadAudioPack(packId: String) = engine.downloadAudioPack(packId)
+    fun triggerAppRestartNow() = engine.triggerAppRestartNow()
+    fun triggerDeviceRebootNow(): Boolean = engine.triggerDeviceRebootNow()
+    fun setOnBeforeLaunchExternalInstaller(callback: (() -> Unit)?) {
+        engine.onBeforeLaunchExternalInstaller = callback
+    }
 
     fun findPrayerAudioSlot(category: String, slotName: String): Pair<Boolean, String> =
         engine.findPrayerAudioSlot(category, slotName)

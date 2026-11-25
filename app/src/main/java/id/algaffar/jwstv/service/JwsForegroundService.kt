@@ -8,8 +8,10 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import id.algaffar.jwstv.JwsApplication
 import id.algaffar.jwstv.MainActivity
@@ -22,8 +24,12 @@ import id.algaffar.jwstv.MainActivity
  */
 class JwsForegroundService : Service() {
 
+    private var cpuWakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
+
     override fun onCreate() {
         super.onCreate()
+        acquireKioskLocks()
         ensureNotificationChannel()
         val notification = buildOngoingNotification()
         try {
@@ -47,7 +53,50 @@ class JwsForegroundService : Service() {
         return START_STICKY
     }
 
+    override fun onDestroy() {
+        releaseKioskLocks()
+        super.onDestroy()
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
+
+    @Suppress("DEPRECATION")
+    private fun acquireKioskLocks() {
+        runCatching {
+            val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            if (pm != null && cpuWakeLock == null) {
+                cpuWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "JwsTv::KioskCpuWakeLock").apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+            }
+        }
+        runCatching {
+            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            if (wm != null && wifiLock == null) {
+                val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+                } else {
+                    WifiManager.WIFI_MODE_FULL_HIGH_PERF
+                }
+                wifiLock = wm.createWifiLock(mode, "JwsTv::KioskWifiLock").apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+            }
+        }
+    }
+
+    private fun releaseKioskLocks() {
+        runCatching {
+            cpuWakeLock?.let { if (it.isHeld) it.release() }
+            cpuWakeLock = null
+        }
+        runCatching {
+            wifiLock?.let { if (it.isHeld) it.release() }
+            wifiLock = null
+        }
+    }
 
     private fun ensureNotificationChannel() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return

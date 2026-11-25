@@ -977,6 +977,15 @@ data class MediaDisplaySettings(
     val sholatTarawihWitirImage: String = ""
 )
 
+@Serializable
+data class KioskMaintenanceSettings(
+    val autoRestartMode: String = "off", // "off" | "daily" | "weekly"
+    val autoRestartAction: String = "app", // "app" | "reboot_device"
+    val autoRestartHour: Int = 3,
+    val autoRestartMinute: Int = 0,
+    val autoRestartDayOfWeek: Int = 1 // 1 = Senin .. 7 = Minggu (ISO-8601)
+)
+
 // ==================== ROOT SETTINGS OBJECT ====================
 
 @Serializable
@@ -1006,6 +1015,7 @@ data class AppStateSettings(
     val themeSettings: ThemeSettings = ThemeSettings(),
     val infoSettings: InfoDisplaySettings = InfoDisplaySettings(),
     val media: MediaDisplaySettings = MediaDisplaySettings(),
+    val kioskMaintenance: KioskMaintenanceSettings = KioskMaintenanceSettings(),
     val globalVolume: Float = 1.0f,
     val performanceMode: Boolean = true,
     val virtualKeyboardMode: String = "auto", // "auto" | "enabled" | "disabled"

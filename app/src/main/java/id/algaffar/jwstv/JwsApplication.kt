@@ -1,8 +1,12 @@
 package id.algaffar.jwstv
 
+import android.app.AlarmManager
 import android.app.Application
+import android.app.PendingIntent
 import android.content.ComponentCallbacks2
 import android.content.Context
+import android.content.Intent
+import android.os.Process
 import coil.Coil
 import coil.ImageLoader
 import coil.ImageLoaderFactory
@@ -22,7 +26,11 @@ import id.algaffar.jwstv.domain.engine.PrayerTimeCalculator
 import id.algaffar.jwstv.runtime.JwsRuntimeEngine
 import okhttp3.OkHttpClient
 import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.time.Instant
 import java.util.concurrent.TimeUnit
+import kotlin.system.exitProcess
 
 /**
  * Shared singleton [OkHttpClient] pool to prevent creating duplicate thread pools
@@ -95,8 +103,43 @@ class JwsApplication : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        installCrashRecoveryHandler()
         container = AppContainer(this)
         container.runtimeEngine.ensureStarted()
+    }
+
+    private fun installCrashRecoveryHandler() {
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            runCatching {
+                val sw = StringWriter()
+                throwable.printStackTrace(PrintWriter(sw))
+                val crashFile = File(filesDir, "last_crash.txt")
+                crashFile.writeText(
+                    "Time: ${Instant.now()}\nThread: ${thread.name}\n\n$sw",
+                    Charsets.UTF_8
+                )
+
+                val markerFile = File(filesDir, ".last_crash_restart_ms")
+                val nowMs = System.currentTimeMillis()
+                val prevRestartMs = if (markerFile.exists()) {
+                    markerFile.readText(Charsets.UTF_8).trim().toLongOrNull() ?: 0L
+                } else {
+                    0L
+                }
+                val elapsed = nowMs - prevRestartMs
+                // Guard against tight crash loops: if crashed within 15s of last restart, delay 15s
+                val delayMs = if (prevRestartMs > 0L && elapsed in 0L..15_000L) 15_000L else 2_000L
+                markerFile.writeText(nowMs.toString(), Charsets.UTF_8)
+
+                scheduleAppRestart(applicationContext, delayMs)
+            }.onFailure {
+                defaultHandler?.uncaughtException(thread, throwable)
+            }
+
+            Process.killProcess(Process.myPid())
+            exitProcess(2)
+        }
     }
 
     override fun newImageLoader(): ImageLoader {
@@ -154,6 +197,38 @@ class JwsApplication : Application(), ImageLoaderFactory {
             }
         } else {
             AppLogger.debug("MEMORY", "Trim cache gambar dijalankan ($reason)")
+        }
+    }
+
+    companion object {
+        private const val RESTART_REQUEST_CODE = 14210
+
+        fun scheduleAppRestart(context: Context, delayMs: Long = 1_500L) {
+            val launchIntent = Intent(context, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                RESTART_REQUEST_CODE,
+                launchIntent,
+                PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            if (alarmManager != null) {
+                alarmManager.set(
+                    AlarmManager.RTC_WAKEUP,
+                    System.currentTimeMillis() + delayMs,
+                    pendingIntent
+                )
+            } else {
+                context.startActivity(launchIntent)
+            }
+        }
+
+        fun restartAppNow(context: Context, delayMs: Long = 1_000L) {
+            runCatching { scheduleAppRestart(context, delayMs) }
+            Process.killProcess(Process.myPid())
+            exitProcess(0)
         }
     }
 }

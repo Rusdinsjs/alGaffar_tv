@@ -101,6 +101,7 @@ class MainActivity : ComponentActivity() {
     private var isSettingsModalOpen by mutableStateOf(false)
     private var activeFilePickerRequest by mutableStateOf<TvFilePickerRequest?>(null)
     private var hasStoragePermission by mutableStateOf(false)
+    private var isKioskMaintenanceUnlocked by mutableStateOf(false)
     private var livePhysicalKeyboardDetected by mutableStateOf(false)
     private var consumeNextDpadUpRelease = false
     private var isMouseCursorHidden by mutableStateOf(true)
@@ -395,7 +396,14 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         applyImmersiveKioskMode()
-        JwsDeviceAdminReceiver.startKioskLockTaskIfDeviceOwner(this)
+        if (!isKioskMaintenanceUnlocked) {
+            JwsDeviceAdminReceiver.startKioskLockTaskIfDeviceOwner(this)
+        }
+    }
+
+    override fun onDestroy() {
+        viewModel.setOnBeforeLaunchExternalInstaller(null)
+        super.onDestroy()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -412,6 +420,10 @@ class MainActivity : ComponentActivity() {
         applyImmersiveKioskMode()
         hasStoragePermission = checkStorageReadPermission()
         JwsForegroundService.startServiceSafely(this)
+        viewModel.setOnBeforeLaunchExternalInstaller {
+            isKioskMaintenanceUnlocked = true
+            JwsDeviceAdminReceiver.stopKioskLockTask(this)
+        }
 
         setContent {
             MaterialTheme {
@@ -852,7 +864,41 @@ class MainActivity : ComponentActivity() {
                                                 systemLauncherInvoke = {}
                                             )
                                         },
-                                        onDownloadAudioPack = { packId -> viewModel.downloadAudioPack(packId) }
+                                        onDownloadAudioPack = { packId -> viewModel.downloadAudioPack(packId) },
+                                        isDeviceOwner = JwsDeviceAdminReceiver.isDeviceOwner(this@MainActivity),
+                                        isKioskMaintenanceUnlocked = isKioskMaintenanceUnlocked,
+                                        onToggleKioskMaintenance = {
+                                            if (isKioskMaintenanceUnlocked) {
+                                                isKioskMaintenanceUnlocked = false
+                                                JwsDeviceAdminReceiver.startKioskLockTaskIfDeviceOwner(this@MainActivity)
+                                                viewModel.postStatusMessage("Mode Kiosk kembali dikunci penuh.")
+                                            } else {
+                                                isKioskMaintenanceUnlocked = true
+                                                JwsDeviceAdminReceiver.stopKioskLockTask(this@MainActivity)
+                                                viewModel.postStatusMessage("Mode Kiosk dibuka sementara untuk maintenance. Tekan 'Kunci Kembali' setelah selesai.")
+                                            }
+                                        },
+                                        onOpenAndroidSettings = {
+                                            isKioskMaintenanceUnlocked = true
+                                            JwsDeviceAdminReceiver.stopKioskLockTask(this@MainActivity)
+                                            val sysIntent = Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            runCatching { startActivity(sysIntent) }.onFailure { err ->
+                                                viewModel.postStatusMessage("Gagal membuka Setelan TV Box: ${err.message}")
+                                            }
+                                        },
+                                        onOpenWifiSettings = {
+                                            isKioskMaintenanceUnlocked = true
+                                            JwsDeviceAdminReceiver.stopKioskLockTask(this@MainActivity)
+                                            val wifiIntent = Intent(android.provider.Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            val sysIntent = Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            runCatching { startActivity(wifiIntent) }.onFailure {
+                                                runCatching { startActivity(sysIntent) }.onFailure { err ->
+                                                    viewModel.postStatusMessage("Gagal membuka Pengaturan Wi-Fi: ${err.message}")
+                                                }
+                                            }
+                                        },
+                                        onTriggerAppRestartNow = { viewModel.triggerAppRestartNow() },
+                                        onTriggerDeviceRebootNow = { viewModel.triggerDeviceRebootNow() }
                                     ),
                                     onClose = {
                                         viewModel.stopAudioPreview()

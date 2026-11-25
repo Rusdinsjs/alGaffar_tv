@@ -137,7 +137,14 @@ data class SettingsActions(
     val onReopenOnboarding: () -> Unit = {},
     val onCheckOtaUpdate: () -> Unit = {},
     val onInstallOtaApkFromUsb: () -> Unit = {},
-    val onDownloadAudioPack: (packId: String) -> Unit = {}
+    val onDownloadAudioPack: (packId: String) -> Unit = {},
+    val isDeviceOwner: Boolean = false,
+    val isKioskMaintenanceUnlocked: Boolean = false,
+    val onToggleKioskMaintenance: () -> Unit = {},
+    val onOpenAndroidSettings: () -> Unit = {},
+    val onOpenWifiSettings: () -> Unit = {},
+    val onTriggerAppRestartNow: () -> Unit = {},
+    val onTriggerDeviceRebootNow: () -> Unit = {}
 )
 
 @Composable

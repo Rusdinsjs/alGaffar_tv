@@ -164,6 +164,11 @@ class JwsRuntimeEngine(
 
     private var lastLoggedState: AppState? = null
     private var lastRamadhanAutoSyncDayKey: String? = null
+    private var lastAutoRestartCheckDayKey: String? = null
+    private val engineBootElapsedMs: Long = android.os.SystemClock.elapsedRealtime()
+
+    @Volatile
+    var onBeforeLaunchExternalInstaller: (() -> Unit)? = null
 
     fun ensureStarted() {
         if (!started.compareAndSet(false, true)) return
@@ -219,6 +224,7 @@ class JwsRuntimeEngine(
                     switchSettings = snap.settings.switchSettings,
                     schedule = snap.schedule
                 )
+                evaluateScheduledKioskMaintenance(snap)
                 delay(1_000L)
             }
         }
@@ -230,6 +236,65 @@ class JwsRuntimeEngine(
                 checkAndRecoverMemoryIfNeeded()
             }
         }
+    }
+
+    private fun evaluateScheduledKioskMaintenance(snap: JwsRuntimeSnapshot) {
+        val ctx = appContext ?: return
+        val cfg = snap.settings.kioskMaintenance
+        if (cfg.autoRestartMode == "off") return
+        if (snap.tickResult.state != AppState.STANDBY || snap.tickResult.isManualOverride) return
+        // Avoid restarting within the first 90s of process start
+        if (android.os.SystemClock.elapsedRealtime() - engineBootElapsedMs < 90_000L) return
+
+        val now = snap.now
+        if (cfg.autoRestartMode == "weekly" && now.dayOfWeek.value != cfg.autoRestartDayOfWeek.coerceIn(1, 7)) {
+            return
+        }
+        if (now.hour != cfg.autoRestartHour.coerceIn(0, 23) ||
+            now.minute != cfg.autoRestartMinute.coerceIn(0, 59)
+        ) {
+            return
+        }
+
+        val todayKey = now.toLocalDate().toString()
+        if (lastAutoRestartCheckDayKey == todayKey) return
+        val markerFile = File(ctx.filesDir, ".last_auto_restart_date")
+        val persistedDay = runCatching {
+            if (markerFile.exists()) markerFile.readText(Charsets.UTF_8).trim() else ""
+        }.getOrDefault("")
+        if (persistedDay == todayKey) {
+            lastAutoRestartCheckDayKey = todayKey
+            return
+        }
+
+        lastAutoRestartCheckDayKey = todayKey
+        runCatching { markerFile.writeText(todayKey, Charsets.UTF_8) }
+
+        if (cfg.autoRestartAction == "reboot_device" &&
+            id.algaffar.jwstv.service.JwsDeviceAdminReceiver.isDeviceOwner(ctx)
+        ) {
+            AppLogger.warn("KIOSK", "Menjalankan Reboot OS TV Box terjadwal ($todayKey ${now.hour}:${now.minute})")
+            id.algaffar.jwstv.service.JwsDeviceAdminReceiver.rebootDeviceIfOwner(ctx)
+        } else {
+            AppLogger.warn("KIOSK", "Menjalankan Restart Aplikasi terjadwal ($todayKey ${now.hour}:${now.minute})")
+            id.algaffar.jwstv.JwsApplication.restartAppNow(ctx, 1_500L)
+        }
+    }
+
+    fun triggerAppRestartNow() {
+        val ctx = appContext ?: return
+        AppLogger.warn("KIOSK", "Restart aplikasi manual dipicu dari Pengaturan")
+        id.algaffar.jwstv.JwsApplication.restartAppNow(ctx, 800L)
+    }
+
+    fun triggerDeviceRebootNow(): Boolean {
+        val ctx = appContext ?: return false
+        AppLogger.warn("KIOSK", "Reboot OS TV Box manual dipicu dari Pengaturan")
+        val ok = id.algaffar.jwstv.service.JwsDeviceAdminReceiver.rebootDeviceIfOwner(ctx)
+        if (!ok) {
+            _statusBannerMessage.value = "Reboot OS membutuhkan status Device Owner (dpm set-device-owner)."
+        }
+        return ok
     }
 
     private fun currentEffectiveNow(): ZonedDateTime {
@@ -347,7 +412,7 @@ class JwsRuntimeEngine(
                     }
                     dlRes.onSuccess { apkFile ->
                         _statusBannerMessage.value = "APK terverifikasi SHA-256! Membuka installer pembaruan..."
-                        otaUpdateManager.launchApkInstaller(apkFile).onFailure { err ->
+                        otaUpdateManager.launchApkInstaller(apkFile) { onBeforeLaunchExternalInstaller?.invoke() }.onFailure { err ->
                             _statusBannerMessage.value = "Gagal membuka installer APK: ${err.message}"
                         }
                     }.onFailure { err ->
@@ -368,7 +433,7 @@ class JwsRuntimeEngine(
             val res = inputStream.use { stream -> otaUpdateManager.stageOfflineApk(stream, targetDir) }
             res.onSuccess { apkFile ->
                 withContext(Dispatchers.Main) {
-                    otaUpdateManager.launchApkInstaller(apkFile).onSuccess {
+                    otaUpdateManager.launchApkInstaller(apkFile) { onBeforeLaunchExternalInstaller?.invoke() }.onSuccess {
                         _statusBannerMessage.value = "Installer pembaruan APK dibuka. Ikuti konfirmasi di layar TV."
                     }.onFailure { err ->
                         _statusBannerMessage.value = "Gagal membuka installer APK: ${err.message}"
@@ -1000,7 +1065,7 @@ class JwsRuntimeEngine(
                 val targetDir = File(appContext?.cacheDir ?: assetsRootDir.parentFile, "ota_updates")
                 val apkFile = otaUpdateManager.stageOfflineApk(inputStream, targetDir).getOrThrow()
                 engineScope.launch(Dispatchers.Main) {
-                    otaUpdateManager.launchApkInstaller(apkFile)
+                    otaUpdateManager.launchApkInstaller(apkFile) { onBeforeLaunchExternalInstaller?.invoke() }
                 }
                 AppLogger.info("OTA", "APK pembaruan offline diterima via Remote PWA: ${apkFile.name}")
                 return@runCatching "APK pembaruan berhasil diunggah! Konfirmasi instalasi di layar TV."

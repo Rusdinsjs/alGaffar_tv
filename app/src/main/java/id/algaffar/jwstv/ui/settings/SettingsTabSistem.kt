@@ -299,7 +299,10 @@ fun UserManagementSettingsTab(
 }
 
 @Composable
-fun BackupRestoreSettingsTab(actions: SettingsActions) {
+fun BackupRestoreSettingsTab(
+    settings: AppStateSettings,
+    actions: SettingsActions
+) {
     val palette = LocalJwsTheme.current
     val health = actions.storageHealth
     val statusColor = if (health.isLowStorage) Color(0xFFEF4444) else Color(0xFF10B981)
@@ -471,6 +474,144 @@ fun BackupRestoreSettingsTab(actions: SettingsActions) {
             HybridInfoBanner(
                 text = "Versi terpasang: Al-Gaffar TV v${id.algaffar.jwstv.BuildConfig.VERSION_NAME} (Build ${id.algaffar.jwstv.BuildConfig.VERSION_CODE}) • Device ID: ${actions.deviceCode.ifBlank { "-" }}. Untuk STB tanpa internet, Anda juga dapat mengunggah file .apk melalui Remote PWA di HP.",
                 accentColor = Color(0xFF38BDF8)
+            )
+        }
+
+        // 5. Mode Kiosk 24/7, Maintenance & Jadwal Restart Otomatis
+        val kioskCfg = settings.kioskMaintenance
+        val kioskStatusLabel = when {
+            !actions.isDeviceOwner -> "Mode Launcher / Non-Device Owner"
+            actions.isKioskMaintenanceUnlocked -> "TERBUKA SEMENTARA (Maintenance)"
+            else -> "TERKUNCI PENUH (Device Owner Kiosk)"
+        }
+        HybridSectionCard(
+            title = "Mode Kiosk 24/7, Maintenance & Jadwal Restart",
+            subtitle = "Status Kiosk: $kioskStatusLabel — Keluar sementara untuk atur Wi-Fi STB atau jadwalkan restart rutin agar RAM selalu segar"
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (actions.isDeviceOwner) {
+                    HybridButton(
+                        label = if (actions.isKioskMaintenanceUnlocked) {
+                            "Kunci Kembali Mode Kiosk"
+                        } else {
+                            "Buka Kunci Kiosk (Maintenance)"
+                        },
+                        isPrimary = actions.isKioskMaintenanceUnlocked,
+                        isDanger = !actions.isKioskMaintenanceUnlocked,
+                        onClick = actions.onToggleKioskMaintenance
+                    )
+                }
+                HybridButton(
+                    label = "Setelan TV Box (Android TV)",
+                    isPrimary = true,
+                    onClick = actions.onOpenAndroidSettings
+                )
+                HybridButton(
+                    label = "Pengaturan Wi-Fi",
+                    icon = Icons.Default.Wifi,
+                    onClick = actions.onOpenWifiSettings
+                )
+                HybridButton(
+                    label = "Restart Aplikasi Sekarang",
+                    icon = Icons.Default.Refresh,
+                    onClick = actions.onTriggerAppRestartNow
+                )
+                if (actions.isDeviceOwner) {
+                    HybridButton(
+                        label = "Reboot TV Box Sekarang",
+                        icon = Icons.Default.Refresh,
+                        isDanger = true,
+                        onClick = actions.onTriggerDeviceRebootNow
+                    )
+                }
+            }
+
+            Text(
+                text = "JADWAL RESTART OTOMATIS (SAAT STANDBY)",
+                color = palette.textSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+            HybridSegmentedRow(
+                options = listOf(
+                    "off" to "Nonaktif",
+                    "daily" to "Setiap Hari",
+                    "weekly" to "Mingguan"
+                ),
+                selectedId = kioskCfg.autoRestartMode,
+                onSelect = { mode ->
+                    actions.onUpdateSettings { prev ->
+                        prev.copy(kioskMaintenance = prev.kioskMaintenance.copy(autoRestartMode = mode))
+                    }
+                }
+            )
+
+            if (kioskCfg.autoRestartMode != "off") {
+                HybridSegmentedRow(
+                    options = listOf(
+                        "app" to "Restart Aplikasi (Aman untuk semua TV Box)",
+                        "reboot_device" to "Reboot OS TV Box (Khusus Device Owner)"
+                    ),
+                    selectedId = kioskCfg.autoRestartAction,
+                    onSelect = { act ->
+                        actions.onUpdateSettings { prev ->
+                            prev.copy(kioskMaintenance = prev.kioskMaintenance.copy(autoRestartAction = act))
+                        }
+                    }
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    HybridNumberStepper(
+                        label = "Jam Restart (WIB/Lokal)",
+                        value = kioskCfg.autoRestartHour,
+                        min = 0,
+                        max = 23,
+                        unit = "jam",
+                        onValueChange = { h ->
+                            actions.onUpdateSettings { prev ->
+                                prev.copy(kioskMaintenance = prev.kioskMaintenance.copy(autoRestartHour = h))
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    HybridNumberStepper(
+                        label = "Menit Restart",
+                        value = kioskCfg.autoRestartMinute,
+                        min = 0,
+                        max = 59,
+                        step = 5,
+                        unit = "menit",
+                        onValueChange = { m ->
+                            actions.onUpdateSettings { prev ->
+                                prev.copy(kioskMaintenance = prev.kioskMaintenance.copy(autoRestartMinute = m))
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (kioskCfg.autoRestartMode == "weekly") {
+                        HybridNumberStepper(
+                            label = "Hari (1=Senin .. 7=Minggu)",
+                            value = kioskCfg.autoRestartDayOfWeek,
+                            min = 1,
+                            max = 7,
+                            unit = "hari",
+                            onValueChange = { d ->
+                                actions.onUpdateSettings { prev ->
+                                    prev.copy(kioskMaintenance = prev.kioskMaintenance.copy(autoRestartDayOfWeek = d))
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            HybridInfoBanner(
+                text = "Restart terjadwal hanya dieksekusi saat aplikasi berada di mode Standby (tidak pernah memotong Adzan, Iqomah, Sholat, Khutbah, atau Tarawih). Jika terjadi crash mendadak, aplikasi otomatis pulih dalam ~2 detik.",
+                accentColor = Color(0xFF10B981)
             )
         }
     }

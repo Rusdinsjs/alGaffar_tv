@@ -70,6 +70,19 @@ android {
             excludes += "/META-INF/io.netty.versions.properties"
         }
     }
+
+    applicationVariants.all {
+        val variant = this
+        variant.outputs
+            .map { it as com.android.build.gradle.internal.api.BaseVariantOutputImpl }
+            .forEach { output ->
+                output.outputFileName = if (variant.buildType.name == "release") {
+                    "alGaffar-tv-jws.apk"
+                } else {
+                    "alGaffar-tv-jws-${variant.buildType.name}.apk"
+                }
+            }
+    }
 }
 
 dependencies {

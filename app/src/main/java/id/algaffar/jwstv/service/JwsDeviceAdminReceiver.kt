@@ -53,5 +53,22 @@ class JwsDeviceAdminReceiver : DeviceAdminReceiver() {
                 activity.startLockTask()
             }
         }
+
+        fun stopKioskLockTask(activity: Activity): Boolean {
+            return runCatching {
+                activity.stopLockTask()
+                true
+            }.getOrDefault(false)
+        }
+
+        fun rebootDeviceIfOwner(context: Context): Boolean {
+            if (!isDeviceOwner(context)) return false
+            val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
+                ?: return false
+            return runCatching {
+                dpm.reboot(componentName(context))
+                true
+            }.getOrDefault(false)
+        }
     }
 }
