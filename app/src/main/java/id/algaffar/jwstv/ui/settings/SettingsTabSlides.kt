@@ -1170,28 +1170,15 @@ private fun SlideAccordionItem(
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    HybridTextInput(
-                        label = "Judul Slide",
-                        value = slide.title,
-                        placeholder = meta.label,
-                        onValueChange = { onUpdate(slide.copy(title = it)) },
-                        modifier = Modifier.weight(1.2f)
-                    )
-                    HybridNumberStepper(
-                        label = "Durasi Tampil",
-                        value = slide.duration,
-                        min = 4,
-                        max = 120,
-                        unit = "dtk",
-                        onValueChange = { onUpdate(slide.copy(duration = it)) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+                HybridNumberStepper(
+                    label = "Durasi Tampil",
+                    value = slide.duration,
+                    min = 4,
+                    max = 120,
+                    unit = "dtk",
+                    onValueChange = { onUpdate(slide.copy(duration = it)) },
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 when (slide.type) {
                     "welcome" -> {
@@ -1249,12 +1236,6 @@ private fun SlideAccordionItem(
                                     icon = Icons.Default.Upload,
                                     isPrimary = true,
                                     onClick = onReplaceImage
-                                )
-                                HybridTextInput(
-                                    label = "Keterangan Bawah Gambar (Opsional)",
-                                    value = slide.content,
-                                    placeholder = "Kosongkan jika poster sudah berisi teks lengkap",
-                                    onValueChange = { onUpdate(slide.copy(content = it)) }
                                 )
                             }
                         }

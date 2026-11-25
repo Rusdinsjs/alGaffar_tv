@@ -181,6 +181,7 @@ fun GroupedSlideshowPlayer(
     assetsRootDir: File?,
     isExpanded: Boolean,
     wrapSystemSlideWithHeader: Boolean = false,
+    hideOverlayAndQr: Boolean = false,
     onActiveGroupChanged: ((SlideshowGroup) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -275,14 +276,14 @@ fun GroupedSlideshowPlayer(
             assetsRootDir = assetsRootDir,
             groupTotalDurationMs = totalGroupDurationMs,
             groupTurnKey = groupTurnKey,
-            visible = activeGroup.showQrCard,
+            visible = activeGroup.showQrCard && !hideOverlayAndQr,
             isFullscreen = isExpanded,
             modifier = Modifier.align(qrAlignment)
         )
 
         // Static Floating Overlay (no running text, original accent pill style, positioned at group's chosen corner)
         StaticFloatingOverlayBanner(
-            overlay = currentOverlay,
+            overlay = if (hideOverlayAndQr) null else currentOverlay,
             position = activeGroup.normalizedOverlayPosition,
             isFullscreen = isExpanded,
             modifier = Modifier.align(overlayAlignment)

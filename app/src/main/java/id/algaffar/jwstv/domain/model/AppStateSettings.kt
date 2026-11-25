@@ -691,6 +691,7 @@ data class OnlineFinanceSettings(
     val atasNama: String = "",
     val refreshIntervalMinutes: Int = 15,
     val showInMainSlide: Boolean = false,
+    val showFloatingOnMain: Boolean = true,
     val slideDuration: Int = 15
 )
 

@@ -49,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -66,6 +67,34 @@ import id.algaffar.jwstv.ui.theme.LocalJwsTheme
 import id.algaffar.jwstv.ui.theme.LocalPerformanceMode
 import kotlinx.coroutines.delay
 import java.io.File
+import kotlin.math.max
+import kotlin.math.min
+
+/**
+ * Computes WCAG contrast ratio between two opaque colors.
+ */
+private fun contrastRatio(c1: Color, c2: Color): Float {
+    val l1 = c1.luminance()
+    val l2 = c2.luminance()
+    return (max(l1, l2) + 0.05f) / (min(l1, l2) + 0.05f)
+}
+
+/**
+ * Picks [preferred] when it already achieves WCAG AA (>= 4.5:1) contrast against [background];
+ * otherwise selects the highest-contrast candidate so text remains legible across all themes.
+ */
+private fun contrastTextColor(
+    background: Color,
+    preferred: Color,
+    fallbackAlt: Color
+): Color {
+    val opaqueBg = background.copy(alpha = 1f)
+    if (contrastRatio(opaqueBg, preferred.copy(alpha = 1f)) >= 4.5f) {
+        return preferred
+    }
+    val candidates = listOf(preferred, fallbackAlt, Color(0xFF0F172A), Color.White)
+    return candidates.maxBy { contrastRatio(opaqueBg, it.copy(alpha = 1f)) }
+}
 
 /**
  * Maps corner position key (`top-left`, `bottom-left`, `top-right`, `bottom-right`)
@@ -113,20 +142,20 @@ fun StaticFloatingOverlayBanner(
         animated
     }
 
-    // Flush flat on the outer edge (left or right), full rounded on the inner end — matching the original Overlay UI
+    // Flush flat on the outer edge (left or right), rounded on the inner end — capped at 40.dp so 3+ line overlays stay clean
     val overlayShape = if (isRightSide) {
         RoundedCornerShape(
-            topStartPercent = 100,
-            bottomStartPercent = 100,
-            topEndPercent = 0,
-            bottomEndPercent = 0
+            topStart = if (isFullscreen) 140.dp else 80.dp,
+            bottomStart = if (isFullscreen) 140.dp else 80.dp,
+            topEnd = 0.dp,
+            bottomEnd = 0.dp
         )
     } else {
         RoundedCornerShape(
-            topStartPercent = 0,
-            bottomStartPercent = 0,
-            topEndPercent = 100,
-            bottomEndPercent = 100
+            topStart = 0.dp,
+            bottomStart = 0.dp,
+            topEnd = if (isFullscreen) 140.dp else 80.dp,
+            bottomEnd = if (isFullscreen) 140.dp else 80.dp
         )
     }
 
@@ -162,7 +191,7 @@ fun StaticFloatingOverlayBanner(
                 modifier = Modifier
                     .widthIn(
                         min = 360.dp,
-                        max = if (isFullscreen) 1200.dp else 940.dp
+                        max = if (isFullscreen) 1600.dp else 1140.dp
                     )
                     .wrapContentWidth()
                     .wrapContentHeight()
@@ -175,34 +204,39 @@ fun StaticFloatingOverlayBanner(
                         shape = overlayShape
                     )
                     .padding(
-                        start = if (isRightSide) 48.dp else 28.dp,
-                        end = if (isRightSide) 28.dp else 48.dp,
+                        start = if (isRightSide) 30.dp else 28.dp,
+                        end = if (isRightSide) 28.dp else 30.dp,
                         top = 14.dp,
                         bottom = 14.dp
                     ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                val overlayTextColor = contrastTextColor(
+                    background = palette.accent,
+                    preferred = palette.bgPrimary,
+                    fallbackAlt = palette.textPrimary
+                )
+
                 if (isRightSide) {
                     Box(
                         modifier = Modifier
                             .size(20.dp)
                             .alpha(dotAlpha)
                             .clip(CircleShape)
-                            .background(palette.bgPrimary)
+                            .background(overlayTextColor)
                     )
                 }
 
                 Text(
                     text = textToDisplay.uppercase(),
-                    color = palette.bgPrimary,
-                    fontSize = if (isFullscreen) 28.sp else 26.sp,
+                    color = overlayTextColor,
+                    fontSize = if (isFullscreen) 42.sp else 32.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    lineHeight = if (isFullscreen) 34.sp else 30.sp,
+                    lineHeight = if (isFullscreen) 46.sp else 36.sp,
                     textAlign = if (isRightSide) TextAlign.End else TextAlign.Start,
-                    maxLines = 2,
+                    maxLines = Int.MAX_VALUE,
                     softWrap = true,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
 
@@ -212,7 +246,7 @@ fun StaticFloatingOverlayBanner(
                             .size(20.dp)
                             .alpha(dotAlpha)
                             .clip(CircleShape)
-                            .background(palette.bgPrimary)
+                            .background(overlayTextColor)
                     )
                 }
             }
@@ -251,7 +285,7 @@ fun FloatingRotatingQrCard(
 
     val cards = remember(masjidQr, onlineFinance, brandName) {
         buildList {
-            if (masjidQr.enabled) {
+            if (masjidQr.enabled && masjidQr.showFloatingOnMain) {
                 val bankSummary = listOf(masjidQr.bankName, masjidQr.nomorRekening)
                     .filter { it.isNotBlank() }
                     .joinToString(" • ")
@@ -267,7 +301,7 @@ fun FloatingRotatingQrCard(
                     )
                 )
             }
-            if (onlineFinance.enabled) {
+            if (onlineFinance.enabled && onlineFinance.showFloatingOnMain) {
                 val financePayload = onlineFinance.reportUrl.ifBlank { onlineFinance.sheetUrl }
                     .ifBlank { masjidQr.link }
                     .ifBlank { "https://masjidalgaffar.id/keuangan" }
@@ -325,17 +359,18 @@ fun FloatingRotatingQrCard(
                     if (resolvedCustomQr != null) null else generateQrBitmap(card.qrPayload, 240)
                 }
                 val accentColor = if (card.isFinance) palette.accent else palette.accentSecondary
-                val qrBoxSize = if (isFullscreen) 92.dp else 78.dp
+                val qrBoxSize = if (isFullscreen) 104.dp else 88.dp
 
-                Row(
+                Column(
                     modifier = Modifier
+                        .width(if (isFullscreen) 168.dp else 144.dp)
                         .shadow(elevation = 14.dp, shape = RoundedCornerShape(18.dp))
                         .clip(RoundedCornerShape(18.dp))
                         .background(palette.bgPrimary.copy(alpha = 0.93f))
                         .border(2.dp, accentColor, RoundedCornerShape(18.dp))
                         .padding(if (isFullscreen) 14.dp else 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(if (isFullscreen) 10.dp else 8.dp)
                 ) {
                     Box(
                         modifier = Modifier
@@ -378,59 +413,22 @@ fun FloatingRotatingQrCard(
                         }
                     }
 
-                    Column(
-                        modifier = Modifier.width(if (isFullscreen) 205.dp else 178.dp),
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = card.badgeTitle,
-                                color = accentColor,
-                                fontSize = if (isFullscreen) 13.sp else 12.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 0.6.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            if (cards.size > 1) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    cards.indices.forEach { dotIdx ->
-                                        Box(
-                                            modifier = Modifier
-                                                .size(if (dotIdx == activeCardIdx % cards.size) 7.dp else 5.dp)
-                                                .clip(CircleShape)
-                                                .background(
-                                                    if (dotIdx == activeCardIdx % cards.size) accentColor
-                                                    else palette.textSecondary.copy(alpha = 0.35f)
-                                                )
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                    val cardTextColor = contrastTextColor(
+                        background = palette.bgPrimary,
+                        preferred = palette.textPrimary,
+                        fallbackAlt = palette.accent
+                    )
 
-                        Text(
-                            text = card.label,
-                            color = palette.textPrimary,
-                            fontSize = if (isFullscreen) 15.sp else 13.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(1.dp))
-                        Text(
-                            text = card.subtitle,
-                            color = palette.textSecondary,
-                            fontSize = if (isFullscreen) 12.sp else 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = card.label,
+                        color = cardTextColor,
+                        fontSize = if (isFullscreen) 15.sp else 13.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        lineHeight = if (isFullscreen) 19.sp else 17.sp,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }

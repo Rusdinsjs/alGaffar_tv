@@ -1360,25 +1360,187 @@ class JwsRuntimeEngine(
                     }
                 }
 
-                "update_prayer_iqomah" -> {
+                "update_prayer_iqomah", "update_prayer_stage" -> {
                     val prayer = payload.stringArg("prayer").orEmpty().lowercase()
+                    val tartil = payload.intArg("tartilDuration")?.coerceIn(5, 60)
+                    val adzan = payload.intArg("adzanDuration")?.coerceIn(1, 15)
                     val iqomah = payload.intArg("iqomahDuration")?.coerceIn(1, 60)
                     val sholat = payload.intArg("sholatDuration")?.coerceIn(5, 60)
-                    fun applyDurations(cfg: PrayerStageConfig): PrayerStageConfig = cfg.copy(
+                    val imam = payload.rawStringArg("imam")
+                    val muadzin = payload.rawStringArg("muadzin")
+                    val adzanTagline = payload.rawStringArg("adzanTagline")
+                    val adzanMessage = payload.rawStringArg("adzanMessage")
+                    val sholatMessage = payload.rawStringArg("sholatMessage")
+                    val correction = payload.intArg("correction")?.coerceIn(-15, 15)
+                    fun applyStage(cfg: PrayerStageConfig): PrayerStageConfig = cfg.copy(
+                        tartilDuration = tartil ?: cfg.tartilDuration,
+                        adzanDuration = adzan ?: cfg.adzanDuration,
                         iqomahDuration = iqomah ?: cfg.iqomahDuration,
-                        sholatDuration = sholat ?: cfg.sholatDuration
+                        sholatDuration = sholat ?: cfg.sholatDuration,
+                        imam = imam ?: cfg.imam,
+                        muadzin = muadzin ?: cfg.muadzin,
+                        adzanTagline = adzanTagline ?: cfg.adzanTagline,
+                        adzanMessage = adzanMessage ?: cfg.adzanMessage,
+                        sholatMessage = sholatMessage ?: cfg.sholatMessage
                     )
                     updateSettings { prev ->
                         val p = prev.prayers
-                        val updated = when (prayer) {
-                            "fajr" -> p.copy(fajr = applyDurations(p.fajr))
-                            "dhuhr" -> p.copy(dhuhr = applyDurations(p.dhuhr))
-                            "asr" -> p.copy(asr = applyDurations(p.asr))
-                            "maghrib" -> p.copy(maghrib = applyDurations(p.maghrib))
-                            "isha" -> p.copy(isha = applyDurations(p.isha))
+                        val updatedPrayers = when (prayer) {
+                            "fajr" -> p.copy(fajr = applyStage(p.fajr))
+                            "dhuhr" -> p.copy(dhuhr = applyStage(p.dhuhr))
+                            "asr" -> p.copy(asr = applyStage(p.asr))
+                            "maghrib" -> p.copy(maghrib = applyStage(p.maghrib))
+                            "isha" -> p.copy(isha = applyStage(p.isha))
                             else -> p
                         }
-                        prev.copy(prayers = updated)
+                        val c = prev.prayerSettings.corrections
+                        val updatedCorrections = if (correction != null) {
+                            when (prayer) {
+                                "fajr" -> c.copy(fajr = correction)
+                                "dhuhr" -> c.copy(dhuhr = correction)
+                                "asr" -> c.copy(asr = correction)
+                                "maghrib" -> c.copy(maghrib = correction)
+                                "isha" -> c.copy(isha = correction)
+                                else -> c
+                            }
+                        } else c
+                        prev.copy(
+                            prayers = updatedPrayers,
+                            prayerSettings = prev.prayerSettings.copy(corrections = updatedCorrections)
+                        )
+                    }
+                }
+
+                "update_jumat_stage" -> {
+                    val enabled = payload.booleanArg("enabled")
+                    val waktuJumat = payload.intArg("waktuJumatDuration")?.coerceIn(3, 45)
+                    val khutbah = payload.intArg("khutbahDuration")?.coerceIn(5, 90)
+                    val sholatJumat = payload.intArg("sholatJumatDuration")?.coerceIn(5, 45)
+                    val khutbahMsg = payload.rawStringArg("khutbahMessage")
+                    val sholatMsg = payload.rawStringArg("sholatMessage")
+                    val khotib = payload.rawStringArg("khotib")
+                    val imam = payload.rawStringArg("imam")
+                    val muadzin = payload.rawStringArg("muadzin")
+                    updateSettings { prev ->
+                        val j = prev.jumat
+                        val updatedPet = if (khotib != null || imam != null || muadzin != null) {
+                            val dateKey = j.petugas.selectedDate.ifBlank {
+                                JwsStateMachine.snapToNearestFriday(_snapshotFlow.value.schedule.date).toString()
+                            }
+                            val existing = j.petugas.records[dateKey] ?: JumatPetugasRecord()
+                            val updatedRec = existing.copy(
+                                khotib = khotib ?: existing.khotib,
+                                imam = imam ?: existing.imam,
+                                muadzin = muadzin ?: existing.muadzin
+                            )
+                            val newMap = j.petugas.records.toMutableMap().apply { put(dateKey, updatedRec) }
+                            j.petugas.copy(selectedDate = dateKey, records = newMap)
+                        } else j.petugas
+                        prev.copy(
+                            jumat = j.copy(
+                                enabled = enabled ?: j.enabled,
+                                waktuJumatDuration = waktuJumat ?: j.waktuJumatDuration,
+                                khutbahDuration = khutbah ?: j.khutbahDuration,
+                                sholatJumatDuration = sholatJumat ?: j.sholatJumatDuration,
+                                khutbahMessage = khutbahMsg ?: j.khutbahMessage,
+                                sholatMessage = sholatMsg ?: j.sholatMessage,
+                                petugas = updatedPet
+                            )
+                        )
+                    }
+                }
+
+                "update_custom_audio_live" -> {
+                    val file = payload.rawStringArg("liveAudioFile")
+                    val dur = payload.intArg("liveDurationMinutes")?.coerceIn(1, 120)
+                    val playing = payload.booleanArg("isPlayingLive")
+                    updateSettings { prev ->
+                        val ca = prev.customAudio
+                        prev.copy(
+                            customAudio = ca.copy(
+                                liveAudioFile = file ?: ca.liveAudioFile,
+                                liveDurationMinutes = dur ?: ca.liveDurationMinutes,
+                                isPlayingLive = playing ?: ca.isPlayingLive
+                            )
+                        )
+                    }
+                }
+
+                "add_custom_audio_schedule" -> {
+                    val name = payload.stringArg("name").orEmpty().ifBlank { "Jadwal Audio" }
+                    val audioFile = payload.rawStringArg("audioFile").orEmpty()
+                    val scheduleType = payload.stringArg("scheduleType")?.takeIf { it == "once" || it == "weekly" } ?: "weekly"
+                    val dayOfWeek = (payload.intArg("dayOfWeek") ?: 5).coerceIn(0, 6)
+                    val date = payload.rawStringArg("date").orEmpty()
+                    val time = payload.rawStringArg("time").orEmpty().ifBlank { "11:00" }
+                    val dur = (payload.intArg("durationMinutes") ?: 15).coerceIn(1, 120)
+                    val item = id.algaffar.jwstv.domain.model.ScheduledAudioItem(
+                        id = "sched-${System.currentTimeMillis()}",
+                        name = name,
+                        audioFile = audioFile,
+                        scheduleType = scheduleType,
+                        dayOfWeek = dayOfWeek,
+                        date = date,
+                        time = time,
+                        durationMinutes = dur,
+                        enabled = true
+                    )
+                    updateSettings { prev ->
+                        prev.copy(customAudio = prev.customAudio.copy(schedules = prev.customAudio.schedules + item))
+                    }
+                }
+
+                "update_custom_audio_schedule" -> {
+                    val id = payload.stringArg("id").orEmpty()
+                    val idxArg = payload.intArg("index")
+                    val toggleEnabled = payload.booleanArg("toggleEnabled") == true
+                    val enabled = payload.booleanArg("enabled")
+                    val name = payload.rawStringArg("name")
+                    val audioFile = payload.rawStringArg("audioFile")
+                    val scheduleType = payload.stringArg("scheduleType")?.takeIf { it == "once" || it == "weekly" }
+                    val dayOfWeek = payload.intArg("dayOfWeek")?.coerceIn(0, 6)
+                    val date = payload.rawStringArg("date")
+                    val time = payload.rawStringArg("time")
+                    val dur = payload.intArg("durationMinutes")?.coerceIn(1, 120)
+                    updateSettings { prev ->
+                        val list = prev.customAudio.schedules.toMutableList()
+                        val idx = if (id.isNotBlank()) list.indexOfFirst { it.id == id } else (idxArg ?: -1)
+                        if (idx in list.indices) {
+                            val cur = list[idx]
+                            list[idx] = cur.copy(
+                                name = name ?: cur.name,
+                                audioFile = audioFile ?: cur.audioFile,
+                                scheduleType = scheduleType ?: cur.scheduleType,
+                                dayOfWeek = dayOfWeek ?: cur.dayOfWeek,
+                                date = date ?: cur.date,
+                                time = time ?: cur.time,
+                                durationMinutes = dur ?: cur.durationMinutes,
+                                enabled = if (toggleEnabled) !cur.enabled else (enabled ?: cur.enabled)
+                            )
+                        }
+                        prev.copy(customAudio = prev.customAudio.copy(schedules = list))
+                    }
+                }
+
+                "delete_custom_audio_schedule" -> {
+                    val id = payload.stringArg("id").orEmpty()
+                    val idxArg = payload.intArg("index")
+                    updateSettings { prev ->
+                        val list = prev.customAudio.schedules.toMutableList()
+                        val idx = if (id.isNotBlank()) list.indexOfFirst { it.id == id } else (idxArg ?: -1)
+                        if (idx in list.indices) list.removeAt(idx)
+                        prev.copy(customAudio = prev.customAudio.copy(schedules = list))
+                    }
+                }
+
+                "delete_custom_audio_file" -> {
+                    val fileName = payload.stringArg("fileName").orEmpty().substringAfterLast('/').substringAfterLast('\\')
+                    if (fileName.isNotBlank()) {
+                        val file = File(assetsRootDir, "audio/custom/$fileName")
+                        if (file.exists() && file.isFile) {
+                            file.delete()
+                            _audioInventoryTick.value += 1
+                        }
                     }
                 }
 
@@ -1514,6 +1676,79 @@ class JwsRuntimeEngine(
                     }
                 }
 
+                "update_info_settings" -> {
+                    val enableSunnah = payload.booleanArg("enableSunnahFasting")
+                    val lookahead = payload.intArg("lookaheadDays")?.coerceIn(7, 365)
+                    updateSettings { prev ->
+                        prev.copy(
+                            infoSettings = prev.infoSettings.copy(
+                                enableSunnahFasting = enableSunnah ?: prev.infoSettings.enableSunnahFasting,
+                                lookaheadDays = lookahead ?: prev.infoSettings.lookaheadDays
+                            )
+                        )
+                    }
+                }
+
+                "reset_islamic_events" -> {
+                    updateSettings { prev ->
+                        prev.copy(
+                            infoSettings = id.algaffar.jwstv.domain.model.InfoDisplaySettings(
+                                enableSunnahFasting = true,
+                                lookaheadDays = 60,
+                                islamicEvents = id.algaffar.jwstv.domain.model.InfoDisplaySettings.defaultIslamicEvents()
+                            )
+                        )
+                    }
+                }
+
+                "add_islamic_event" -> {
+                    val name = payload.stringArg("name").orEmpty().ifBlank { "Agenda Masjid Baru" }
+                    val type = payload.stringArg("type")?.takeIf { it == "hijri" || it == "gregorian" } ?: "hijri"
+                    val hijriMonth = (payload.intArg("hijriMonth") ?: 1).coerceIn(1, 12)
+                    val hijriDay = (payload.intArg("hijriDay") ?: 1).coerceIn(1, 30)
+                    val gregorianDate = payload.rawStringArg("gregorianDate").orEmpty()
+                    val ev = id.algaffar.jwstv.domain.model.CustomIslamicEventItem(
+                        id = "agenda-${System.currentTimeMillis()}",
+                        name = name,
+                        type = type,
+                        hijriMonth = hijriMonth,
+                        hijriDay = hijriDay,
+                        gregorianDate = gregorianDate,
+                        enabled = true
+                    )
+                    updateSettings { prev ->
+                        prev.copy(
+                            infoSettings = prev.infoSettings.copy(
+                                islamicEvents = listOf(ev) + prev.infoSettings.islamicEvents
+                            )
+                        )
+                    }
+                }
+
+                "toggle_islamic_event" -> {
+                    val id = payload.stringArg("id").orEmpty()
+                    val idxArg = payload.intArg("index")
+                    updateSettings { prev ->
+                        val list = prev.infoSettings.islamicEvents.toMutableList()
+                        val idx = if (id.isNotBlank()) list.indexOfFirst { it.id == id } else (idxArg ?: -1)
+                        if (idx in list.indices) {
+                            list[idx] = list[idx].copy(enabled = !list[idx].enabled)
+                        }
+                        prev.copy(infoSettings = prev.infoSettings.copy(islamicEvents = list))
+                    }
+                }
+
+                "delete_islamic_event" -> {
+                    val id = payload.stringArg("id").orEmpty()
+                    val idxArg = payload.intArg("index")
+                    updateSettings { prev ->
+                        val list = prev.infoSettings.islamicEvents.toMutableList()
+                        val idx = if (id.isNotBlank()) list.indexOfFirst { it.id == id } else (idxArg ?: -1)
+                        if (idx in list.indices) list.removeAt(idx)
+                        prev.copy(infoSettings = prev.infoSettings.copy(islamicEvents = list))
+                    }
+                }
+
                 "update_jumat_petugas" -> {
                     val khotib = payload.stringArg("khotib").orEmpty()
                     val imam = payload.stringArg("imam").orEmpty()
@@ -1568,6 +1803,7 @@ class JwsRuntimeEngine(
 
                 "update_online_finance" -> {
                     val enabled = payload.booleanArg("enabled")
+                    val showFloating = payload.booleanArg("showFloatingOnMain")
                     val url = payload.rawStringArg("url")
                     val reportUrl = payload.rawStringArg("reportUrl")
                     val bankName = payload.rawStringArg("bankName")
@@ -1579,6 +1815,7 @@ class JwsRuntimeEngine(
                         prev.copy(
                             onlineFinance = f.copy(
                                 enabled = enabled ?: f.enabled,
+                                showFloatingOnMain = showFloating ?: f.showFloatingOnMain,
                                 sheetUrl = url ?: f.sheetUrl,
                                 reportUrl = reportUrl ?: f.reportUrl,
                                 bankName = bankName ?: f.bankName,
@@ -1821,24 +2058,34 @@ class JwsRuntimeEngine(
 
                 "update_standby_slideshow" -> {
                     val enabled = payload.booleanArg("enabled")
-                    val slideDuration = payload.intArg("slideDuration")?.coerceIn(5, 120)
+                    val slideDuration = payload.intArg("slideDuration")?.coerceIn(5, 600)
+                    val repeatCount = payload.intArg("repeatCount")?.coerceIn(1, 10)
+                    val showNextPrayerCard = payload.booleanArg("showNextPrayerCard")
+                    val nextPrayerThreshold = payload.intArg("nextPrayerThresholdMinutes")?.coerceIn(5, 120)
                     updateSettings { prev ->
+                        val s = prev.standbySlideshow
                         prev.copy(
-                            standbySlideshow = prev.standbySlideshow.copy(
-                                enabled = enabled ?: prev.standbySlideshow.enabled,
-                                durationMain = slideDuration ?: prev.standbySlideshow.durationMain
+                            standbySlideshow = s.copy(
+                                enabled = enabled ?: s.enabled,
+                                durationMain = slideDuration ?: s.durationMain,
+                                repeatCount = repeatCount ?: s.repeatCount,
+                                showNextPrayerCard = showNextPrayerCard ?: s.showNextPrayerCard,
+                                nextPrayerThresholdMinutes = nextPrayerThreshold ?: s.nextPrayerThresholdMinutes
                             )
                         )
                     }
                 }
 
                 "update_jumat_keuangan" -> {
+                    val selectedDate = payload.rawStringArg("selectedDate")?.takeIf { it.isNotBlank() }
+                    val customTitle = payload.rawStringArg("customTitle")
+                    val source = payload.stringArg("source")?.takeIf { it == "manual" || it == "online" }
                     val saldoKasLalu = payload.stringArg("saldoKasLalu")?.toLongOrNull() ?: payload.intArg("saldoKasLalu")?.toLong()
                     val pemasukan = payload.stringArg("pemasukan")?.toLongOrNull() ?: payload.intArg("pemasukan")?.toLong()
                     val pengeluaran = payload.stringArg("pengeluaran")?.toLongOrNull() ?: payload.intArg("pengeluaran")?.toLong()
                     updateSettings { prev ->
                         val today = _snapshotFlow.value.schedule.date
-                        val dateKey = prev.jumat.keuangan.selectedDate.ifBlank {
+                        val dateKey = selectedDate ?: prev.jumat.keuangan.selectedDate.ifBlank {
                             JwsStateMachine.findEffectiveJumatKeuanganDate(prev.jumat.keuangan.records, today)
                                 ?: JwsStateMachine.snapToNearestFriday(today).toString()
                         }
@@ -1855,11 +2102,73 @@ class JwsRuntimeEngine(
                             jumat = prev.jumat.copy(
                                 keuangan = prev.jumat.keuangan.copy(
                                     selectedDate = dateKey,
+                                    customTitle = customTitle ?: prev.jumat.keuangan.customTitle,
+                                    source = source ?: prev.jumat.keuangan.source,
                                     saldoKasLalu = updatedRec.saldoKasLalu,
                                     records = newMap
                                 )
                             )
                         )
+                    }
+                }
+
+                "add_jumat_journal" -> {
+                    val desc = payload.stringArg("description").orEmpty().trim()
+                    val amount = (payload.stringArg("amount")?.toLongOrNull() ?: payload.intArg("amount")?.toLong() ?: 0L).coerceAtLeast(0L)
+                    val type = payload.stringArg("type")?.takeIf { it == "in" || it == "out" } ?: "in"
+                    val selectedDate = payload.rawStringArg("selectedDate")?.takeIf { it.isNotBlank() }
+                    if (desc.isNotBlank() && amount > 0L) {
+                        updateSettings { prev ->
+                            val today = _snapshotFlow.value.schedule.date
+                            val dateKey = selectedDate ?: prev.jumat.keuangan.selectedDate.ifBlank {
+                                JwsStateMachine.findEffectiveJumatKeuanganDate(prev.jumat.keuangan.records, today)
+                                    ?: JwsStateMachine.snapToNearestFriday(today).toString()
+                            }
+                            val existing = prev.jumat.keuangan.records[dateKey] ?: id.algaffar.jwstv.domain.model.JumatKeuanganRecord(
+                                saldoKasLalu = prev.jumat.keuangan.saldoKasLalu
+                            )
+                            val newEntry = id.algaffar.jwstv.domain.model.JumatJournalEntry(
+                                id = System.currentTimeMillis().toString(),
+                                description = desc,
+                                amount = amount,
+                                type = type
+                            )
+                            val updatedEntries = existing.entries + newEntry
+                            val totalIn = updatedEntries.filter { it.type == "in" }.sumOf { it.amount }
+                            val totalOut = updatedEntries.filter { it.type == "out" }.sumOf { it.amount }
+                            val newMap = prev.jumat.keuangan.records.toMutableMap()
+                            newMap[dateKey] = existing.copy(pemasukan = totalIn, pengeluaran = totalOut, entries = updatedEntries)
+                            prev.copy(
+                                jumat = prev.jumat.copy(
+                                    keuangan = prev.jumat.keuangan.copy(selectedDate = dateKey, records = newMap)
+                                )
+                            )
+                        }
+                    }
+                }
+
+                "delete_jumat_journal" -> {
+                    val entryId = payload.stringArg("id").orEmpty()
+                    val selectedDate = payload.rawStringArg("selectedDate")?.takeIf { it.isNotBlank() }
+                    if (entryId.isNotBlank()) {
+                        updateSettings { prev ->
+                            val today = _snapshotFlow.value.schedule.date
+                            val dateKey = selectedDate ?: prev.jumat.keuangan.selectedDate.ifBlank {
+                                JwsStateMachine.findEffectiveJumatKeuanganDate(prev.jumat.keuangan.records, today)
+                                    ?: JwsStateMachine.snapToNearestFriday(today).toString()
+                            }
+                            val existing = prev.jumat.keuangan.records[dateKey] ?: return@updateSettings prev
+                            val remaining = existing.entries.filterNot { it.id == entryId }
+                            val totalIn = remaining.filter { it.type == "in" }.sumOf { it.amount }
+                            val totalOut = remaining.filter { it.type == "out" }.sumOf { it.amount }
+                            val newMap = prev.jumat.keuangan.records.toMutableMap()
+                            newMap[dateKey] = existing.copy(pemasukan = totalIn, pengeluaran = totalOut, entries = remaining)
+                            prev.copy(
+                                jumat = prev.jumat.copy(
+                                    keuangan = prev.jumat.keuangan.copy(selectedDate = dateKey, records = newMap)
+                                )
+                            )
+                        }
                     }
                 }
 

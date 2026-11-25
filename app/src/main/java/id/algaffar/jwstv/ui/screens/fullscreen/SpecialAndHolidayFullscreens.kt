@@ -1555,9 +1555,10 @@ fun StandbySlideshowFullscreen(
     val fullscreenGroups = remember(snapshot.settings) {
         snapshot.settings.resolveGroupsForState(SlideshowTargetState.FULLSCREEN)
     }
-    var activeGroup by remember(fullscreenGroups) {
-        mutableStateOf(fullscreenGroups.firstOrNull())
-    }
+    val standbyCfg = snapshot.settings.standbySlideshow
+    val thresholdSec = standbyCfg.nextPrayerThresholdMinutes.coerceIn(5, 120) * 60L
+    val showNextPrayerCard = standbyCfg.showNextPrayerCard &&
+        snapshot.schedule.secondsToNextPrayer in 1L..thresholdSec
 
     Box(modifier = modifier.fillMaxSize()) {
         if (fullscreenGroups.isNotEmpty()) {
@@ -1567,7 +1568,7 @@ fun StandbySlideshowFullscreen(
                 assetsRootDir = assetsRootDir,
                 isExpanded = true,
                 wrapSystemSlideWithHeader = true,
-                onActiveGroupChanged = { activeGroup = it },
+                hideOverlayAndQr = showNextPrayerCard,
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -1579,28 +1580,12 @@ fun StandbySlideshowFullscreen(
             )
         }
 
-        // Optional floating Next Prayer Card when nearing Adzan (moves to BottomCenter if bottom-right is occupied)
-        val standbyCfg = snapshot.settings.standbySlideshow
-        val thresholdSec = standbyCfg.nextPrayerThresholdMinutes.coerceIn(5, 120) * 60L
-        if (standbyCfg.showNextPrayerCard && snapshot.schedule.secondsToNextPrayer in 1L..thresholdSec) {
-            val g = activeGroup
-            val hasBottomRightOverlay = g != null &&
-                g.resolveActiveOverlays(snapshot.settings.floatingOverlays).isNotEmpty() &&
-                g.normalizedOverlayPosition == SlideshowGroup.POS_BOTTOM_RIGHT
-            val hasBottomRightQr = g != null &&
-                g.showQrCard &&
-                (snapshot.settings.masjidQr.enabled || snapshot.settings.onlineFinance.enabled) &&
-                g.qrCardPosition == SlideshowGroup.POS_BOTTOM_RIGHT
-            val nextPrayerAlign = if (hasBottomRightOverlay || hasBottomRightQr) {
-                Alignment.BottomCenter
-            } else {
-                Alignment.BottomEnd
-            }
-
+        // Floating Next Prayer Card when nearing Adzan (Overlay & QR Card are hidden to give it space)
+        if (showNextPrayerCard) {
             NextPrayerCountdownCard(
                 schedule = snapshot.schedule,
                 modifier = Modifier
-                    .align(nextPrayerAlign)
+                    .align(Alignment.BottomEnd)
                     .padding(24.dp)
             )
         }

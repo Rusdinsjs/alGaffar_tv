@@ -590,23 +590,40 @@ class KtorRemoteServer(
                 put("madhab", settings.prayerSettings.madhab)
                 put("ihtiyati", settings.prayerSettings.ihtiyati)
                 put("hijriAdjustment", settings.prayerSettings.hijriAdjustment)
+                putJsonObject("corrections") {
+                    val c = settings.prayerSettings.corrections
+                    put("fajr", c.fajr)
+                    put("dhuhr", c.dhuhr)
+                    put("asr", c.asr)
+                    put("maghrib", c.maghrib)
+                    put("isha", c.isha)
+                }
             }
 
             putJsonObject("prayerSettings") {
-                val map = mapOf(
-                    "fajr" to settings.prayers.fajr,
-                    "dhuhr" to settings.prayers.dhuhr,
-                    "asr" to settings.prayers.asr,
-                    "maghrib" to settings.prayers.maghrib,
-                    "isha" to settings.prayers.isha
+                val c = settings.prayerSettings.corrections
+                val map = listOf(
+                    Triple("fajr", settings.prayers.fajr, c.fajr),
+                    Triple("dhuhr", settings.prayers.dhuhr, c.dhuhr),
+                    Triple("asr", settings.prayers.asr, c.asr),
+                    Triple("maghrib", settings.prayers.maghrib, c.maghrib),
+                    Triple("isha", settings.prayers.isha, c.isha)
                 )
-                for ((key, cfg) in map) {
+                for ((key, cfg, corr) in map) {
                     putJsonObject(key) {
                         put("isTartil", cfg.isTartil && cfg.tartilDuration > 0)
                         put("isTarhim", cfg.isTarhim && cfg.tarhimDuration > 0)
                         put("isAdzan", cfg.isAdzan)
+                        put("tartilDuration", cfg.tartilDuration)
+                        put("adzanDuration", cfg.adzanDuration)
                         put("iqomahDuration", cfg.iqomahDuration)
                         put("sholatDuration", cfg.sholatDuration)
+                        put("imam", cfg.imam)
+                        put("muadzin", cfg.muadzin)
+                        put("adzanTagline", cfg.adzanTagline)
+                        put("adzanMessage", cfg.adzanMessage)
+                        put("sholatMessage", cfg.sholatMessage)
+                        put("correction", corr)
                     }
                 }
             }
@@ -692,6 +709,19 @@ class KtorRemoteServer(
             putJsonObject("infoSettings") {
                 put("enableSunnahFasting", settings.infoSettings.enableSunnahFasting)
                 put("lookaheadDays", settings.infoSettings.lookaheadDays)
+                putJsonArray("islamicEvents") {
+                    settings.infoSettings.islamicEvents.forEach { ev ->
+                        addJsonObject {
+                            put("id", ev.id)
+                            put("name", ev.name)
+                            put("type", ev.type)
+                            put("hijriMonth", ev.hijriMonth)
+                            put("hijriDay", ev.hijriDay)
+                            put("gregorianDate", ev.gregorianDate)
+                            put("enabled", ev.enabled)
+                        }
+                    }
+                }
             }
 
             val todayStr = java.time.LocalDate.now().toString()
@@ -705,13 +735,31 @@ class KtorRemoteServer(
 
             putJsonObject("jumat") {
                 put("enabled", settings.jumat.enabled)
+                put("waktuJumatDuration", settings.jumat.waktuJumatDuration)
+                put("khutbahDuration", settings.jumat.khutbahDuration)
+                put("sholatJumatDuration", settings.jumat.sholatJumatDuration)
+                put("khutbahMessage", settings.jumat.khutbahMessage)
+                put("sholatMessage", settings.jumat.sholatMessage)
                 put("khotib", effJumatRec?.khotib.orEmpty())
                 put("imam", effJumatRec?.imam.orEmpty())
                 put("muadzin", effJumatRec?.muadzin.orEmpty())
                 put("keuanganDate", effKeuDate)
+                put("customTitle", settings.jumat.keuangan.customTitle)
+                put("source", settings.jumat.keuangan.source)
                 put("saldoKasLalu", effJumatKeu?.saldoKasLalu ?: settings.jumat.keuangan.saldoKasLalu)
                 put("pemasukan", effJumatKeu?.pemasukan ?: 0L)
                 put("pengeluaran", effJumatKeu?.pengeluaran ?: 0L)
+                put("saldoAkhir", effJumatKeu?.saldoAkhir ?: settings.jumat.keuangan.saldoKasLalu)
+                putJsonArray("entries") {
+                    (effJumatKeu?.entries ?: emptyList()).forEach { e ->
+                        addJsonObject {
+                            put("id", e.id)
+                            put("description", e.description)
+                            put("amount", e.amount)
+                            put("type", e.type)
+                        }
+                    }
+                }
             }
 
             val nightIdx = (settings.ramadhan.currentNight - 1).coerceIn(0, 29)
@@ -742,6 +790,9 @@ class KtorRemoteServer(
             putJsonObject("standbySlideshow") {
                 put("enabled", settings.standbySlideshow.enabled)
                 put("slideDuration", settings.standbySlideshow.durationMain)
+                put("repeatCount", settings.standbySlideshow.repeatCount)
+                put("showNextPrayerCard", settings.standbySlideshow.showNextPrayerCard)
+                put("nextPrayerThresholdMinutes", settings.standbySlideshow.nextPrayerThresholdMinutes)
             }
 
             putJsonObject("idulFitri") {
@@ -849,6 +900,7 @@ class KtorRemoteServer(
 
             putJsonObject("onlineFinance") {
                 put("enabled", settings.onlineFinance.enabled)
+                put("showFloatingOnMain", settings.onlineFinance.showFloatingOnMain)
                 put("url", settings.onlineFinance.sheetUrl)
                 put("reportUrl", settings.onlineFinance.reportUrl)
                 put("bankName", settings.onlineFinance.bankName)
@@ -876,6 +928,28 @@ class KtorRemoteServer(
                 audioInv.forEach { (category, slots) ->
                     putJsonArray(category) {
                         slots.forEach { add(it) }
+                    }
+                }
+            }
+
+            putJsonObject("customAudioConfig") {
+                val ca = settings.customAudio
+                put("liveAudioFile", ca.liveAudioFile)
+                put("liveDurationMinutes", ca.liveDurationMinutes)
+                put("isPlayingLive", ca.isPlayingLive)
+                putJsonArray("schedules") {
+                    ca.schedules.forEach { s ->
+                        addJsonObject {
+                            put("id", s.id)
+                            put("name", s.name)
+                            put("audioFile", s.audioFile)
+                            put("scheduleType", s.scheduleType)
+                            put("dayOfWeek", s.dayOfWeek)
+                            put("date", s.date)
+                            put("time", s.time)
+                            put("durationMinutes", s.durationMinutes)
+                            put("enabled", s.enabled)
+                        }
                     }
                 }
             }

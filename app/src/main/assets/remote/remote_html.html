@@ -124,6 +124,38 @@
         .tab-content { display: none; animation: fadeUp 0.22s ease-out; }
         .tab-content.active { display: flex; flex-direction: column; gap: 14px; }
 
+        .sub-tabs {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding: 2px 2px 6px 2px;
+            margin-bottom: 2px;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        }
+        .sub-tabs::-webkit-scrollbar { display: none; }
+        .sub-tab-btn {
+            flex: 0 0 auto;
+            background: var(--card-2);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 8px 14px;
+            border-radius: 99px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .sub-tab-btn.active {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 2px 10px var(--accent-glow);
+        }
+        .sub-panel { display: none; flex-direction: column; gap: 14px; animation: fadeUp 0.18s ease-out; }
+        .sub-panel.active { display: flex; }
+
         @keyframes fadeUp {
             from { opacity: 0; transform: translateY(8px); }
             to { opacity: 1; transform: translateY(0); }
@@ -625,6 +657,11 @@
 
         <!-- TAB 2: MASJID & TEKS -->
         <div id="tab-brand" class="tab-content">
+            <div class="sub-tabs">
+                <button class="sub-tab-btn active" onclick="switchSubTab('brand','identitas',event)">Identitas Masjid</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('brand','qr',event)">QR Infaq &amp; Keuangan</button>
+            </div>
+            <div id="sub-brand-identitas" class="sub-panel active">
             <div class="card">
                 <span class="card-title">Identitas Masjid & Upload Logo</span>
                 <div class="form-group">
@@ -649,7 +686,9 @@
                 </div>
                 <button class="submit-btn secondary" onclick="uploadLogoFile()">📤 UNGGAH & PASANG LOGO</button>
             </div>
+            </div>
 
+            <div id="sub-brand-qr" class="sub-panel">
             <div class="card">
                 <span class="card-title">QR Infaq Digital &amp; Keuangan Online</span>
                 <div class="grid-2" style="margin-bottom:10px;">
@@ -685,10 +724,11 @@
                 <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
                 <div class="grid-2" style="margin-bottom:10px;">
                     <button id="financeEnabledBtn" class="toggle-btn" onclick="toggleRemoteFlag('financeEnabledBtn')">Aktifkan Keuangan Online</button>
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label>Refresh (Menit)</label>
-                        <input type="number" min="1" max="60" id="financeRefresh" value="5">
-                    </div>
+                    <button id="financeShowFloatingBtn" class="toggle-btn" onclick="toggleRemoteFlag('financeShowFloatingBtn')">Banner Melayang</button>
+                </div>
+                <div class="form-group">
+                    <label>Refresh (Menit)</label>
+                    <input type="number" min="1" max="60" id="financeRefresh" value="5">
                 </div>
                 <div class="form-group">
                     <label>URL Google Sheets Keuangan Online (CSV/JSON)</label>
@@ -714,10 +754,17 @@
                 </div>
                 <button class="submit-btn secondary" onclick="saveOnlineFinance()">💾 SIMPAN QR KEUANGAN ONLINE</button>
             </div>
+            </div>
         </div>
 
         <!-- TAB 3: SHOLAT & ACARA -->
         <div id="tab-sholat" class="tab-content">
+            <div class="sub-tabs">
+                <button class="sub-tab-btn active" onclick="switchSubTab('sholat','waktu',event)">Waktu &amp; Tahapan</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('sholat','audio',event)">Audio Sholat</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('sholat','custom',event)">Audio Kustom</button>
+            </div>
+            <div id="sub-sholat-waktu" class="sub-panel active">
             <div class="card">
                 <span class="card-title">Lokasi, Koreksi & Kalender Hijriah</span>
                 <div class="grid-2">
@@ -767,7 +814,9 @@
             </div>
 
             <div id="prayerStagesContainer" style="display:contents;"></div>
+            </div>
 
+            <div id="sub-sholat-audio" class="sub-panel">
             <div class="card">
                 <span class="card-title">Kontrol Volume Master TV</span>
                 <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
@@ -821,11 +870,111 @@
                     <div id="audioInventoryBox" class="list-box"></div>
                 </div>
             </div>
+            </div>
+
+            <div id="sub-sholat-custom" class="sub-panel">
+                <div class="sub-tabs" style="margin-bottom:0;">
+                    <button class="sub-tab-btn active" onclick="switchCustomAudioTab('library',event)">1. Perpustakaan</button>
+                    <button class="sub-tab-btn" onclick="switchCustomAudioTab('live',event)">2. Siaran Langsung</button>
+                    <button class="sub-tab-btn" onclick="switchCustomAudioTab('schedule',event)">3. Jadwal Otomatis</button>
+                </div>
+
+                <div id="custom-sub-library" class="sub-panel active">
+                    <div class="card">
+                        <span class="card-title">Perpustakaan Audio Kustom</span>
+                        <div class="form-group">
+                            <label>Impor File Audio (MP3 / WAV / M4A)</label>
+                            <input type="file" id="customAudioFileInput" accept="audio/*">
+                        </div>
+                        <button class="submit-btn" onclick="uploadCustomAudioFile()" style="margin-bottom:14px;">📤 UNGGAH KE PERPUSTAKAAN</button>
+                        <div id="customAudioLibraryBox" class="list-box"></div>
+                    </div>
+                </div>
+
+                <div id="custom-sub-live" class="sub-panel">
+                    <div class="card">
+                        <span class="card-title">
+                            <span>Siaran Audio Langsung (On-Demand)</span>
+                            <span id="customLiveStatusBadge" style="font-size:10px;color:var(--text-secondary);font-weight:800;">STANDBY</span>
+                        </span>
+                        <div class="form-group">
+                            <label>File Audio Aktif</label>
+                            <input type="text" id="customLiveFile" placeholder="audio/custom/nama_file.mp3 (pilih dari Perpustakaan)">
+                        </div>
+                        <div class="form-group">
+                            <label>Durasi Maksimal Siaran (Menit)</label>
+                            <input type="number" min="1" max="120" id="customLiveDur" value="30">
+                        </div>
+                        <button id="customLivePlayBtn" class="submit-btn" onclick="toggleCustomAudioLive()">▶ MULAI SIARAN LANGSUNG</button>
+                    </div>
+                </div>
+
+                <div id="custom-sub-schedule" class="sub-panel">
+                    <div class="card">
+                        <span class="card-title">Jadwal Audio Kustom Otomatis</span>
+                        <div id="customAudioScheduleBox" class="list-box"></div>
+                        <hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">
+                        <div class="form-group">
+                            <label>Nama Jadwal</label>
+                            <input type="text" id="schedNewName" placeholder="Contoh: Pengajian Pagi Jum'at">
+                        </div>
+                        <div class="form-group">
+                            <label>File Audio</label>
+                            <input type="text" id="schedNewFile" placeholder="audio/custom/nama_file.mp3">
+                        </div>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>Tipe Jadwal</label>
+                                <select id="schedNewType" onchange="toggleSchedTypeFields()">
+                                    <option value="weekly">Rutin Mingguan</option>
+                                    <option value="once">Satu Kali (Tanggal)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="schedNewDayWrap">
+                                <label>Hari</label>
+                                <select id="schedNewDay">
+                                    <option value="0">Minggu</option>
+                                    <option value="1">Senin</option>
+                                    <option value="2">Selasa</option>
+                                    <option value="3">Rabu</option>
+                                    <option value="4">Kamis</option>
+                                    <option value="5" selected>Jum'at</option>
+                                    <option value="6">Sabtu</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="schedNewDateWrap" style="display:none;">
+                                <label>Tanggal (YYYY-MM-DD)</label>
+                                <input type="text" id="schedNewDate" placeholder="2026-11-27">
+                            </div>
+                        </div>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>Jam (HH:mm)</label>
+                                <input type="text" id="schedNewTime" value="11:00" placeholder="11:00">
+                            </div>
+                            <div class="form-group">
+                                <label>Durasi (Menit)</label>
+                                <input type="number" min="1" max="120" id="schedNewDur" value="15">
+                            </div>
+                        </div>
+                        <button class="submit-btn" onclick="addCustomAudioSchedule()">+ TAMBAH JADWAL OTOMATIS</button>
+                    </div>
+                </div>
+            </div>
 
         </div>
 
         <!-- TAB 3B: TAMPILAN -->
         <div id="tab-tampilan" class="tab-content">
+            <div class="sub-tabs">
+                <button class="sub-tab-btn active" onclick="switchSubTab('tampilan','tema',event)">Tema, Layout &amp; Jam</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('tampilan','overlay',event)">Overlay Text</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('tampilan','info',event)">Kartu Info</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('tampilan','slides',event)">Slideshow Info</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('tampilan','media',event)">Tartil &amp; Media</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('tampilan','standby',event)">Mode Standby</button>
+            </div>
+            <div id="sub-tampilan-tema" class="sub-panel active">
             <div class="card">
                 <span class="card-title">Tampilan TV Cepat</span>
                 <div class="grid-3" style="margin-bottom:10px;">
@@ -868,21 +1017,16 @@
                         </select>
                     </div>
                 </div>
-                <div class="grid-2">
+                <div class="grid-3">
                     <button class="action-btn" onclick="sendCommand('next_theme')">🎨 TEMA BERIKUTNYA</button>
                     <button class="action-btn" onclick="sendCommand('next_layout')">📐 GANTI LAYOUT</button>
+                    <button class="action-btn" onclick="sendCommand('next_clock_style')">🕒 GANTI GAYA JAM</button>
                 </div>
-                <hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">
-                <div class="grid-2" style="align-items:end;">
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label>Durasi Standby Slideshow (Detik)</label>
-                        <input type="number" min="5" max="120" id="standbySlideDur" value="15">
-                    </div>
-                    <button class="submit-btn secondary" style="margin-top:0;" onclick="saveStandbySlideshow()">💾 SIMPAN STANDBY</button>
-                </div>
+            </div>
             </div>
 
 
+            <div id="sub-tampilan-overlay" class="sub-panel">
             <div class="card">
                 <span class="card-title">Floating Overlay (Statis)</span>
                 <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">
@@ -902,8 +1046,15 @@
                     <button class="submit-btn danger" onclick="clearRunningText()">KOSONGKAN</button>
                 </div>
             </div>
+            </div>
 
 
+            <div id="sub-tampilan-info" class="sub-panel">
+            <div class="sub-tabs" style="margin-bottom:0;">
+                <button class="sub-tab-btn active" onclick="switchInfoSubTab('kartu',event)">1. Kartu Info Masjid</button>
+                <button class="sub-tab-btn" onclick="switchInfoSubTab('phbi',event)">2. Agenda Islami &amp; PHBI</button>
+            </div>
+            <div id="info-sub-kartu" class="sub-panel active">
             <div class="card">
                 <span class="card-title">Kartu Info Masjid (Card 1)</span>
                 <div id="infoListBox" class="list-box"></div>
@@ -926,8 +1077,70 @@
                     <button class="submit-btn danger" onclick="clearInfoCard()">KOSONGKAN</button>
                 </div>
             </div>
+            </div>
+
+            <div id="info-sub-phbi" class="sub-panel">
+                <div class="card">
+                    <span class="card-title">
+                        <span>Agenda Islami &amp; PHBI</span>
+                        <button class="mini-btn" onclick="if(confirm('Reset daftar agenda PHBI ke default?')) sendCommand('reset_islamic_events', {}, '🔄 Agenda PHBI direset!')">Reset Default</button>
+                    </span>
+                    <div class="grid-2" style="align-items:end;margin-bottom:10px;">
+                        <button id="phbiSunnahBtn" class="toggle-btn" onclick="toggleRemoteFlag('phbiSunnahBtn')">Info Puasa Sunnah</button>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>Rentang Deteksi (Hari)</label>
+                            <input type="number" min="7" max="365" id="phbiLookahead" value="60">
+                        </div>
+                    </div>
+                    <button class="submit-btn secondary" onclick="savePhbiSettings()" style="margin-bottom:14px;">💾 SIMPAN PENGATURAN PHBI</button>
+
+                    <div id="phbiEventsListBox" class="list-box"></div>
+                    <hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">
+                    <div class="form-group">
+                        <label>Nama PHBI / Agenda Baru</label>
+                        <input type="text" id="phbiNewName" placeholder="Contoh: Maulid Nabi SAW">
+                    </div>
+                    <div class="form-group">
+                        <label>Tipe Kalender</label>
+                        <select id="phbiNewType" onchange="togglePhbiTypeFields()">
+                            <option value="hijri">Kalender Hijriah</option>
+                            <option value="gregorian">Kalender Masehi (YYYY-MM-DD)</option>
+                        </select>
+                    </div>
+                    <div id="phbiHijriWrap" class="grid-2">
+                        <div class="form-group">
+                            <label>Bulan Hijriah</label>
+                            <select id="phbiNewMonth">
+                                <option value="1">1. Muharram</option>
+                                <option value="2">2. Shafar</option>
+                                <option value="3">3. Rabi'ul Awal</option>
+                                <option value="4">4. Rabi'ul Akhir</option>
+                                <option value="5">5. Jumadil Awal</option>
+                                <option value="6">6. Jumadil Akhir</option>
+                                <option value="7">7. Rajab</option>
+                                <option value="8">8. Sya'ban</option>
+                                <option value="9">9. Ramadhan</option>
+                                <option value="10">10. Syawal</option>
+                                <option value="11">11. Dzulqa'dah</option>
+                                <option value="12">12. Dzulhijjah</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tanggal Hijriah (1-30)</label>
+                            <input type="number" min="1" max="30" id="phbiNewDay" value="1">
+                        </div>
+                    </div>
+                    <div id="phbiGregWrap" class="form-group" style="display:none;">
+                        <label>Tanggal Masehi (YYYY-MM-DD)</label>
+                        <input type="text" id="phbiNewDate" placeholder="2026-12-25">
+                    </div>
+                    <button class="submit-btn" onclick="addPhbiEvent()">+ TAMBAH AGENDA PHBI</button>
+                </div>
+            </div>
+            </div>
 
 
+            <div id="sub-tampilan-slides" class="sub-panel">
             <div class="card">
                 <span class="card-title">
                     <span>Group Slideshow, Poster &amp; Video</span>
@@ -1006,6 +1219,9 @@
             </div>
 
 
+            </div>
+
+            <div id="sub-tampilan-media" class="sub-panel">
             <div class="card">
                 <span class="card-title">Konten Slide Tartil &amp; Tarhim</span>
                 <div class="grid-2">
@@ -1073,57 +1289,100 @@
                 </div>
                 <button class="submit-btn secondary" onclick="uploadMediaBgFile()">🖼️ UNGGAH LATAR IBADAH</button>
             </div>
+            </div>
+
+            <div id="sub-tampilan-standby" class="sub-panel">
+                <div class="card">
+                    <span class="card-title">Mode Fullscreen Standby Slideshow</span>
+                    <button id="standbyEnabledBtn" class="toggle-btn" style="width:100%;margin-bottom:12px;" onclick="toggleRemoteFlag('standbyEnabledBtn')">Aktifkan Fullscreen Standby Slideshow</button>
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>Durasi Layar Utama (Detik)</label>
+                            <input type="number" min="15" max="600" id="standbySlideDur" value="60">
+                        </div>
+                        <div class="form-group">
+                            <label>Jumlah Putaran Slide</label>
+                            <input type="number" min="1" max="10" id="standbyRepeatCount" value="1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <span class="card-title">Card Next Prayer Menjelang Adzan</span>
+                    <button id="standbyNextPrayerBtn" class="toggle-btn" style="width:100%;margin-bottom:12px;" onclick="toggleRemoteFlag('standbyNextPrayerBtn')">Tampilkan Card Next Prayer Saat Mendekati Adzan</button>
+                    <div class="form-group">
+                        <label>Batas Waktu Muncul Sebelum Adzan (Menit)</label>
+                        <input type="number" min="5" max="120" id="standbyNextThreshold" value="30">
+                    </div>
+                    <button class="submit-btn" onclick="saveStandbySlideshow()">💾 SIMPAN PENGATURAN MODE STANDBY</button>
+                </div>
+            </div>
         </div>
 
         <!-- TAB 4: ACARA & SAKLAR -->
         <div id="tab-acara" class="tab-content">
+            <div class="sub-tabs">
+                <button class="sub-tab-btn active" onclick="switchSubTab('acara','jumat',event)">Jum'at</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('acara','ramadhan',event)">Ramadhan</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('acara','fitri',event)">Idul Fitri</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('acara','adha',event)">Idul Adha &amp; Qurban</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('acara','saklar',event)">Screensaver &amp; Saklar</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('acara','live',event)">Siaran Live</button>
+            </div>
+            <div id="sub-acara-jumat" class="sub-panel active">
             <div class="card">
-                <span class="card-title">Mode Acara &amp; Layar Khusus</span>
+                <span class="card-title">
+                    <span>Buku Kas &amp; Jurnal Transaksi Jum'at</span>
+                    <span id="jumatSaldoAkhirBadge" style="font-size:11px;color:var(--accent);font-weight:800;">Rp 0</span>
+                </span>
                 <div class="grid-2">
-                    <button id="toggle-jumat" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'jumat' })">🕌 MODE JUMAT</button>
-                    <button id="toggle-ramadhan" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'ramadhan' })">🌙 RAMADHAN</button>
-                    <button id="toggle-idul_fitri" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'idul_fitri' })">🕋 IDUL FITRI</button>
-                    <button id="toggle-idul_adha" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'idul_adha' })">🐑 IDUL ADHA</button>
-                    <button id="toggle-info_qurban" class="action-btn" onclick="toggleInfoQurban()">🐄 INFO QURBAN</button>
-                    <button id="toggle-slideshow" class="action-btn" onclick="sendCommand('toggle_mode', { mode: 'slideshow' })">🎞️ AUTO SLIDESHOW</button>
+                    <div class="form-group">
+                        <label>Tanggal Jum'at</label>
+                        <input type="date" id="jumatKeuDate" onchange="changeJumatDate()">
+                    </div>
+                    <div class="form-group">
+                        <label>Sumber Data Kas</label>
+                        <select id="jumatKeuSource" onchange="saveJumatKeuangan()">
+                            <option value="manual">Manual Lokal</option>
+                            <option value="online">Google Sheets Online</option>
+                        </select>
+                    </div>
                 </div>
+                <div class="form-group">
+                    <label>Judul Laporan Kas Jum'at</label>
+                    <input type="text" id="jumatCustomTitle" placeholder="Laporan Kas Infaq Jum'at">
+                </div>
+                <div class="form-group">
+                    <label>Saldo Kas Pekan Lalu (Rp)</label>
+                    <input type="number" id="jumatSaldoLalu" value="0">
+                </div>
+                <button class="submit-btn secondary" onclick="saveJumatKeuangan()">💰 SIMPAN BUKU KAS JUM'AT</button>
+
+                <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+                <span class="card-title">Jurnal Transaksi Jum'at</span>
+                <div id="jumatJournalListBox" class="list-box"></div>
+                <div class="form-group">
+                    <label>Uraian Transaksi</label>
+                    <input type="text" id="jumatJournalDesc" placeholder="Infaq Kotak Amal Jum'at">
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Nominal (Rp)</label>
+                        <input type="number" min="0" id="jumatJournalAmount" placeholder="500000">
+                    </div>
+                    <div class="form-group">
+                        <label>Jenis Transaksi</label>
+                        <select id="jumatJournalType">
+                            <option value="in">MASUK (+)</option>
+                            <option value="out">KELUAR (-)</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="submit-btn" onclick="addJumatJournal()">+ TAMBAH TRANSAKSI JURNAL</button>
+            </div>
             </div>
 
-            <div class="card">
-                <span class="card-title">Petugas &amp; Kas Infaq Jum'at</span>
-                <div class="grid-3">
-                    <div class="form-group">
-                        <label>Khotib</label>
-                        <input type="text" id="jumatKhotib" placeholder="Ust. ...">
-                    </div>
-                    <div class="form-group">
-                        <label>Imam</label>
-                        <input type="text" id="jumatImam" placeholder="Ust. ...">
-                    </div>
-                    <div class="form-group">
-                        <label>Muadzin</label>
-                        <input type="text" id="jumatMuadzin" placeholder="Sdr. ...">
-                    </div>
-                </div>
-                <button class="submit-btn" onclick="saveJumatPetugas()">💾 SIMPAN PETUGAS JUM'AT</button>
-                <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">
-                <div class="grid-3">
-                    <div class="form-group">
-                        <label>Saldo Lalu (Rp)</label>
-                        <input type="number" min="0" id="jumatSaldoLalu" placeholder="0">
-                    </div>
-                    <div class="form-group">
-                        <label>Pemasukan (Rp)</label>
-                        <input type="number" min="0" id="jumatPemasukan" placeholder="0">
-                    </div>
-                    <div class="form-group">
-                        <label>Pengeluaran (Rp)</label>
-                        <input type="number" min="0" id="jumatPengeluaran" placeholder="0">
-                    </div>
-                </div>
-                <button class="submit-btn secondary" onclick="saveJumatKeuangan()">💰 SIMPAN KAS JUM'AT</button>
-            </div>
-
+            <div id="sub-acara-ramadhan" class="sub-panel">
             <div class="card">
                 <span class="card-title">Ramadhan (Petugas, Kas, Ta'jil &amp; Sirine)</span>
                 <div class="grid-2">
@@ -1197,6 +1456,9 @@
                 <button class="submit-btn secondary" onclick="saveRamadhanSirine()">🔔 SIMPAN SIRINE RAMADHAN</button>
             </div>
 
+            </div>
+
+            <div id="sub-acara-fitri" class="sub-panel">
             <div class="card">
                 <span class="card-title">Hari Raya Idul Fitri</span>
                 <div class="grid-3">
@@ -1234,6 +1496,9 @@
                 <button class="submit-btn" onclick="saveIdulFitri()">💾 SIMPAN IDUL FITRI</button>
             </div>
 
+            </div>
+
+            <div id="sub-acara-adha" class="sub-panel">
             <div class="card">
                 <span class="card-title">Idul Adha &amp; Kelompok Qurban</span>
                 <div class="grid-3">
@@ -1273,6 +1538,9 @@
                 <div id="qurbanGroupsList" class="list-box" style="margin-top:12px;"></div>
             </div>
 
+            </div>
+
+            <div id="sub-acara-saklar" class="sub-panel">
             <div class="card">
                 <span class="card-title">Screensaver &amp; Hardware Saklar (Relay)</span>
                 <div style="margin-bottom:10px;">
@@ -1321,6 +1589,9 @@
                 <div id="switchChannelEditor"></div>
             </div>
 
+            </div>
+
+            <div id="sub-acara-live" class="sub-panel">
             <div class="card">
                 <span class="card-title">Preset Live Streaming (YouTube &amp; HLS .m3u8)</span>
                 <div class="form-group">
@@ -1362,10 +1633,19 @@
                 </div>
                 <button class="submit-btn" style="margin-top:10px;" onclick="saveLivePresets()">💾 SIMPAN PRESET LIVE &amp; HLS</button>
             </div>
+            </div>
         </div>
 
         <!-- TAB 5: SISTEM -->
         <div id="tab-sistem" class="tab-content">
+            <div class="sub-tabs">
+                <button class="sub-tab-btn active" onclick="switchSubTab('sistem','backup',event)">Data &amp; Backup</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('sistem','ota',event)">Update OTA</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('sistem','admin',event)">Kelola Admin</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('sistem','koneksi',event)">Remote &amp; Jaringan</button>
+                <button class="sub-tab-btn" onclick="switchSubTab('sistem','logs',event)">Log Aktivitas</button>
+            </div>
+            <div id="sub-sistem-backup" class="sub-panel active">
             <div class="card">
                 <span class="card-title">
                     <span>Memori TV &amp; Backup Pengaturan</span>
@@ -1384,6 +1664,9 @@
                 </div>
             </div>
 
+            </div>
+
+            <div id="sub-sistem-ota" class="sub-panel">
             <div class="card">
                 <span class="card-title">OTA Self-Updater (Pembaruan Aplikasi)</span>
                 <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">
@@ -1399,6 +1682,9 @@
                 <button class="submit-btn" onclick="uploadOtaApk()">📲 UNGGAH &amp; INSTALL APK KE TV</button>
             </div>
 
+            </div>
+
+            <div id="sub-sistem-admin" class="sub-panel">
             <div class="card">
                 <span class="card-title">Kelola Admin &amp; PIN Akses TV</span>
                 <div id="usersListBox" class="list-box"></div>
@@ -1419,6 +1705,9 @@
                 <button class="submit-btn" onclick="saveAdminPin()">🔐 PERBARUI PIN AKUN</button>
             </div>
 
+            </div>
+
+            <div id="sub-sistem-koneksi" class="sub-panel">
             <div class="card">
                 <span class="card-title">Remote Server &amp; Koneksi</span>
                 <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:12px;">
@@ -1430,12 +1719,16 @@
                 </div>
             </div>
 
+            </div>
+
+            <div id="sub-sistem-logs" class="sub-panel">
             <div class="card">
                 <span class="card-title">
                     <span>Log Aktivitas TV (25 Terbaru)</span>
                     <button class="mini-btn del" onclick="sendCommand('clear_logs', {}, '🗑️ Log dibersihkan')">Kosongkan</button>
                 </span>
                 <div id="logsListBox" class="list-box" style="max-height:360px;overflow-y:auto;"></div>
+            </div>
             </div>
         </div>
     </div>
@@ -1489,30 +1782,127 @@
             { id: 'isha', label: 'ISYA' }
         ];
 
+        function switchPrayerStageTab(stageId, evt) {
+            vibe();
+            const box = document.getElementById('prayerStagesContainer');
+            if (!box) return;
+            box.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+            box.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+            const target = document.getElementById('prayer-tab-' + stageId);
+            if (target) target.classList.add('active');
+            if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+        }
+
         function buildPrayerStageCards() {
             const box = document.getElementById('prayerStagesContainer');
             if (!box) return;
-            box.innerHTML = PRAYERS_META.map(p => `
-                <div class="card">
-                    <span class="card-title">${p.label}</span>
-                    <div class="grid-3">
+            const tabsHtml = `
+                <div class="sub-tabs" style="margin-bottom:10px;">
+                    ${PRAYERS_META.map((p, idx) => `<button class="sub-tab-btn ${idx === 0 ? 'active' : ''}" onclick="switchPrayerStageTab('${p.id}', event)">${p.label}</button>`).join('')}
+                    <button class="sub-tab-btn" onclick="switchPrayerStageTab('jumat', event)">JUM'AT</button>
+                </div>
+            `;
+            const prayersHtml = PRAYERS_META.map((p, idx) => `
+                <div id="prayer-tab-${p.id}" class="sub-panel ${idx === 0 ? 'active' : ''}">
+                    <div class="grid-3" style="margin-bottom:10px;">
                         <button id="${p.id}-isTartil" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: '${p.id}', setting: 'isTartil' })">📖 TARTIL</button>
                         <button id="${p.id}-isTarhim" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: '${p.id}', setting: 'isTarhim' })">🕯️ TARHIM</button>
                         <button id="${p.id}-isAdzan" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: '${p.id}', setting: 'isAdzan' })">📢 ADZAN</button>
                     </div>
-                    <div class="prayer-row-meta">
-                        <div>
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>Koreksi Manual (Mnt)</label>
+                            <input type="number" min="-15" max="15" id="${p.id}-correction" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Durasi Tartil (Mnt)</label>
+                            <input type="number" min="5" max="60" id="${p.id}-tartil" value="15">
+                        </div>
+                    </div>
+                    <div class="grid-3">
+                        <div class="form-group">
+                            <label>Adzan Manual</label>
+                            <input type="number" min="1" max="15" id="${p.id}-adzan" value="4">
+                        </div>
+                        <div class="form-group">
                             <label>Iqomah (Mnt)</label>
                             <input type="number" min="1" max="60" id="${p.id}-iqomah" value="10">
                         </div>
-                        <div>
+                        <div class="form-group">
                             <label>Sholat (Mnt)</label>
                             <input type="number" min="5" max="60" id="${p.id}-sholat" value="15">
                         </div>
-                        <button class="mini-btn on" style="height:42px;padding:0 12px;" onclick="savePrayerDur('${p.id}')">Simpan</button>
                     </div>
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>Nama Imam</label>
+                            <input type="text" id="${p.id}-imam" placeholder="Ust. Fulan">
+                        </div>
+                        <div class="form-group">
+                            <label>Nama Muadzin</label>
+                            <input type="text" id="${p.id}-muadzin" placeholder="Sdr. Fulan">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Tagline Layar Adzan</label>
+                        <input type="text" id="${p.id}-adzanTagline" placeholder="Panggilan Suci">
+                    </div>
+                    <div class="form-group">
+                        <label>Pesan / Kutipan Adzan</label>
+                        <input type="text" id="${p.id}-adzanMessage" placeholder="Saatnya Menunaikan Sholat...">
+                    </div>
+                    <div class="form-group">
+                        <label>Pesan Layar Pelaksanaan Sholat</label>
+                        <input type="text" id="${p.id}-sholatMessage" placeholder="Rapatkan Shaf dan Matikan Gadget">
+                    </div>
+                    <button class="submit-btn" onclick="savePrayerDur('${p.id}')">💾 SIMPAN ${p.label}</button>
                 </div>
             `).join('');
+
+            const jumatHtml = `
+                <div id="prayer-tab-jumat" class="sub-panel">
+                    <button id="jumat-stage-enabled" class="toggle-btn" style="width:100%;margin-bottom:10px;" onclick="toggleRemoteFlag('jumat-stage-enabled')">Aktifkan Mode Sholat Jum'at</button>
+                    <div class="grid-3">
+                        <div class="form-group">
+                            <label>Waktu Jum'at (Mnt)</label>
+                            <input type="number" min="3" max="45" id="jumat-waktuDur" value="12">
+                        </div>
+                        <div class="form-group">
+                            <label>Khutbah (Mnt)</label>
+                            <input type="number" min="5" max="90" id="jumat-khutbahDur" value="30">
+                        </div>
+                        <div class="form-group">
+                            <label>Sholat (Mnt)</label>
+                            <input type="number" min="5" max="45" id="jumat-sholatDur" value="20">
+                        </div>
+                    </div>
+                    <div class="grid-3">
+                        <div class="form-group">
+                            <label>Khotib</label>
+                            <input type="text" id="jumat-stage-khotib" placeholder="Ust. Fulan">
+                        </div>
+                        <div class="form-group">
+                            <label>Imam</label>
+                            <input type="text" id="jumat-stage-imam" placeholder="Ust. Fulan">
+                        </div>
+                        <div class="form-group">
+                            <label>Muadzin</label>
+                            <input type="text" id="jumat-stage-muadzin" placeholder="Sdr. Fulan">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Pesan Layar Khutbah</label>
+                        <input type="text" id="jumat-khutbahMsg" placeholder="Harap Tenang dan Menyimak Khutbah">
+                    </div>
+                    <div class="form-group">
+                        <label>Pesan Layar Pelaksanaan Sholat Jum'at</label>
+                        <input type="text" id="jumat-sholatMsg" placeholder="Rapatkan Shaf dan Matikan Gadget">
+                    </div>
+                    <button class="submit-btn" onclick="saveJumatStage()">💾 SIMPAN PENGATURAN JUM'AT</button>
+                </div>
+            `;
+
+            box.innerHTML = `<div class="card"><span class="card-title">Tahapan 5 Waktu Sholat &amp; Jum'at</span>${tabsHtml}${prayersHtml}${jumatHtml}</div>`;
         }
         buildPrayerStageCards();
 
@@ -1692,6 +2082,17 @@
             if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
         }
 
+        function switchSubTab(parentTab, subId, evt) {
+            vibe();
+            const parent = document.getElementById('tab-' + parentTab);
+            if (!parent) return;
+            parent.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
+            parent.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+            const target = document.getElementById('sub-' + parentTab + '-' + subId);
+            if (target) target.classList.add('active');
+            if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+        }
+
         function updateIdentity() {
             const name = document.getElementById('mosqueName').value.trim();
             const address = document.getElementById('mosqueAddress').value.trim();
@@ -1759,8 +2160,10 @@
 
         function saveOnlineFinance() {
             const enabledBtn = document.getElementById('financeEnabledBtn');
+            const floatingBtn = document.getElementById('financeShowFloatingBtn');
             sendCommand('update_online_finance', {
                 enabled: enabledBtn ? enabledBtn.classList.contains('on') : true,
+                showFloatingOnMain: floatingBtn ? floatingBtn.classList.contains('on') : true,
                 url: document.getElementById('financeUrl').value.trim(),
                 reportUrl: document.getElementById('financeReportUrl').value.trim(),
                 bankName: document.getElementById('financeBank').value.trim(),
@@ -1851,9 +2254,139 @@
         }
 
         function savePrayerDur(prayerId) {
+            const correction = parseInt(document.getElementById(`${prayerId}-correction`).value, 10);
+            const tartilDuration = parseInt(document.getElementById(`${prayerId}-tartil`).value, 10) || 15;
+            const adzanDuration = parseInt(document.getElementById(`${prayerId}-adzan`).value, 10) || 4;
             const iqomahDuration = parseInt(document.getElementById(`${prayerId}-iqomah`).value, 10) || 10;
             const sholatDuration = parseInt(document.getElementById(`${prayerId}-sholat`).value, 10) || 15;
-            sendCommand('update_prayer_iqomah', { prayer: prayerId, iqomahDuration, sholatDuration }, '✅ Durasi sholat diperbarui!');
+            const imam = document.getElementById(`${prayerId}-imam`).value.trim();
+            const muadzin = document.getElementById(`${prayerId}-muadzin`).value.trim();
+            const adzanTagline = document.getElementById(`${prayerId}-adzanTagline`).value.trim();
+            const adzanMessage = document.getElementById(`${prayerId}-adzanMessage`).value.trim();
+            const sholatMessage = document.getElementById(`${prayerId}-sholatMessage`).value.trim();
+            sendCommand('update_prayer_stage', {
+                prayer: prayerId,
+                correction: isNaN(correction) ? 0 : correction,
+                tartilDuration,
+                adzanDuration,
+                iqomahDuration,
+                sholatDuration,
+                imam,
+                muadzin,
+                adzanTagline,
+                adzanMessage,
+                sholatMessage
+            }, '✅ Pengaturan tahapan sholat disimpan!');
+        }
+
+        function saveJumatStage() {
+            const enBtn = document.getElementById('jumat-stage-enabled');
+            sendCommand('update_jumat_stage', {
+                enabled: enBtn ? enBtn.classList.contains('on') : true,
+                waktuJumatDuration: parseInt(document.getElementById('jumat-waktuDur').value, 10) || 12,
+                khutbahDuration: parseInt(document.getElementById('jumat-khutbahDur').value, 10) || 30,
+                sholatJumatDuration: parseInt(document.getElementById('jumat-sholatDur').value, 10) || 20,
+                khotib: document.getElementById('jumat-stage-khotib').value.trim(),
+                imam: document.getElementById('jumat-stage-imam').value.trim(),
+                muadzin: document.getElementById('jumat-stage-muadzin').value.trim(),
+                khutbahMessage: document.getElementById('jumat-khutbahMsg').value.trim(),
+                sholatMessage: document.getElementById('jumat-sholatMsg').value.trim()
+            }, '✅ Pengaturan Sholat Jum\'at disimpan!');
+        }
+
+        function switchInfoSubTab(subId, evt) {
+            vibe();
+            const parent = document.getElementById('sub-tampilan-info');
+            if (!parent) return;
+            parent.querySelectorAll(':scope > .sub-panel').forEach(p => p.classList.remove('active'));
+            parent.querySelectorAll(':scope > .sub-tabs .sub-tab-btn').forEach(b => b.classList.remove('active'));
+            const target = document.getElementById('info-sub-' + subId);
+            if (target) target.classList.add('active');
+            if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+        }
+
+        function togglePhbiTypeFields() {
+            const t = document.getElementById('phbiNewType')?.value || 'hijri';
+            document.getElementById('phbiHijriWrap').style.display = t === 'hijri' ? 'grid' : 'none';
+            document.getElementById('phbiGregWrap').style.display = t === 'gregorian' ? 'block' : 'none';
+        }
+
+        function savePhbiSettings() {
+            const sunnahBtn = document.getElementById('phbiSunnahBtn');
+            sendCommand('update_info_settings', {
+                enableSunnahFasting: sunnahBtn ? sunnahBtn.classList.contains('on') : true,
+                lookaheadDays: parseInt(document.getElementById('phbiLookahead').value, 10) || 60
+            }, '✅ Pengaturan PHBI disimpan!');
+        }
+
+        function addPhbiEvent() {
+            const name = document.getElementById('phbiNewName').value.trim();
+            const type = document.getElementById('phbiNewType').value;
+            const hijriMonth = parseInt(document.getElementById('phbiNewMonth').value, 10) || 1;
+            const hijriDay = parseInt(document.getElementById('phbiNewDay').value, 10) || 1;
+            const gregorianDate = document.getElementById('phbiNewDate').value.trim();
+            if (!name) { showToast('Isi nama PHBI / agenda!', true); return; }
+            sendCommand('add_islamic_event', { name, type, hijriMonth, hijriDay, gregorianDate }, '✅ Agenda PHBI ditambahkan!');
+            document.getElementById('phbiNewName').value = '';
+        }
+
+        function switchCustomAudioTab(subId, evt) {
+            vibe();
+            const parent = document.getElementById('sub-sholat-custom');
+            if (!parent) return;
+            parent.querySelectorAll(':scope > .sub-panel').forEach(p => p.classList.remove('active'));
+            parent.querySelectorAll(':scope > .sub-tabs .sub-tab-btn').forEach(b => b.classList.remove('active'));
+            const target = document.getElementById('custom-sub-' + subId);
+            if (target) target.classList.add('active');
+            if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+        }
+
+        function toggleSchedTypeFields() {
+            const t = document.getElementById('schedNewType')?.value || 'weekly';
+            document.getElementById('schedNewDayWrap').style.display = t === 'weekly' ? 'block' : 'none';
+            document.getElementById('schedNewDateWrap').style.display = t === 'once' ? 'block' : 'none';
+        }
+
+        async function uploadCustomAudioFile() {
+            const inp = document.getElementById('customAudioFileInput');
+            if (!inp || !inp.files || !inp.files[0]) { showToast('Pilih file audio terlebih dahulu!', true); return; }
+            await uploadFileToTv('custom', 'custom', inp.files[0], 'customAudioFileInput');
+        }
+
+        function selectCustomAudioForLive(fileName) {
+            const path = 'audio/custom/' + fileName;
+            setInputSafely('customLiveFile', path);
+            sendCommand('update_custom_audio_live', { liveAudioFile: path }, '✅ Audio dipilih untuk Siaran Langsung');
+            const liveBtn = document.querySelector('#sub-sholat-custom > .sub-tabs .sub-tab-btn:nth-child(2)');
+            switchCustomAudioTab('live', liveBtn ? { currentTarget: liveBtn } : null);
+        }
+
+        function toggleCustomAudioLive() {
+            const liveAudioFile = document.getElementById('customLiveFile').value.trim();
+            const liveDurationMinutes = parseInt(document.getElementById('customLiveDur').value, 10) || 30;
+            const btn = document.getElementById('customLivePlayBtn');
+            const currentlyPlaying = btn && btn.dataset.playing === '1';
+            if (!currentlyPlaying && !liveAudioFile) {
+                showToast('Pilih atau isi File Audio Aktif terlebih dahulu!', true);
+                return;
+            }
+            sendCommand('update_custom_audio_live', {
+                liveAudioFile,
+                liveDurationMinutes,
+                isPlayingLive: !currentlyPlaying
+            }, currentlyPlaying ? '⏹ Siaran Langsung dihentikan' : '▶ Siaran Langsung dimulai');
+        }
+
+        function addCustomAudioSchedule() {
+            const name = document.getElementById('schedNewName').value.trim() || 'Jadwal Audio';
+            const audioFile = document.getElementById('schedNewFile').value.trim();
+            const scheduleType = document.getElementById('schedNewType').value;
+            const dayOfWeek = parseInt(document.getElementById('schedNewDay').value, 10) || 5;
+            const date = document.getElementById('schedNewDate').value.trim();
+            const time = document.getElementById('schedNewTime').value.trim() || '11:00';
+            const durationMinutes = parseInt(document.getElementById('schedNewDur').value, 10) || 15;
+            if (!audioFile) { showToast('Isi path File Audio terlebih dahulu!', true); return; }
+            sendCommand('add_custom_audio_schedule', { name, audioFile, scheduleType, dayOfWeek, date, time, durationMinutes }, '✅ Jadwal audio ditambahkan!');
         }
 
         function saveJumatPetugas() {
@@ -2107,7 +2640,18 @@
                 }
 
                 if (status.standbySlideshow) {
-                    setInputSafely('standbySlideDur', status.standbySlideshow.slideDuration || 15);
+                    const sb = status.standbySlideshow;
+                    const sBtn = document.getElementById('standbyEnabledBtn');
+                    if (sBtn && (!pendingUpdates['standbyEnabledBtn'] || (Date.now() - pendingUpdates['standbyEnabledBtn'] >= 2500))) {
+                        sBtn.classList.toggle('on', !!sb.enabled);
+                    }
+                    const npBtn = document.getElementById('standbyNextPrayerBtn');
+                    if (npBtn && (!pendingUpdates['standbyNextPrayerBtn'] || (Date.now() - pendingUpdates['standbyNextPrayerBtn'] >= 2500))) {
+                        npBtn.classList.toggle('on', sb.showNextPrayerCard !== false);
+                    }
+                    setInputSafely('standbySlideDur', sb.slideDuration ?? 60);
+                    setInputSafely('standbyRepeatCount', sb.repeatCount ?? 1);
+                    setInputSafely('standbyNextThreshold', sb.nextPrayerThresholdMinutes ?? 30);
                 }
 
                 if (status.jumat) {
@@ -2115,8 +2659,6 @@
                     setInputSafely('jumatImam', status.jumat.imam);
                     setInputSafely('jumatMuadzin', status.jumat.muadzin);
                     setInputSafely('jumatSaldoLalu', status.jumat.saldoKasLalu ?? 0);
-                    setInputSafely('jumatPemasukan', status.jumat.pemasukan ?? 0);
-                    setInputSafely('jumatPengeluaran', status.jumat.pengeluaran ?? 0);
                 }
 
                 if (status.ramadhan) {
@@ -2209,6 +2751,9 @@
                     if (!pendingUpdates['financeEnabledBtn'] || (Date.now() - pendingUpdates['financeEnabledBtn'] >= 2500)) {
                         document.getElementById('financeEnabledBtn')?.classList.toggle('on', !!status.onlineFinance.enabled);
                     }
+                    if (!pendingUpdates['financeShowFloatingBtn'] || (Date.now() - pendingUpdates['financeShowFloatingBtn'] >= 2500)) {
+                        document.getElementById('financeShowFloatingBtn')?.classList.toggle('on', status.onlineFinance.showFloatingOnMain !== false);
+                    }
                     setInputSafely('financeUrl', status.onlineFinance.url);
                     setInputSafely('financeReportUrl', status.onlineFinance.reportUrl);
                     setInputSafely('financeBank', status.onlineFinance.bankName);
@@ -2224,6 +2769,30 @@
                 if (status.infoSettings) {
                     const bf = document.getElementById('btn-fasting');
                     if (bf) bf.classList.toggle('on', !!status.infoSettings.enableSunnahFasting);
+                    const psb = document.getElementById('phbiSunnahBtn');
+                    if (psb && (!pendingUpdates['phbiSunnahBtn'] || (Date.now() - pendingUpdates['phbiSunnahBtn'] >= 2500))) {
+                        psb.classList.toggle('on', !!status.infoSettings.enableSunnahFasting);
+                    }
+                    setInputSafely('phbiLookahead', status.infoSettings.lookaheadDays ?? 60);
+                    const phbiBox = document.getElementById('phbiEventsListBox');
+                    if (phbiBox) {
+                        const hijriMonths = ['', 'Muharram', 'Shafar', 'Rabiul Awal', 'Rabiul Akhir', 'Jumadil Awal', 'Jumadil Akhir', 'Rajab', 'Syaban', 'Ramadhan', 'Syawal', 'Dzulqadah', 'Dzulhijjah'];
+                        const evs = status.infoSettings.islamicEvents || [];
+                        phbiBox.innerHTML = evs.length === 0
+                            ? '<div style="font-size:12px;color:var(--text-secondary);">Belum ada agenda PHBI.</div>'
+                            : evs.map((ev, idx) => `
+                                <div class="list-item">
+                                    <div class="list-item-text">
+                                        <div class="list-item-title">${escapeHtml(ev.name || 'Agenda #' + (idx+1))}</div>
+                                        <div class="list-item-sub">${ev.type === 'gregorian' ? 'Masehi: ' + escapeHtml(ev.gregorianDate || '-') : (ev.hijriDay + ' ' + (hijriMonths[ev.hijriMonth] || ev.hijriMonth))}</div>
+                                    </div>
+                                    <div style="display:flex;gap:6px;">
+                                        <button class="mini-btn ${ev.enabled ? 'on' : ''}" onclick="sendCommand('toggle_islamic_event', { id: '${escapeHtml(ev.id)}' })">${ev.enabled ? 'AKTIF' : 'OFF'}</button>
+                                        <button class="mini-btn del" onclick="sendCommand('delete_islamic_event', { id: '${escapeHtml(ev.id)}' }, 'Agenda dihapus')">Hapus</button>
+                                    </div>
+                                </div>
+                            `).join('');
+                    }
                 }
 
                 document.getElementById('btn-audio')?.classList.toggle('active', !!status.customAudio);
@@ -2273,9 +2842,110 @@
                             const btn = document.getElementById(id);
                             if (btn) btn.classList.toggle('on', !!cfg[key]);
                         });
+                        setInputSafely(`${p.id}-correction`, cfg.correction ?? 0);
+                        setInputSafely(`${p.id}-tartil`, cfg.tartilDuration ?? 15);
+                        setInputSafely(`${p.id}-adzan`, cfg.adzanDuration ?? 4);
                         setInputSafely(`${p.id}-iqomah`, cfg.iqomahDuration);
                         setInputSafely(`${p.id}-sholat`, cfg.sholatDuration);
+                        setInputSafely(`${p.id}-imam`, cfg.imam || '');
+                        setInputSafely(`${p.id}-muadzin`, cfg.muadzin || '');
+                        setInputSafely(`${p.id}-adzanTagline`, cfg.adzanTagline || '');
+                        setInputSafely(`${p.id}-adzanMessage`, cfg.adzanMessage || '');
+                        setInputSafely(`${p.id}-sholatMessage`, cfg.sholatMessage || '');
                     });
+                }
+
+                if (status.jumat) {
+                    const jBtn = document.getElementById('jumat-stage-enabled');
+                    if (jBtn && (!pendingUpdates['jumat-stage-enabled'] || (Date.now() - pendingUpdates['jumat-stage-enabled'] >= 2500))) {
+                        jBtn.classList.toggle('on', !!status.jumat.enabled);
+                    }
+                    setInputSafely('jumat-waktuDur', status.jumat.waktuJumatDuration ?? 12);
+                    setInputSafely('jumat-khutbahDur', status.jumat.khutbahDuration ?? 30);
+                    setInputSafely('jumat-sholatDur', status.jumat.sholatJumatDuration ?? 20);
+                    setInputSafely('jumat-stage-khotib', status.jumat.khotib || '');
+                    setInputSafely('jumat-stage-imam', status.jumat.imam || '');
+                    setInputSafely('jumat-stage-muadzin', status.jumat.muadzin || '');
+                    setInputSafely('jumat-khutbahMsg', status.jumat.khutbahMessage || '');
+                    setInputSafely('jumat-sholatMsg', status.jumat.sholatMessage || '');
+                    setInputSafely('jumatKeuDate', status.jumat.keuanganDate || '');
+                    setInputSafely('jumatCustomTitle', status.jumat.customTitle || '');
+                    setInputSafely('jumatKeuSource', status.jumat.source || 'manual');
+                    setInputSafely('jumatSaldoLalu', status.jumat.saldoKasLalu ?? 0);
+                    const saldoAkhirBadge = document.getElementById('jumatSaldoAkhirBadge');
+                    if (saldoAkhirBadge) {
+                        const sa = status.jumat.saldoAkhir ?? ((status.jumat.saldoKasLalu || 0) + (status.jumat.pemasukan || 0) - (status.jumat.pengeluaran || 0));
+                        saldoAkhirBadge.textContent = 'Saldo: Rp ' + Number(sa).toLocaleString('id-ID');
+                    }
+                    const jBox = document.getElementById('jumatJournalListBox');
+                    if (jBox) {
+                        const entries = status.jumat.entries || [];
+                        jBox.innerHTML = entries.length === 0
+                            ? '<div style="font-size:12px;color:var(--text-secondary);">Belum ada transaksi jurnal pada tanggal ini.</div>'
+                            : entries.map(e => `
+                                <div class="list-item">
+                                    <div class="list-item-text">
+                                        <div class="list-item-title">${escapeHtml(e.description || '-')}</div>
+                                        <div class="list-item-sub" style="color:${e.type === 'in' ? '#34d399' : '#f87171'};font-weight:700;">${e.type === 'in' ? '+' : '-'} Rp ${Number(e.amount || 0).toLocaleString('id-ID')}</div>
+                                    </div>
+                                    <button class="mini-btn del" onclick="sendCommand('delete_jumat_journal', { id: '${escapeHtml(e.id)}', selectedDate: document.getElementById('jumatKeuDate')?.value || '' }, 'Transaksi dihapus')">Hapus</button>
+                                </div>
+                            `).join('');
+                    }
+                }
+
+                if (status.customAudioConfig) {
+                    const ca = status.customAudioConfig;
+                    setInputSafely('customLiveFile', ca.liveAudioFile || '');
+                    setInputSafely('customLiveDur', ca.liveDurationMinutes ?? 30);
+                    const playBtn = document.getElementById('customLivePlayBtn');
+                    const badge = document.getElementById('customLiveStatusBadge');
+                    if (playBtn) {
+                        playBtn.dataset.playing = ca.isPlayingLive ? '1' : '0';
+                        playBtn.textContent = ca.isPlayingLive ? '⏹ HENTIKAN SIARAN LANGSUNG' : '▶ MULAI SIARAN LANGSUNG';
+                        playBtn.classList.toggle('danger', !!ca.isPlayingLive);
+                    }
+                    if (badge) {
+                        badge.textContent = ca.isPlayingLive ? 'ON-AIR' : 'STANDBY';
+                        badge.style.color = ca.isPlayingLive ? '#ef4444' : 'var(--text-secondary)';
+                    }
+                    const schedBox = document.getElementById('customAudioScheduleBox');
+                    if (schedBox) {
+                        const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+                        const scheds = ca.schedules || [];
+                        schedBox.innerHTML = scheds.length === 0
+                            ? '<div style="font-size:12px;color:var(--text-secondary);">Belum ada jadwal audio otomatis.</div>'
+                            : scheds.map((s, idx) => `
+                                <div class="list-item">
+                                    <div class="list-item-text">
+                                        <div class="list-item-title">${escapeHtml(s.name || 'Jadwal #' + (idx+1))} • ${escapeHtml(s.time || '11:00')}</div>
+                                        <div class="list-item-sub">${s.scheduleType === 'once' ? escapeHtml(s.date || '-') : dayNames[s.dayOfWeek] || 'Jum'} • ${s.durationMinutes || 15} mnt • ${escapeHtml(s.audioFile || '-')}</div>
+                                    </div>
+                                    <div style="display:flex;gap:6px;">
+                                        <button class="mini-btn ${s.enabled ? 'on' : ''}" onclick="sendCommand('update_custom_audio_schedule', { id: '${escapeHtml(s.id)}', toggleEnabled: true })">${s.enabled ? 'AKTIF' : 'OFF'}</button>
+                                        <button class="mini-btn del" onclick="sendCommand('delete_custom_audio_schedule', { id: '${escapeHtml(s.id)}' }, 'Jadwal dihapus')">Hapus</button>
+                                    </div>
+                                </div>
+                            `).join('');
+                    }
+                }
+
+                const customLibBox = document.getElementById('customAudioLibraryBox');
+                if (customLibBox) {
+                    const customFiles = (status.audioSlots && status.audioSlots.custom) ? status.audioSlots.custom : [];
+                    customLibBox.innerHTML = customFiles.length === 0
+                        ? '<div style="font-size:12px;color:var(--text-secondary);">Belum ada file audio kustom tersimpan.</div>'
+                        : customFiles.map(fn => `
+                            <div class="list-item">
+                                <div class="list-item-text">
+                                    <div class="list-item-title">${escapeHtml(fn)}</div>
+                                </div>
+                                <div style="display:flex;gap:6px;">
+                                    <button class="mini-btn on" onclick="selectCustomAudioForLive('${escapeHtml(fn)}')">Pilih u/ Live</button>
+                                    <button class="mini-btn del" onclick="sendCommand('delete_custom_audio_file', { fileName: '${escapeHtml(fn)}' }, 'Audio dihapus')">Hapus</button>
+                                </div>
+                            </div>
+                        `).join('');
                 }
 
                 renderDynamicLists(status);
@@ -2397,8 +3067,15 @@
         }
 
         function saveStandbySlideshow() {
-            const dur = parseInt(document.getElementById('standbySlideDur')?.value, 10) || 15;
-            sendCommand('update_standby_slideshow', { slideDuration: dur }, '✅ Durasi Standby Slideshow disimpan!');
+            const enBtn = document.getElementById('standbyEnabledBtn');
+            const npBtn = document.getElementById('standbyNextPrayerBtn');
+            sendCommand('update_standby_slideshow', {
+                enabled: enBtn ? enBtn.classList.contains('on') : false,
+                slideDuration: parseInt(document.getElementById('standbySlideDur')?.value, 10) || 60,
+                repeatCount: parseInt(document.getElementById('standbyRepeatCount')?.value, 10) || 1,
+                showNextPrayerCard: npBtn ? npBtn.classList.contains('on') : true,
+                nextPrayerThresholdMinutes: parseInt(document.getElementById('standbyNextThreshold')?.value, 10) || 30
+            }, '✅ Pengaturan Mode Standby disimpan!');
         }
 
         function simulateSelectedState() {
@@ -2406,12 +3083,33 @@
             sendCommand('simulate_state', { state, durationSeconds: 300 }, `▶ Simulasi state: ${state}`);
         }
 
+        function changeJumatDate() {
+            const selectedDate = document.getElementById('jumatKeuDate')?.value || '';
+            if (!selectedDate) return;
+            sendCommand('update_jumat_keuangan', { selectedDate }, '📅 Tanggal Jum\'at dipilih: ' + selectedDate);
+        }
+
         function saveJumatKeuangan() {
             sendCommand('update_jumat_keuangan', {
-                saldoKasLalu: parseInt(document.getElementById('jumatSaldoLalu')?.value, 10) || 0,
-                pemasukan: parseInt(document.getElementById('jumatPemasukan')?.value, 10) || 0,
-                pengeluaran: parseInt(document.getElementById('jumatPengeluaran')?.value, 10) || 0
-            }, '💰 Kas Jum\'at disimpan!');
+                selectedDate: document.getElementById('jumatKeuDate')?.value || '',
+                customTitle: document.getElementById('jumatCustomTitle')?.value.trim() || '',
+                source: document.getElementById('jumatKeuSource')?.value || 'manual',
+                saldoKasLalu: parseInt(document.getElementById('jumatSaldoLalu')?.value, 10) || 0
+            }, '💰 Buku Kas Jum\'at disimpan!');
+        }
+
+        function addJumatJournal() {
+            const description = document.getElementById('jumatJournalDesc')?.value.trim() || '';
+            const amount = parseInt(document.getElementById('jumatJournalAmount')?.value, 10) || 0;
+            const type = document.getElementById('jumatJournalType')?.value || 'in';
+            const selectedDate = document.getElementById('jumatKeuDate')?.value || '';
+            if (!description || amount <= 0) {
+                showToast('Isi uraian dan nominal transaksi!', true);
+                return;
+            }
+            sendCommand('add_jumat_journal', { description, amount, type, selectedDate }, '✅ Transaksi jurnal ditambahkan!');
+            document.getElementById('jumatJournalDesc').value = '';
+            document.getElementById('jumatJournalAmount').value = '';
         }
 
         function saveRamadhanAll() {

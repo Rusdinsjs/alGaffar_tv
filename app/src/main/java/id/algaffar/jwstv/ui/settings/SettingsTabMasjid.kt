@@ -352,6 +352,13 @@ fun OnlineFinanceSettingsTab(
                 onCheckedChange = { v -> actions.onUpdateSettings { it.copy(onlineFinance = it.onlineFinance.copy(enabled = v)) } }
             )
 
+            HybridToggleRow(
+                label = "Tampilkan Banner Melayang QR Kas Online",
+                description = "Tampil bergiliran dengan QR Infaq di sudut berlawanan dari Floating Overlay pada Group Slideshow",
+                checked = fin.showFloatingOnMain,
+                onCheckedChange = { v -> actions.onUpdateSettings { it.copy(onlineFinance = it.onlineFinance.copy(showFloatingOnMain = v)) } }
+            )
+
             HybridInfoBanner(
                 text = "Modul ini menampilkan Laporan Kas Umum Masjid via Google Sheets dan berdiri terpisah dari pembukuan Kas Jum'at manual (kecuali jika di tab Jum'at Anda memilih sumber Online).",
                 accentColor = Color(0xFF10B981)
