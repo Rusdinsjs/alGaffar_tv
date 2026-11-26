@@ -1,0 +1,8 @@
+{
+  "versionCode": 3,
+  "versionName": "2.2.0-stb",
+  "changelog": "Penambahan fitur 1-Click CDN Image Pack Downloader (15 slot gambar), sinkronisasi endpoint algaffartv-ops/releases, dan peningkatan stabilitas STB.",
+  "apkUrl": "https://github.com/algaffartv-ops/releases/releases/download/v2.2.0-stb/alGaffar-tv-jws.apk",
+  "sha256": "",
+  "minAndroidSdk": 26
+}

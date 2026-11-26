@@ -1,0 +1,244 @@
+{
+  "packs": [
+    {
+      "id": "standard_image_pack",
+      "title": "Paket Gambar Standar Masjid (Lengkap 1080p)",
+      "description": "Koleksi lengkap latar Islami, poster edukasi masjid, slide Tartil/Tarhim, Do'a Adzan, Khutbah/Ceramah, dan Pelaksanaan Sholat.",
+      "sizeLabel": "~8 MB",
+      "replaceExistingLists": true,
+      "assets": [
+        {
+          "target": "logo",
+          "title": "Logo Default Masjid",
+          "fileName": "logo_masjid.png",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/logo_masjid.png",
+          "sha256": "",
+          "overwrite": false
+        },
+        {
+          "target": "slide_image",
+          "title": "Adab & Ketertiban di Dalam Masjid",
+          "fileName": "poster_adab_masjid.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/poster_adab_masjid.jpg",
+          "sha256": "",
+          "duration": 15
+        },
+        {
+          "target": "slide_image",
+          "title": "Keutamaan Sholat Berjamaah",
+          "fileName": "poster_sholat_berjamaah.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/poster_sholat_berjamaah.jpg",
+          "sha256": "",
+          "duration": 15
+        },
+        {
+          "target": "tartil_image",
+          "title": "Latar Tartil Al-Qur'an 1",
+          "fileName": "tartil_01.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/tartil_01.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "tartil_image",
+          "title": "Latar Tartil Al-Qur'an 2",
+          "fileName": "tartil_02.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/tartil_02.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "tarhim_image",
+          "title": "Latar Shalawat Tarhim 1",
+          "fileName": "tarhim_01.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/tarhim_01.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "tarhim_image",
+          "title": "Latar Shalawat Tarhim 2",
+          "fileName": "tarhim_02.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/tarhim_02.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "doa_adzan",
+          "title": "Poster Do'a Setelah Adzan",
+          "fileName": "doa_adzan.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/doa_adzan.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "khutbah_jumat",
+          "title": "Latar Khutbah Jum'at",
+          "fileName": "khutbah_jumat.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/khutbah_jumat.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "khutbah_idul_fitri",
+          "title": "Latar Khutbah Idul Fitri",
+          "fileName": "khutbah_idul_fitri.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/khutbah_idul_fitri.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "khutbah_idul_adha",
+          "title": "Latar Khutbah Idul Adha",
+          "fileName": "khutbah_idul_adha.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/khutbah_idul_adha.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "ceramah_tarawih",
+          "title": "Latar Ceramah Tarawih",
+          "fileName": "ceramah_tarawih.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/ceramah_tarawih.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "sholat_5_waktu",
+          "title": "Latar Sholat 5 Waktu",
+          "fileName": "sholat_5_waktu.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/sholat_5_waktu.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "sholat_jumat",
+          "title": "Latar Sholat Jum'at",
+          "fileName": "sholat_jumat.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/sholat_jumat.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "sholat_idul_fitri",
+          "title": "Latar Sholat Idul Fitri",
+          "fileName": "sholat_idul_fitri.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/sholat_idul_fitri.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "sholat_idul_adha",
+          "title": "Latar Sholat Idul Adha",
+          "fileName": "sholat_idul_adha.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/sholat_idul_adha.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "sholat_tarawih_witir",
+          "title": "Latar Sholat Tarawih & Witir",
+          "fileName": "sholat_tarawih_witir.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/standard/sholat_tarawih_witir.jpg",
+          "sha256": ""
+        }
+      ]
+    },
+    {
+      "id": "haramain_image_pack",
+      "title": "Paket Gambar Haramain (Makkah & Madinah 1080p)",
+      "description": "Koleksi foto fotografi eksklusif Masjidil Haram & Masjid Nabawi untuk seluruh layar ibadah dan slideshow.",
+      "sizeLabel": "~10 MB",
+      "replaceExistingLists": true,
+      "assets": [
+        {
+          "target": "slide_image",
+          "title": "Masjidil Haram — Makkah Al-Mukarramah",
+          "fileName": "haramain_makkah_slide.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/haramain/haramain_makkah_slide.jpg",
+          "sha256": "",
+          "duration": 15
+        },
+        {
+          "target": "slide_image",
+          "title": "Masjid Nabawi — Madinah Al-Munawwarah",
+          "fileName": "haramain_madinah_slide.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/haramain/haramain_madinah_slide.jpg",
+          "sha256": "",
+          "duration": 15
+        },
+        {
+          "target": "tartil_image",
+          "title": "Tartil Haramain 1",
+          "fileName": "haramain_tartil_01.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/haramain/haramain_tartil_01.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "tarhim_image",
+          "title": "Tarhim Haramain 1",
+          "fileName": "haramain_tarhim_01.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/haramain/haramain_tarhim_01.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "doa_adzan",
+          "title": "Do'a Setelah Adzan Haramain",
+          "fileName": "haramain_doa_adzan.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/haramain/haramain_doa_adzan.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "khutbah_jumat",
+          "title": "Khutbah Jum'at Haramain",
+          "fileName": "haramain_khutbah_jumat.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/haramain/haramain_khutbah_jumat.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "khutbah_idul_fitri",
+          "title": "Khutbah Idul Fitri Haramain",
+          "fileName": "haramain_khutbah_idul_fitri.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/haramain/haramain_khutbah_idul_fitri.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "khutbah_idul_adha",
+          "title": "Khutbah Idul Adha Haramain",
+          "fileName": "haramain_khutbah_idul_adha.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/haramain/haramain_khutbah_idul_adha.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "ceramah_tarawih",
+          "title": "Ceramah Tarawih Haramain",
+          "fileName": "haramain_ceramah_tarawih.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/haramain/haramain_ceramah_tarawih.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "sholat_5_waktu",
+          "title": "Sholat 5 Waktu Haramain",
+          "fileName": "haramain_sholat_5_waktu.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/haramain/haramain_sholat_5_waktu.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "sholat_jumat",
+          "title": "Sholat Jum'at Haramain",
+          "fileName": "haramain_sholat_jumat.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/haramain/haramain_sholat_jumat.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "sholat_idul_fitri",
+          "title": "Sholat Idul Fitri Haramain",
+          "fileName": "haramain_sholat_idul_fitri.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/haramain/haramain_sholat_idul_fitri.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "sholat_idul_adha",
+          "title": "Sholat Idul Adha Haramain",
+          "fileName": "haramain_sholat_idul_adha.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/haramain/haramain_sholat_idul_adha.jpg",
+          "sha256": ""
+        },
+        {
+          "target": "sholat_tarawih_witir",
+          "title": "Sholat Tarawih & Witir Haramain",
+          "fileName": "haramain_sholat_tarawih_witir.jpg",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/images/haramain/haramain_sholat_tarawih_witir.jpg",
+          "sha256": ""
+        }
+      ]
+    }
+  ]
+}

@@ -44,6 +44,42 @@ class JwsAudioEngineTest {
     }
 
     @Test
+    fun `resolvePlaylistFiles prioritizes jumat slot over dhuhr on Friday and falls back cleanly`() {
+        val tempRoot = Files.createTempDirectory("jws_audio_jumat_test").toFile()
+        try {
+            val tarhimDir = File(tempRoot, "audio/tarhim").apply { mkdirs() }
+            val dhuhrFile = File(tarhimDir, "dhuhr.mp3").apply { writeText("dhuhr") }
+
+            // Before jumat.mp3 exists, Friday falls back to dhuhr.mp3
+            assertEquals(
+                listOf(dhuhrFile),
+                JwsAudioEngine.resolvePlaylistFiles("tarhim", PrayerId.DHUHR, tempRoot, isFridayJumat = true)
+            )
+
+            // Once jumat.mp3 exists, Friday uses jumat.mp3 while non-Friday still uses dhuhr.mp3
+            val jumatFile = File(tarhimDir, "jumat.mp3").apply { writeText("jumat") }
+            assertEquals(
+                listOf(jumatFile),
+                JwsAudioEngine.resolvePlaylistFiles("tarhim", PrayerId.DHUHR, tempRoot, isFridayJumat = true)
+            )
+            assertEquals(
+                listOf(dhuhrFile),
+                JwsAudioEngine.resolvePlaylistFiles("tarhim", PrayerId.DHUHR, tempRoot, isFridayJumat = false)
+            )
+
+            // Folder audio/tarhim/jumat/ takes top priority over single jumat.mp3 on Friday
+            val jumatFolder = File(tarhimDir, "jumat").apply { mkdirs() }
+            val jumatFolderTrack = File(jumatFolder, "01_khusus_jumat.mp3").apply { writeText("jumat_folder") }
+            assertEquals(
+                listOf(jumatFolderTrack),
+                JwsAudioEngine.resolvePlaylistFiles("tarhim", PrayerId.DHUHR, tempRoot, isFridayJumat = true)
+            )
+        } finally {
+            tempRoot.deleteRecursively()
+        }
+    }
+
+    @Test
     fun `generateSineWavePcm produces non-zero 1000Hz PCM samples with smooth envelope`() {
         val pcm = BeepGenerator.generateSineWavePcm(frequencyHz = 1000.0, durationMs = 280, sampleRate = 44100)
         assertEquals((44100 * 280) / 1000, pcm.size)

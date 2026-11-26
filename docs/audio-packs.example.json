@@ -1,0 +1,56 @@
+{
+  "packs": [
+    {
+      "id": "standard_pack",
+      "title": "Paket Audio Standar Masjid",
+      "description": "Tartil Al-Qur'an, Shalawat Tarhim, dan Adzan standar masjid (termasuk Adzan Subuh).",
+      "sizeLabel": "~15 MB",
+      "tracks": [
+        {
+          "category": "tartil",
+          "slot": "default",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/audio/standard/tartil_default.mp3",
+          "sha256": ""
+        },
+        {
+          "category": "tarhim",
+          "slot": "default",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/audio/standard/tarhim_default.mp3",
+          "sha256": ""
+        },
+        {
+          "category": "adzan",
+          "slot": "fajr",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/audio/standard/adzan_subuh.mp3",
+          "sha256": ""
+        },
+        {
+          "category": "adzan",
+          "slot": "default",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/audio/standard/adzan_default.mp3",
+          "sha256": ""
+        }
+      ]
+    },
+    {
+      "id": "haramain_pack",
+      "title": "Paket Adzan Makkah & Madinah",
+      "description": "Kumandang Adzan khas Masjidil Haram & Masjid Nabawi.",
+      "sizeLabel": "~12 MB",
+      "tracks": [
+        {
+          "category": "adzan",
+          "slot": "fajr",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/audio/haramain/adzan_madinah_subuh.mp3",
+          "sha256": ""
+        },
+        {
+          "category": "adzan",
+          "slot": "default",
+          "url": "https://raw.githubusercontent.com/algaffartv-ops/releases/main/audio/haramain/adzan_makkah.mp3",
+          "sha256": ""
+        }
+      ]
+    }
+  ]
+}

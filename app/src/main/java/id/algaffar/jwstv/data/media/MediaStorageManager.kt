@@ -88,7 +88,7 @@ object MediaStorageManager {
     val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp", "bmp")
     val AUDIO_EXTENSIONS = setOf("mp3", "wav", "ogg", "m4a", "aac")
     val VIDEO_EXTENSIONS = setOf("mp4", "mkv", "webm", "mov", "m4v")
-    private val PRAYER_SLOTS = setOf("fajr", "dhuhr", "asr", "maghrib", "isha", "default")
+    private val PRAYER_SLOTS = setOf("fajr", "dhuhr", "asr", "maghrib", "isha", "jumat", "default")
     private val PRAYER_AUDIO_CATEGORIES = setOf("tartil", "tarhim", "adzan")
 
     fun formatByteSize(bytes: Long): String {

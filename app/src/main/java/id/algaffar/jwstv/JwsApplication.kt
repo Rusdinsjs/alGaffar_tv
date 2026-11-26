@@ -16,6 +16,7 @@ import id.algaffar.jwstv.data.audio.JwsAudioEngine
 import id.algaffar.jwstv.data.hardware.SwitchController
 import id.algaffar.jwstv.data.logging.AppLogger
 import id.algaffar.jwstv.data.media.AudioPackDownloader
+import id.algaffar.jwstv.data.media.ImagePackDownloader
 import id.algaffar.jwstv.data.repository.SettingsRepository
 import id.algaffar.jwstv.data.server.RemoteTokenStore
 import id.algaffar.jwstv.data.update.OtaUpdateManager
@@ -77,6 +78,7 @@ class AppContainer(application: Application) {
     val switchController: SwitchController = SwitchController(appContext)
     val otaUpdateManager: OtaUpdateManager = OtaUpdateManager(appContext)
     val audioPackDownloader: AudioPackDownloader = AudioPackDownloader()
+    val imagePackDownloader: ImagePackDownloader = ImagePackDownloader()
 
     val runtimeEngine: JwsRuntimeEngine = JwsRuntimeEngine(
         appContext = appContext,
@@ -90,7 +92,8 @@ class AppContainer(application: Application) {
         audioEngine = audioEngine,
         switchController = switchController,
         otaUpdateManager = otaUpdateManager,
-        audioPackDownloader = audioPackDownloader
+        audioPackDownloader = audioPackDownloader,
+        imagePackDownloader = imagePackDownloader
     )
 }
 

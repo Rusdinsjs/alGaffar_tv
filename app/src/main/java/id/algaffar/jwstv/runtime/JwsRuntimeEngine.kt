@@ -13,6 +13,7 @@ import id.algaffar.jwstv.data.excel.TakjilImportPreviewRow
 import id.algaffar.jwstv.data.hardware.SwitchController
 import id.algaffar.jwstv.data.logging.AppLogger
 import id.algaffar.jwstv.data.media.AudioPackDownloader
+import id.algaffar.jwstv.data.media.ImagePackDownloader
 import id.algaffar.jwstv.data.media.MediaStorageManager
 import id.algaffar.jwstv.data.media.StorageHealthSnapshot
 import id.algaffar.jwstv.data.repository.SettingsRepository
@@ -83,7 +84,8 @@ class JwsRuntimeEngine(
     val audioEngine: JwsAudioEngine,
     val switchController: SwitchController,
     val otaUpdateManager: OtaUpdateManager = OtaUpdateManager(appContext),
-    val audioPackDownloader: AudioPackDownloader = AudioPackDownloader()
+    val audioPackDownloader: AudioPackDownloader = AudioPackDownloader(),
+    val imagePackDownloader: ImagePackDownloader = ImagePackDownloader()
 ) {
     private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val started = AtomicBoolean(false)
@@ -554,6 +556,40 @@ class JwsRuntimeEngine(
                 }
             }.onFailure { err ->
                 _statusBannerMessage.value = "Gagal terhubung ke server paket audio: ${err.message}. Gunakan Sync USB / Remote PWA."
+            }
+        }
+    }
+
+    fun downloadImagePack(packId: String) {
+        engineScope.launch {
+            _statusBannerMessage.value = "Mengambil katalog paket gambar resmi Al-Gaffar TV..."
+            val catalogRes = imagePackDownloader.fetchCatalog()
+            catalogRes.onSuccess { packs ->
+                val target = packs.firstOrNull { it.id == packId } ?: packs.firstOrNull()
+                if (target == null) {
+                    _statusBannerMessage.value = "Katalog paket gambar belum tersedia di server."
+                    return@onSuccess
+                }
+                _statusBannerMessage.value = "Mengunduh ${target.title}..."
+                val dl = imagePackDownloader.downloadPack(target, assetsRootDir) { done, total ->
+                    _statusBannerMessage.value = "Mengunduh & optimasi ${target.title} ($done/$total gambar)..."
+                }
+                dl.onSuccess { result ->
+                    updateSettings { prev ->
+                        ImagePackDownloader.applyToSettings(prev, target, result)
+                    }
+                    refreshStorageHealth()
+                    val sizeText = MediaStorageManager.formatByteSize(result.totalSavedBytes)
+                    val msg = "Paket '${result.packTitle}' terpasang (${result.downloadedCount} gambar • $sizeText) ke seluruh slot media!"
+                    AppLogger.info("MEDIA", msg)
+                    _statusBannerMessage.value = msg
+                }.onFailure { err ->
+                    AppLogger.error("MEDIA", "Gagal mengunduh paket gambar: ${err.message}")
+                    _statusBannerMessage.value = "Gagal mengunduh paket gambar: ${err.message}"
+                }
+            }.onFailure { err ->
+                AppLogger.warn("MEDIA", "Gagal terhubung ke server paket gambar: ${err.message}")
+                _statusBannerMessage.value = "Gagal terhubung ke server paket gambar: ${err.message}. Gunakan Sync USB / Remote PWA."
             }
         }
     }
@@ -1497,6 +1533,11 @@ class JwsRuntimeEngine(
                 "download_audio_pack" -> {
                     val packId = payload.stringArg("packId")?.trim().orEmpty().ifBlank { "standard_pack" }
                     downloadAudioPack(packId)
+                }
+
+                "download_image_pack" -> {
+                    val packId = payload.stringArg("packId")?.trim().orEmpty().ifBlank { "standard_image_pack" }
+                    downloadImagePack(packId)
                 }
 
                 "check_ota_update" -> {

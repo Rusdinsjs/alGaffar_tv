@@ -138,6 +138,7 @@ data class SettingsActions(
     val onCheckOtaUpdate: () -> Unit = {},
     val onInstallOtaApkFromUsb: () -> Unit = {},
     val onDownloadAudioPack: (packId: String) -> Unit = {},
+    val onDownloadImagePack: (packId: String) -> Unit = {},
     val isDeviceOwner: Boolean = false,
     val isKioskMaintenanceUnlocked: Boolean = false,
     val onToggleKioskMaintenance: () -> Unit = {},

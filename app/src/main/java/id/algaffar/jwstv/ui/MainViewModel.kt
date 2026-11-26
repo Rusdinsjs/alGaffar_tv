@@ -104,6 +104,7 @@ class MainViewModel(
     fun checkOtaUpdate() = engine.checkOtaUpdate()
     fun installOfflineApk(inputStream: InputStream) = engine.installOfflineApk(inputStream)
     fun downloadAudioPack(packId: String) = engine.downloadAudioPack(packId)
+    fun downloadImagePack(packId: String) = engine.downloadImagePack(packId)
     fun triggerAppRestartNow() = engine.triggerAppRestartNow()
     fun triggerDeviceRebootNow(): Boolean = engine.triggerDeviceRebootNow()
     fun setOnBeforeLaunchExternalInstaller(callback: (() -> Unit)?) {

@@ -17,10 +17,23 @@ import java.time.temporal.ChronoUnit
  */
 data class AudioFileDurations(
     val tarhimSecondsByPrayer: Map<PrayerId, Long> = emptyMap(),
-    val adzanSecondsByPrayer: Map<PrayerId, Long> = emptyMap()
+    val adzanSecondsByPrayer: Map<PrayerId, Long> = emptyMap(),
+    val jumatTarhimSeconds: Long? = null,
+    val jumatAdzanSeconds: Long? = null
 ) {
-    fun tarhimSecondsFor(prayerId: PrayerId): Long? = tarhimSecondsByPrayer[prayerId]
-    fun adzanSecondsFor(prayerId: PrayerId): Long? = adzanSecondsByPrayer[prayerId]
+    fun tarhimSecondsFor(prayerId: PrayerId, isFridayJumat: Boolean = false): Long? =
+        if (isFridayJumat && prayerId == PrayerId.DHUHR) {
+            jumatTarhimSeconds ?: tarhimSecondsByPrayer[prayerId]
+        } else {
+            tarhimSecondsByPrayer[prayerId]
+        }
+
+    fun adzanSecondsFor(prayerId: PrayerId, isFridayJumat: Boolean = false): Long? =
+        if (isFridayJumat && prayerId == PrayerId.DHUHR) {
+            jumatAdzanSeconds ?: adzanSecondsByPrayer[prayerId]
+        } else {
+            adzanSecondsByPrayer[prayerId]
+        }
 }
 
 /**
@@ -304,7 +317,7 @@ class JwsStateMachine(
                 settings.jumat.enabled)
 
             val tarhimSec = if (stageConfig.isTarhim) {
-                audioDurations.tarhimSecondsFor(prayerId)
+                audioDurations.tarhimSecondsFor(prayerId, isFridayJumat = isFridayDhuhr)
                     ?: (stageConfig.tarhimDuration.toLong().coerceAtLeast(0L) * 60L)
             } else {
                 0L

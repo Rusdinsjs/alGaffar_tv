@@ -35,6 +35,7 @@ captures/
 
 # Reference repository & large PDF document (keep local only, exclude from Android git repo)
 _referensi_lama/
+cdn-releases/
 prd.pdf
 hs_err_pid*.log
 replay_pid*.log

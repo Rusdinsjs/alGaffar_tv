@@ -73,9 +73,20 @@ class JwsAudioEngine(
             }
         }
 
+        val jumatTarhimSec = resolvePlaylistFiles("tarhim", PrayerId.DHUHR, assetsRootDir, isFridayJumat = true)
+            .takeIf { it.isNotEmpty() }
+            ?.sumOf { readAudioDurationSeconds(it) }
+            ?.takeIf { it > 5L }
+        val jumatAdzanSec = resolvePlaylistFiles("adzan", PrayerId.DHUHR, assetsRootDir, isFridayJumat = true)
+            .takeIf { it.isNotEmpty() }
+            ?.sumOf { readAudioDurationSeconds(it) }
+            ?.takeIf { it > 5L }
+
         return AudioFileDurations(
             tarhimSecondsByPrayer = tarhimMap,
-            adzanSecondsByPrayer = adzanMap
+            adzanSecondsByPrayer = adzanMap,
+            jumatTarhimSeconds = jumatTarhimSec,
+            jumatAdzanSeconds = jumatAdzanSec
         )
     }
 
@@ -120,9 +131,10 @@ class JwsAudioEngine(
         }
 
         if (desiredCategory != null) {
-            val key = "$desiredCategory:${prayerId.id}"
+            val isFridayJumat = schedule.isFriday && settings.jumat.enabled && prayerId == PrayerId.DHUHR
+            val key = if (isFridayJumat) "$desiredCategory:jumat" else "$desiredCategory:${prayerId.id}"
             if (activePlaybackKey != key) {
-                val files = resolvePlaylistFiles(desiredCategory, prayerId, assetsRootDir)
+                val files = resolvePlaylistFiles(desiredCategory, prayerId, assetsRootDir, isFridayJumat = isFridayJumat)
                 if (files.isNotEmpty()) {
                     startPlaylist(
                         key = key,
@@ -364,6 +376,7 @@ class JwsAudioEngine(
         /**
          * Resolves the audio playlist hierarchy for a given [category] (`tartil`, `tarhim`, `adzan`)
          * and [prayerId] (`fajr`, `dhuhr`, `asr`, `maghrib`, `isha`):
+         * 0. (When [isFridayJumat] && [prayerId] == DHUHR) `audio/{category}/jumat/[tracks]` -> `audio/{category}/jumat.{ext}`
          * 1. `audio/{category}/{prayerId}/[tracks]`
          * 2. `audio/{category}/{prayerId}.mp3`
          * 3. `audio/{category}/default/[tracks]`
@@ -372,10 +385,29 @@ class JwsAudioEngine(
         fun resolvePlaylistFiles(
             category: String,
             prayerId: PrayerId,
-            assetsRootDir: File
+            assetsRootDir: File,
+            isFridayJumat: Boolean = false
         ): List<File> {
             val categoryDir = File(assetsRootDir, "audio/$category")
             if (!categoryDir.exists()) return emptyList()
+
+            // 0. Friday-specific Jum'at override (falls back to normal Dhuhr if empty)
+            if (isFridayJumat && prayerId == PrayerId.DHUHR) {
+                val jumatFolder = File(categoryDir, "jumat")
+                if (jumatFolder.exists() && jumatFolder.isDirectory) {
+                    val list = jumatFolder.listFiles()
+                        ?.filter { it.isFile && it.extension.lowercase() in SUPPORTED_AUDIO_EXTENSIONS }
+                        ?.sortedBy { it.name.lowercase() }
+                        .orEmpty()
+                    if (list.isNotEmpty()) return list
+                }
+                for (ext in SUPPORTED_AUDIO_EXTENSIONS) {
+                    val jumatFile = File(categoryDir, "jumat.$ext")
+                    if (jumatFile.exists() && jumatFile.isFile) {
+                        return listOf(jumatFile)
+                    }
+                }
+            }
 
             // 1. Folder `audio/{category}/{prayerId}/`
             val prayerFolder = File(categoryDir, prayerId.id)

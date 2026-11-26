@@ -940,6 +940,7 @@ class MainActivity : ComponentActivity() {
                     )
                 },
                 onDownloadAudioPack = { packId -> viewModel.downloadAudioPack(packId) },
+                onDownloadImagePack = { packId -> viewModel.downloadImagePack(packId) },
                 isDeviceOwner = isDeviceOwner,
                 isKioskMaintenanceUnlocked = isKioskMaintenanceUnlocked,
                 onToggleKioskMaintenance = {

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Videocam
@@ -320,6 +321,30 @@ fun MediaGallerySettingsTab(
                     value = "$sholatReadyCount / ${sholatSlots.size} Latar Siap",
                     isReady = sholatReadyCount > 0,
                     modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        // ==================== PAKET GAMBAR OTOMATIS (1-KLIK CDN) ====================
+        HybridSectionCard(
+            title = "Unduh Paket Gambar Lengkap (1-Klik CDN HTTPS)",
+            subtitle = "Pasang otomatis seluruh gambar yang dibutuhkan aplikasi (Logo, Poster Slideshow, Slide Tartil & Tarhim, Do'a Adzan, 4 Latar Khutbah/Ceramah, dan 5 Latar Sholat) tanpa upload satu per satu"
+        ) {
+            HybridInfoBanner(
+                text = "Seluruh gambar diunduh via HTTPS (terverifikasi SHA-256), otomatis dioptimasi ke 1080p agar hemat RAM di TV/STB, dan langsung terpasang ke masing-masing slot media.",
+                accentColor = Color(0xFF38BDF8)
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HybridButton(
+                    label = "Unduh Paket Gambar Standar (1-Klik)",
+                    icon = Icons.Default.Download,
+                    isPrimary = true,
+                    onClick = { actions.onDownloadImagePack("standard_image_pack") }
+                )
+                HybridButton(
+                    label = "Unduh Paket Gambar Haramain",
+                    icon = Icons.Default.Download,
+                    onClick = { actions.onDownloadImagePack("haramain_image_pack") }
                 )
             }
         }
