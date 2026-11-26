@@ -69,15 +69,23 @@ fun Responsive1080pCanvas(
             fontScale = baseDensity.fontScale.coerceIn(0.85f, 1.15f)
         )
 
+        val needsScaling = kotlin.math.abs(scaleX - 1f) > 0.001f || kotlin.math.abs(scaleY - 1f) > 0.001f
+
         CompositionLocalProvider(LocalDensity provides virtualDensity) {
             Box(
                 modifier = Modifier
                     .requiredSize(1920.dp, 1080.dp)
-                    .graphicsLayer {
-                        this.scaleX = scaleX
-                        this.scaleY = scaleY
-                        this.transformOrigin = TransformOrigin.Center
-                    },
+                    .then(
+                        if (needsScaling) {
+                            Modifier.graphicsLayer {
+                                this.scaleX = scaleX
+                                this.scaleY = scaleY
+                                this.transformOrigin = TransformOrigin.Center
+                            }
+                        } else {
+                            Modifier
+                        }
+                    ),
                 content = content
             )
         }

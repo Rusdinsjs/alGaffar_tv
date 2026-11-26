@@ -6,6 +6,7 @@ import id.algaffar.jwstv.domain.model.AppState
 import id.algaffar.jwstv.domain.model.AppStateSettings
 import id.algaffar.jwstv.domain.model.FloatingOverlayItem
 import id.algaffar.jwstv.domain.model.MediaDisplaySettings
+import id.algaffar.jwstv.domain.model.QurbanGroup
 import id.algaffar.jwstv.domain.model.SlideGlobalConfig
 import id.algaffar.jwstv.domain.model.SlideItem
 import id.algaffar.jwstv.domain.model.SlideTextStyle
@@ -231,5 +232,89 @@ class SettingsEnhancementsTest {
         assertEquals(AppState.STANDBY_SLIDESHOW, tickFs.state)
         assertEquals(30L, tickFs.totalStageSeconds)
         assertEquals(20L, tickFs.countdownSeconds)
+    }
+
+    @Test
+    fun `QurbanGroup supports full tab CRUD, enforces max 7 members per group, and preserves JSON compatibility`() {
+        // 1. Add group tabs with auto-incrementing default names
+        val (after1, g1) = QurbanGroup.addGroup(emptyList(), id = "q1")
+        assertEquals("Kelompok 1", g1.groupName)
+        assertEquals(QurbanGroup.ANIMAL_SAPI, g1.animalType)
+        assertTrue(g1.members.isEmpty())
+
+        val (after2, g2) = QurbanGroup.addGroup(after1, animalType = "Kambing", id = "q2")
+        assertEquals("Kelompok 2", g2.groupName)
+        assertEquals(QurbanGroup.ANIMAL_KAMBING, g2.animalType)
+
+        // Deleting Kelompok 1 then adding again reuses lowest unused number ("Kelompok 1")
+        val withoutFirst = QurbanGroup.deleteGroup(after2, "q1")
+        val (readdedList, gReadded) = QurbanGroup.addGroup(withoutFirst, id = "q3")
+        assertEquals("Kelompok 1", gReadded.groupName)
+        assertEquals(listOf("q2", "q3"), readdedList.map { it.id })
+
+        // Move tab left/right
+        val reorderedTabs = QurbanGroup.moveGroup(readdedList, "q3", -1)
+        assertEquals(listOf("q3", "q2"), reorderedTabs.map { it.id })
+
+        // 2. Add members up to MAX_MEMBERS (7) and verify 8th member is rejected
+        var groups = reorderedTabs
+        for (i in 1..7) {
+            groups = QurbanGroup.addMember(groups, "q3", "  Peserta $i  ")
+        }
+        val fullGroup = groups.first { it.id == "q3" }
+        assertEquals(7, fullGroup.members.size)
+        assertTrue(fullGroup.isFull)
+        assertEquals("Peserta 1", fullGroup.members.first())
+        assertEquals("Peserta 7", fullGroup.members.last())
+
+        // Attempt to add 8th member or blank member -> ignored
+        val after8th = QurbanGroup.addMember(groups, "q3", "Peserta 8")
+        assertEquals(7, after8th.first { it.id == "q3" }.members.size)
+        val afterBlank = QurbanGroup.addMember(groups, "q2", "   ")
+        assertTrue(afterBlank.first { it.id == "q2" }.members.isEmpty())
+
+        // 3. Update, reorder, and delete members inside a group
+        groups = QurbanGroup.updateMember(groups, "q3", 0, "H. Ahmad, S.Pd")
+        assertEquals("H. Ahmad, S.Pd", groups.first { it.id == "q3" }.members[0])
+
+        groups = QurbanGroup.moveMember(groups, "q3", 0, 1)
+        assertEquals("Peserta 2", groups.first { it.id == "q3" }.members[0])
+        assertEquals("H. Ahmad, S.Pd", groups.first { it.id == "q3" }.members[1])
+
+        groups = QurbanGroup.deleteMember(groups, "q3", 1)
+        assertEquals(6, groups.first { it.id == "q3" }.members.size)
+        assertFalse(groups.first { it.id == "q3" }.isFull)
+
+        // Now that a slot freed up, adding a 7th member succeeds again
+        groups = QurbanGroup.addMember(groups, "q3", "Peserta Pengganti")
+        assertEquals(7, groups.first { it.id == "q3" }.members.size)
+        assertEquals("Peserta Pengganti", groups.first { it.id == "q3" }.members.last())
+
+        // 4. Update group metadata & sanitize oversized legacy members
+        groups = QurbanGroup.updateGroup(
+            groups = groups,
+            groupId = "q2",
+            groupName = "Sapi RT 02",
+            animalType = "sapi",
+            members = (1..10).map { "Warga $it" }
+        )
+        val updatedQ2 = groups.first { it.id == "q2" }
+        assertEquals("Sapi RT 02", updatedQ2.groupName)
+        assertEquals(QurbanGroup.ANIMAL_SAPI, updatedQ2.animalType)
+        assertEquals(7, updatedQ2.members.size)
+
+        // 5. activeMembers filters blank entries and caps legacy >7 lists at 7
+        val legacyOverflow = QurbanGroup(
+            id = "legacy",
+            animalType = "Sapi",
+            groupName = "Legacy",
+            members = listOf("A", " ", "B", "C", "D", "E", "F", "G", "H", "I")
+        )
+        assertEquals(listOf("A", "B", "C", "D", "E", "F", "G"), legacyOverflow.activeMembers)
+
+        // 6. JSON round-trip preserves exact fields
+        val encoded = json.encodeToString(updatedQ2)
+        val decoded = json.decodeFromString<QurbanGroup>(encoded)
+        assertEquals(updatedQ2, decoded)
     }
 }

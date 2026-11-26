@@ -38,6 +38,7 @@ import java.security.MessageDigest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
@@ -75,6 +76,13 @@ data class RemoteCommandPayload(
 
     fun booleanArg(key: String): Boolean? =
         (rawJson[key] as? JsonPrimitive)?.booleanOrNull
+
+    fun stringListArg(key: String, maxItems: Int = 50, maxLen: Int = 200): List<String>? {
+        val arr = rawJson[key] as? JsonArray ?: return null
+        return arr.take(maxItems).mapNotNull { el ->
+            (el as? JsonPrimitive)?.contentOrNull?.let { KtorRemoteServer.sanitizeInput(it, maxLen) }
+        }
+    }
 }
 
 /**
@@ -468,6 +476,16 @@ class KtorRemoteServer(
         val ip = resolveLocalNetworkIp()
         val base = "http://$ip:$port/remote"
         return if (includeTokenQuery) "$base?token=$authToken" else base
+    }
+
+    /**
+     * Non-blocking pair of `(remoteUrl, qrPairingUrl)` using the IO-refreshed cached LAN IP.
+     * Safe to invoke every second on the Main thread without triggering netlink syscalls.
+     */
+    fun getRemoteUrlsNonBlocking(): Pair<String, String> {
+        val ip = getCachedLocalIpOrLoopback()
+        val base = "http://$ip:$port/remote"
+        return base to "$base?token=$authToken"
     }
 
     private suspend fun handleHtmlIndex(call: ApplicationCall) {
@@ -1135,11 +1153,46 @@ class KtorRemoteServer(
             settings: AppStateSettings
         ): Boolean = resolveAuthorizedRole(authHeader, serverToken, settings) != null
 
+        @Volatile
+        private var cachedLocalIp: String = ""
+
+        @Volatile
+        private var cachedLocalIpAtNs: Long = 0L
+
+        private const val LOCAL_IP_CACHE_TTL_NS: Long = 15_000_000_000L
+
+        /**
+         * Returns the most recently resolved LAN IP without blocking on network interface syscalls
+         * when a cached value is available; refreshes at most once every 15 seconds unless [forceRefresh] is true.
+         */
+        fun resolveLocalNetworkIp(forceRefresh: Boolean = false): String {
+            val nowNs = System.nanoTime()
+            val existing = cachedLocalIp
+            if (!forceRefresh && existing.isNotEmpty() && (nowNs - cachedLocalIpAtNs) in 0L until LOCAL_IP_CACHE_TTL_NS) {
+                return existing
+            }
+            val fresh = queryLocalNetworkIpNow()
+            cachedLocalIp = fresh
+            cachedLocalIpAtNs = nowNs
+            return fresh
+        }
+
+        /**
+         * Non-blocking snapshot of the cached LAN IP for the 1Hz Main-thread ticker.
+         * Call [refreshCachedLocalIp] from an IO coroutine to keep it up to date.
+         */
+        fun getCachedLocalIpOrLoopback(): String = cachedLocalIp.ifEmpty { "127.0.0.1" }
+
+        /**
+         * Refreshes the cached LAN IP (safe to call from Dispatchers.IO).
+         */
+        fun refreshCachedLocalIp(): String = resolveLocalNetworkIp(forceRefresh = true)
+
         /**
          * Finds the device's LAN IPv4 address, prioritizing `192.168.x.x` > `10.x.x.x` > `172.x.x.x`.
          * Mirrors `get_local_ip` in `src-tauri/src/lib.rs`.
          */
-        fun resolveLocalNetworkIp(): String {
+        private fun queryLocalNetworkIpNow(): String {
             return try {
                 val candidates = mutableListOf<String>()
                 val interfaces = NetworkInterface.getNetworkInterfaces() ?: return "127.0.0.1"

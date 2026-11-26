@@ -7,6 +7,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.OpenableColumns
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -44,7 +46,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -63,7 +64,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import kotlinx.coroutines.delay
 import kotlin.math.abs
 import id.algaffar.jwstv.data.server.KtorRemoteServer
 import id.algaffar.jwstv.domain.model.AppState
@@ -105,9 +105,15 @@ class MainActivity : ComponentActivity() {
     private var livePhysicalKeyboardDetected by mutableStateOf(false)
     private var consumeNextDpadUpRelease = false
     private var isMouseCursorHidden by mutableStateOf(true)
-    private var mouseActivityTick by mutableLongStateOf(0L)
     private var lastMouseX = Float.NaN
     private var lastMouseY = Float.NaN
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val hideMouseCursorRunnable = Runnable {
+        if (!isMouseCursorHidden) {
+            isMouseCursorHidden = true
+        }
+    }
 
     private companion object {
         const val MOUSE_IDLE_TIMEOUT_MS = 3000L
@@ -131,8 +137,11 @@ class MainActivity : ComponentActivity() {
         lastMouseX = ev.x
         lastMouseY = ev.y
 
-        isMouseCursorHidden = false
-        mouseActivityTick++
+        if (isMouseCursorHidden) {
+            isMouseCursorHidden = false
+        }
+        mainHandler.removeCallbacks(hideMouseCursorRunnable)
+        mainHandler.postDelayed(hideMouseCursorRunnable, MOUSE_IDLE_TIMEOUT_MS)
     }
 
     private fun applyWindowPointerIcon(hidden: Boolean) {
@@ -402,6 +411,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacks(hideMouseCursorRunnable)
         viewModel.setOnBeforeLaunchExternalInstaller(null)
         super.onDestroy()
     }
@@ -427,33 +437,30 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
-                val snapshot by viewModel.snapshotFlow.collectAsState()
-                val statusBanner by viewModel.statusBannerMessage.collectAsState()
-                val takjilPreview by viewModel.takjilPreviewFlow.collectAsState()
-                val relayPinStates by viewModel.relayPinStatesFlow.collectAsState()
+                // Root subscribes ONLY to low-frequency flows (settings edits, hourly rotation, IP/token changes)
+                // so 1Hz clock ticks NEVER recompose root, SettingsModal, or TvFilePickerDialog.
+                val settings by viewModel.settingsFlow.collectAsState()
+                val currentHour by viewModel.currentHourFlow.collectAsState()
+                val remoteUiInfo by viewModel.remoteUiInfoFlow.collectAsState()
                 val openSettingsReq by viewModel.openSettingsRequestCount.collectAsState()
-                val onlineFinanceTestResult by viewModel.onlineFinanceTestResult.collectAsState()
-                val audioInventoryTick by viewModel.audioInventoryTick.collectAsState()
-                val previewingAudioKey by viewModel.previewingAudioKey.collectAsState()
-                val storageHealth by viewModel.storageHealthFlow.collectAsState()
 
-                val activePalette = remember(snapshot.settings.themeSettings, snapshot.now.hour) {
+                val activePalette = remember(settings.themeSettings, currentHour) {
                     ThemeEngine.resolveActivePalette(
-                        themeSettings = snapshot.settings.themeSettings,
-                        now = snapshot.now
+                        themeSettings = settings.themeSettings,
+                        now = viewModel.snapshotFlow.value.now
                     )
                 }
 
                 val effectiveLayout = remember(
-                    snapshot.settings.layoutSettings.position,
-                    snapshot.settings.layoutSettings.autoRotateLayout,
-                    snapshot.now.hour
+                    settings.layoutSettings.position,
+                    settings.layoutSettings.autoRotateLayout,
+                    currentHour
                 ) {
-                    if (snapshot.settings.layoutSettings.autoRotateLayout) {
-                        val block = (snapshot.now.hour / 4) % 3
+                    if (settings.layoutSettings.autoRotateLayout) {
+                        val block = (currentHour / 4) % 3
                         LayoutPosition.entries[block]
                     } else {
-                        snapshot.settings.layoutSettings.position
+                        settings.layoutSettings.position
                     }
                 }
                 val isVerticalLeft = (effectiveLayout == LayoutPosition.VERTICAL_LEFT)
@@ -483,19 +490,19 @@ class MainActivity : ComponentActivity() {
                         activeFilePickerRequest != null -> activeFilePickerRequest = null
                         isLogoMenuOpen -> isLogoMenuOpen = false
                         isDebugModalOpen -> isDebugModalOpen = false
-                        isSettingsModalOpen && takjilPreview != null -> viewModel.dismissTakjilImport()
+                        isSettingsModalOpen && viewModel.takjilPreviewFlow.value != null -> viewModel.dismissTakjilImport()
                         isSettingsModalOpen -> {
                             viewModel.stopAudioPreview()
                             isSettingsModalOpen = false
                         }
-                        snapshot.tickResult.isManualOverride -> viewModel.clearSimulation()
+                        viewModel.isManualOverrideNow() -> viewModel.clearSimulation()
                     }
                 }
 
                 val detectedKeyboards = rememberPhysicalKeyboardNames(livePhysicalKeyboardDetected)
-                val virtualKeyboardPolicy = remember(snapshot.settings.virtualKeyboardMode, detectedKeyboards) {
+                val virtualKeyboardPolicy = remember(settings.virtualKeyboardMode, detectedKeyboards) {
                     VirtualKeyboardPolicy(
-                        mode = snapshot.settings.virtualKeyboardMode,
+                        mode = settings.virtualKeyboardMode,
                         hasPhysicalKeyboard = detectedKeyboards.isNotEmpty(),
                         detectedKeyboardNames = detectedKeyboards
                     )
@@ -529,24 +536,17 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                LaunchedEffect(mouseActivityTick, isMouseCursorHidden) {
-                    if (!isMouseCursorHidden) {
-                        delay(MOUSE_IDLE_TIMEOUT_MS)
-                        isMouseCursorHidden = true
-                    }
-                }
-
                 LaunchedEffect(isMouseCursorHidden) {
                     applyWindowPointerIcon(isMouseCursorHidden)
                 }
 
                 CompositionLocalProvider(
                     LocalJwsTheme provides activePalette,
-                    LocalPerformanceMode provides snapshot.settings.performanceMode,
+                    LocalPerformanceMode provides settings.performanceMode,
                     LocalVirtualKeyboardPolicy provides virtualKeyboardPolicy
                 ) {
                     Responsive1080pCanvas(
-                        scaleMode = snapshot.settings.layoutSettings.scaleMode,
+                        scaleMode = settings.layoutSettings.scaleMode,
                         modifier = if (isMouseCursorHidden) {
                             Modifier.pointerHoverIcon(hiddenPointerIcon, overrideDescendants = true)
                         } else {
@@ -554,381 +554,37 @@ class MainActivity : ComponentActivity() {
                         }
                     ) {
                         IslamicAmbientBackground(palette = activePalette) {
-                            if (!snapshot.settings.onboardingCompleted) {
-                                FirstRunOnboardingWizard(
-                                    snapshot = snapshot,
-                                    onTestBeep = { viewModel.testPlayBeep1000Hz() },
-                                    onCompleteOnboarding = { transform -> viewModel.updateSettings(transform) }
-                                )
-                            } else {
-                            FullScreenRouter(
-                                snapshot = snapshot,
-                                assetsRootDir = viewModel.assetsRootDir,
-                                isLogoMenuOpen = isLogoMenuOpen,
-                                onToggleLogoMenu = { isLogoMenuOpen = !isLogoMenuOpen },
-                                onOpenDebugModal = { isDebugModalOpen = true },
-                                onExitManualSimulation = { viewModel.clearSimulation() }
-                            )
+                            when {
+                                !settings.onboardingCompleted -> {
+                                    val onboardingSnapshot by viewModel.snapshotFlow.collectAsState()
+                                    FirstRunOnboardingWizard(
+                                        snapshot = onboardingSnapshot,
+                                        onTestBeep = { viewModel.testPlayBeep1000Hz() },
+                                        onCompleteOnboarding = { transform -> viewModel.updateSettings(transform) }
+                                    )
+                                }
 
-                            // No-RTC STB Clock Integrity Warning Banner
-                            if (snapshot.isClockSuspect && !isSettingsModalOpen) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopCenter)
-                                        .padding(top = 12.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(Color(0xFF991B1B).copy(alpha = 0.94f))
-                                        .border(2.dp, Color(0xFFFBBF24), RoundedCornerShape(14.dp))
-                                        .padding(horizontal = 24.dp, vertical = 10.dp)
-                                ) {
-                                    Text(
-                                        text = "⚠ JAM STB BELUM SINKRON (TANPA BATERAI RTC) — Sambungkan WiFi atau buka Remote HP (${snapshot.remoteServerUrl}) untuk menyamakan jam!",
-                                        color = Color.White,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Black
+                                isSettingsModalOpen -> {
+                                    // Do NOT compose or draw FullScreenRouter behind the opaque SettingsModal:
+                                    // eliminates 100% of background 1080p GPU overdraw & 1Hz recompositions on Mali-450.
+                                    SettingsModalHost(
+                                        settings = settings,
+                                        remoteUiInfo = remoteUiInfo
+                                    )
+                                }
+
+                                else -> {
+                                    LiveDisplayHost(
+                                        isVerticalLeft = isVerticalLeft
                                     )
                                 }
                             }
 
-                            // Floating Quick Action Menu (triggered by clicking the Mosque Logo OR pressing D-Pad UP)
-                            if (isLogoMenuOpen && !isSettingsModalOpen && !isDebugModalOpen && activeFilePickerRequest == null) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black.copy(alpha = 0.25f))
-                                        .clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null
-                                        ) { isLogoMenuOpen = false }
-                                )
-
-                                LogoQuickMenuCard(
-                                    onCycleTheme = { viewModel.cycleTheme() },
-                                    onCycleLayout = { viewModel.cycleLayout() },
-                                    onCycleClockStyle = { viewModel.cycleClockStyle() },
-                                    onOpenDebugModal = { isDebugModalOpen = true },
-                                    onOpenSettingsModal = { isSettingsModalOpen = true },
-                                    onDismiss = { isLogoMenuOpen = false },
-                                    modifier = Modifier
-                                        .align(if (isVerticalLeft) Alignment.TopEnd else Alignment.TopStart)
-                                        .padding(
-                                            top = 182.dp,
-                                            start = if (isVerticalLeft) 0.dp else 18.dp,
-                                            end = if (isVerticalLeft) 18.dp else 0.dp
-                                        )
-                                )
-                            }
-
-                            if (isSettingsModalOpen) {
-                                SettingsModal(
-                                    settings = snapshot.settings,
-                                    statusBannerMessage = statusBanner,
-                                    takjilImportPreview = takjilPreview,
-                                    onConfirmTakjilImport = { viewModel.confirmTakjilImport() },
-                                    onDismissTakjilImport = { viewModel.dismissTakjilImport() },
-                                    actions = SettingsActions(
-                                        onUpdateSettings = { viewModel.updateSettings(it) },
-                                        onExportTakjilTemplate = {
-                                            val slug = KtorRemoteServer.sanitizeFileSlug(snapshot.settings.brand.name)
-                                            val fileName = "Template_Takjil_Ramadhan_$slug.xlsx"
-                                            val mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                            if (canHandleCreateDocument(mime)) {
-                                                runCatching { exportTakjilExcelLauncher.launch(fileName) }.onFailure {
-                                                    saveDirectToDownloads(fileName) { out -> viewModel.exportTakjilExcelTemplate(out) }
-                                                }
-                                            } else {
-                                                saveDirectToDownloads(fileName) { out -> viewModel.exportTakjilExcelTemplate(out) }
-                                            }
-                                        },
-                                        onImportTakjilExcel = {
-                                            val mimes = arrayOf(
-                                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                                "application/vnd.ms-excel"
-                                            )
-                                            openInAppOrSystemFilePicker(
-                                                title = "Pilih File Excel Jadwal Ta'jil (.xlsx)",
-                                                subtitle = "Pilih file Excel dari Memori Internal atau Flashdisk USB OTG",
-                                                allowedExtensions = setOf("xlsx", "xls"),
-                                                mimeTypes = mimes,
-                                                onFileSelected = { file ->
-                                                    runCatching {
-                                                        FileInputStream(file).use { input ->
-                                                            viewModel.parseTakjilExcelPreview(input)
-                                                        }
-                                                    }.onFailure { err ->
-                                                        viewModel.postStatusMessage("Gagal membaca Excel: ${err.message}")
-                                                    }
-                                                },
-                                                systemLauncherInvoke = { importTakjilExcelLauncher.launch(mimes) }
-                                            )
-                                        },
-                                        onExportBackupZip = {
-                                            val slug = KtorRemoteServer.sanitizeFileSlug(snapshot.settings.brand.name)
-                                            val fileName = "Backup_AlGaffarTV_$slug.zip"
-                                            val mime = "application/zip"
-                                            if (canHandleCreateDocument(mime)) {
-                                                runCatching { exportBackupZipLauncher.launch(fileName) }.onFailure {
-                                                    saveDirectToDownloads(fileName) { out -> viewModel.exportFullBackupZip(out) }
-                                                }
-                                            } else {
-                                                saveDirectToDownloads(fileName) { out -> viewModel.exportFullBackupZip(out) }
-                                            }
-                                        },
-                                        onImportBackupZip = {
-                                            val mimes = arrayOf("application/zip", "application/octet-stream")
-                                            openInAppOrSystemFilePicker(
-                                                title = "Pilih File Backup JWS (.zip)",
-                                                subtitle = "Restore pengaturan & aset dari file backup ZIP di Memori TV / USB",
-                                                allowedExtensions = setOf("zip"),
-                                                mimeTypes = mimes,
-                                                onFileSelected = { file ->
-                                                    runCatching {
-                                                        viewModel.importFullBackupZip(FileInputStream(file))
-                                                    }.onFailure { err ->
-                                                        viewModel.postStatusMessage("Gagal membuka ZIP: ${err.message}")
-                                                    }
-                                                },
-                                                systemLauncherInvoke = { importBackupZipLauncher.launch(mimes) }
-                                            )
-                                        },
-                                        onSyncUsbFolder = {
-                                            hasStoragePermission = checkStorageReadPermission()
-                                            if (!hasStoragePermission) {
-                                                requestStoragePermissionsSafely()
-                                            }
-                                            activeFilePickerRequest = TvFilePickerRequest(
-                                                title = "Sync Massal 1 Folder dari Flashdisk USB",
-                                                subtitle = "Buka folder berisi gambar, video (.mp4), atau audio MP3 lalu tekan 'Sinkronkan Folder Ini ✓'",
-                                                allowedExtensions = setOf(
-                                                    "png", "jpg", "jpeg", "webp", "bmp",
-                                                    "mp3", "wav", "ogg", "m4a", "aac",
-                                                    "mp4", "mkv", "webm", "mov", "m4v"
-                                                ),
-                                                mimeTypes = arrayOf("*/*"),
-                                                pickDirectoryMode = true,
-                                                onDirectorySelected = { dir ->
-                                                    viewModel.syncMediaFromExternalFolder(dir)
-                                                }
-                                            )
-                                        },
-                                        onRefreshStorageHealth = {
-                                            viewModel.refreshStorageHealth()
-                                            viewModel.postStatusMessage("Statistik penyimpanan internal diperbarui.")
-                                        },
-                                        onCleanOrphanMedia = {
-                                            viewModel.cleanOrphanMedia()
-                                        },
-                                        onOpenDebugSimulator = {
-                                            isSettingsModalOpen = false
-                                            isDebugModalOpen = true
-                                        },
-                                        onToggleManualRelay = { pin, turnOn ->
-                                            viewModel.toggleManualRelay(pin, turnOn)
-                                        },
-                                        onTestOnlineFinance = {
-                                            viewModel.testOnlineFinanceConnection()
-                                        },
-                                        onStartDirectLive = { src, customId, mins ->
-                                            viewModel.startDirectLive(src, customId, mins)
-                                            isSettingsModalOpen = false
-                                        },
-                                        onStopDirectLive = {
-                                            viewModel.stopDirectLive()
-                                        },
-                                        onPickImageAsset = { subFolder, onSaved ->
-                                            pendingImageSubFolder = subFolder
-                                            pendingImageCallback = onSaved
-                                            val mimes = arrayOf("image/*")
-                                            openInAppOrSystemFilePicker(
-                                                title = if (subFolder == "logo") "Pilih Logo Masjid (PNG / JPG)" else "Pilih Gambar / Poster ($subFolder)",
-                                                subtitle = "Pilih gambar dari Memori TV, Flashdisk USB, atau unggah langsung lewat Remote PWA",
-                                                allowedExtensions = setOf("png", "jpg", "jpeg", "webp", "bmp"),
-                                                mimeTypes = mimes,
-                                                onFileSelected = { file ->
-                                                    runCatching {
-                                                        viewModel.importImageAsset(subFolder, file.name, FileInputStream(file), onSaved)
-                                                    }.onFailure { err ->
-                                                        viewModel.postStatusMessage("Gagal mengimpor gambar: ${err.message}")
-                                                    }
-                                                    pendingImageCallback = null
-                                                },
-                                                systemLauncherInvoke = { pickImageAssetLauncher.launch(mimes) }
-                                            )
-                                        },
-                                        onPickVideoAsset = { onSaved ->
-                                            pendingVideoCallback = onSaved
-                                            val mimes = arrayOf("video/*")
-                                            openInAppOrSystemFilePicker(
-                                                title = "Pilih Video Slide Masjid (.mp4 / .webm / .mkv)",
-                                                subtitle = "Video akan disalin ke memori internal TV (maks 250 MB) dan diputar otomatis tanpa suara",
-                                                allowedExtensions = setOf("mp4", "mkv", "webm", "mov", "m4v"),
-                                                mimeTypes = mimes,
-                                                onFileSelected = { file ->
-                                                    runCatching {
-                                                        viewModel.importVideoAsset(file.name, FileInputStream(file), onSaved)
-                                                    }.onFailure { err ->
-                                                        viewModel.postStatusMessage("Gagal mengimpor video: ${err.message}")
-                                                    }
-                                                    pendingVideoCallback = null
-                                                },
-                                                systemLauncherInvoke = { pickVideoAssetLauncher.launch(mimes) }
-                                            )
-                                        },
-                                        onPickPrayerAudio = { category, slotName ->
-                                            pendingAudioCategory = category
-                                            pendingAudioSlot = slotName
-                                            val mimes = arrayOf("audio/*", "application/octet-stream")
-                                            openInAppOrSystemFilePicker(
-                                                title = "Pilih Audio ${category.uppercase()} (${slotName.uppercase()})",
-                                                subtitle = "Pilih file MP3 / WAV / M4A / OGG dari Memori TV / USB atau unggah lewat Remote PWA",
-                                                allowedExtensions = setOf("mp3", "wav", "ogg", "m4a", "aac"),
-                                                mimeTypes = mimes,
-                                                onFileSelected = { file ->
-                                                    runCatching {
-                                                        viewModel.importPrayerAudioSlot(category, slotName, FileInputStream(file))
-                                                    }.onFailure { err ->
-                                                        viewModel.postStatusMessage("Gagal mengimpor audio: ${err.message}")
-                                                    }
-                                                },
-                                                systemLauncherInvoke = { pickPrayerAudioLauncher.launch(mimes) }
-                                            )
-                                        },
-                                        onDeletePrayerAudio = { category, slotName ->
-                                            viewModel.deletePrayerAudioSlot(category, slotName)
-                                        },
-                                        onTogglePreviewPrayerAudio = { category, slotName ->
-                                            viewModel.togglePreviewPrayerAudio(category, slotName)
-                                        },
-                                        onPickCustomAudio = {
-                                            val mimes = arrayOf("audio/*", "application/octet-stream")
-                                            openInAppOrSystemFilePicker(
-                                                title = "Pilih File Audio Kustom / Murottal",
-                                                subtitle = "Pilih file MP3 / WAV / M4A / OGG dari Memori TV atau Flashdisk USB OTG",
-                                                allowedExtensions = setOf("mp3", "wav", "ogg", "m4a", "aac"),
-                                                mimeTypes = mimes,
-                                                onFileSelected = { file ->
-                                                    runCatching {
-                                                        viewModel.importCustomAudioFile(file.name, FileInputStream(file))
-                                                    }.onFailure { err ->
-                                                        viewModel.postStatusMessage("Gagal mengimpor audio kustom: ${err.message}")
-                                                    }
-                                                },
-                                                systemLauncherInvoke = { pickCustomAudioLauncher.launch(mimes) }
-                                            )
-                                        },
-                                        onDeleteCustomAudio = { fileName ->
-                                            viewModel.deleteCustomAudioFile(fileName)
-                                        },
-                                        onTogglePreviewCustomAudio = { fileName ->
-                                            viewModel.togglePreviewCustomAudio(fileName)
-                                        },
-                                        onFindPrayerAudioSlot = { category, slotName ->
-                                            viewModel.findPrayerAudioSlot(category, slotName)
-                                        },
-                                        onListCustomAudioFiles = {
-                                            viewModel.listCustomAudioFilesWithDurations()
-                                        },
-                                        assetsRootDir = viewModel.assetsRootDir,
-                                        storageHealth = storageHealth,
-                                        remoteServerUrl = snapshot.remoteServerUrl,
-                                        remoteQrPairingUrl = snapshot.remoteQrPairingUrl,
-                                        remoteAuthToken = snapshot.remoteAuthToken,
-                                        deviceCode = snapshot.deviceCode,
-                                        relayPinStates = relayPinStates,
-                                        onlineFinanceTestResult = onlineFinanceTestResult,
-                                        audioInventoryTick = audioInventoryTick,
-                                        previewingAudioKey = previewingAudioKey,
-                                        isLiveActiveNow = snapshot.tickResult.state == AppState.LIVE,
-                                        onRegenerateRemoteToken = { viewModel.regenerateRemoteToken() },
-                                        onResetSuperadminPin = { viewModel.resetSuperadminPin(it) },
-                                        onUpgradeUserPinHash = { id, pin -> viewModel.upgradeUserPinHash(id, pin) },
-                                        onRequestUsbPermission = { viewModel.requestUsbRelayPermission() },
-                                        onReopenOnboarding = {
-                                            isSettingsModalOpen = false
-                                            viewModel.updateSettings { it.copy(onboardingCompleted = false) }
-                                        },
-                                        onCheckOtaUpdate = { viewModel.checkOtaUpdate() },
-                                        onInstallOtaApkFromUsb = {
-                                            openInAppOrSystemFilePicker(
-                                                title = "Pilih File Pembaruan Al-Gaffar TV (.apk)",
-                                                subtitle = "Pilih file .apk dari Flashdisk USB OTG atau Memori Internal STB",
-                                                allowedExtensions = setOf("apk"),
-                                                mimeTypes = arrayOf("application/vnd.android.package-archive", "application/octet-stream"),
-                                                onFileSelected = { file ->
-                                                    runCatching {
-                                                        viewModel.installOfflineApk(FileInputStream(file))
-                                                    }.onFailure { err ->
-                                                        viewModel.postStatusMessage("Gagal membuka file APK: ${err.message}")
-                                                    }
-                                                },
-                                                systemLauncherInvoke = {}
-                                            )
-                                        },
-                                        onDownloadAudioPack = { packId -> viewModel.downloadAudioPack(packId) },
-                                        isDeviceOwner = JwsDeviceAdminReceiver.isDeviceOwner(this@MainActivity),
-                                        isKioskMaintenanceUnlocked = isKioskMaintenanceUnlocked,
-                                        onToggleKioskMaintenance = {
-                                            if (isKioskMaintenanceUnlocked) {
-                                                isKioskMaintenanceUnlocked = false
-                                                JwsDeviceAdminReceiver.startKioskLockTaskIfDeviceOwner(this@MainActivity)
-                                                viewModel.postStatusMessage("Mode Kiosk kembali dikunci penuh.")
-                                            } else {
-                                                isKioskMaintenanceUnlocked = true
-                                                JwsDeviceAdminReceiver.stopKioskLockTask(this@MainActivity)
-                                                viewModel.postStatusMessage("Mode Kiosk dibuka sementara untuk maintenance. Tekan 'Kunci Kembali' setelah selesai.")
-                                            }
-                                        },
-                                        onOpenAndroidSettings = {
-                                            isKioskMaintenanceUnlocked = true
-                                            JwsDeviceAdminReceiver.stopKioskLockTask(this@MainActivity)
-                                            val sysIntent = Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            runCatching { startActivity(sysIntent) }.onFailure { err ->
-                                                viewModel.postStatusMessage("Gagal membuka Setelan TV Box: ${err.message}")
-                                            }
-                                        },
-                                        onOpenWifiSettings = {
-                                            isKioskMaintenanceUnlocked = true
-                                            JwsDeviceAdminReceiver.stopKioskLockTask(this@MainActivity)
-                                            val wifiIntent = Intent(android.provider.Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            val sysIntent = Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            runCatching { startActivity(wifiIntent) }.onFailure {
-                                                runCatching { startActivity(sysIntent) }.onFailure { err ->
-                                                    viewModel.postStatusMessage("Gagal membuka Pengaturan Wi-Fi: ${err.message}")
-                                                }
-                                            }
-                                        },
-                                        onTriggerAppRestartNow = { viewModel.triggerAppRestartNow() },
-                                        onTriggerDeviceRebootNow = { viewModel.triggerDeviceRebootNow() }
-                                    ),
-                                    onClose = {
-                                        viewModel.stopAudioPreview()
-                                        isSettingsModalOpen = false
-                                    }
-                                )
-                            }
-                            }
-
                             if (isDebugModalOpen) {
-                                QuickDebugModalOverlay(
-                                    activeState = snapshot.tickResult.state,
-                                    isManualOverride = snapshot.tickResult.isManualOverride,
-                                    currentThemeName = activePalette.name,
-                                    currentLayoutName = snapshot.settings.layoutSettings.position.serialName,
-                                    currentClockStyle = snapshot.settings.brand.clockStyle,
-                                    onSimulateState = { state ->
-                                        viewModel.simulateState(state, 180L)
-                                        isDebugModalOpen = false
-                                    },
-                                    onClearSimulation = {
-                                        viewModel.clearSimulation()
-                                        isDebugModalOpen = false
-                                    },
-                                    onTestBeep = { viewModel.testPlayBeep1000Hz() },
-                                    onTestSirine = { viewModel.testPlayRamadhanSirine() },
-                                    onCycleTheme = { viewModel.cycleTheme() },
-                                    onCycleLayout = { viewModel.cycleLayout() },
-                                    onCycleClock = { viewModel.cycleClockStyle() },
-                                    onDismiss = { isDebugModalOpen = false }
+                                DebugModalHost(
+                                    activePaletteName = activePalette.name,
+                                    currentLayoutName = settings.layoutSettings.position.serialName,
+                                    currentClockStyle = settings.brand.clockStyle
                                 )
                             }
 
@@ -938,7 +594,7 @@ class MainActivity : ComponentActivity() {
                                 TvFilePickerDialog(
                                     request = pickerReq,
                                     assetsRootDir = viewModel.assetsRootDir,
-                                    remoteServerUrl = snapshot.remoteServerUrl,
+                                    remoteServerUrl = remoteUiInfo.remoteServerUrl,
                                     hasStoragePermission = hasStoragePermission,
                                     onRequestStoragePermission = { requestStoragePermissionsSafely() },
                                     onDismiss = { activeFilePickerRequest = null }
@@ -949,6 +605,420 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    @Composable
+    private fun LiveDisplayHost(
+        isVerticalLeft: Boolean
+    ) {
+        val snapshot by viewModel.snapshotFlow.collectAsState()
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            FullScreenRouter(
+                snapshot = snapshot,
+                assetsRootDir = viewModel.assetsRootDir,
+                isLogoMenuOpen = isLogoMenuOpen,
+                onToggleLogoMenu = { isLogoMenuOpen = !isLogoMenuOpen },
+                onOpenDebugModal = { isDebugModalOpen = true },
+                onExitManualSimulation = { viewModel.clearSimulation() }
+            )
+
+            // No-RTC STB Clock Integrity Warning Banner
+            if (snapshot.isClockSuspect) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 12.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF991B1B).copy(alpha = 0.94f))
+                        .border(2.dp, Color(0xFFFBBF24), RoundedCornerShape(14.dp))
+                        .padding(horizontal = 24.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = "⚠ JAM STB BELUM SINKRON (TANPA BATERAI RTC) — Sambungkan WiFi atau buka Remote HP (${snapshot.remoteServerUrl}) untuk menyamakan jam!",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
+
+            // Floating Quick Action Menu (triggered by clicking the Mosque Logo OR pressing D-Pad UP)
+            if (isLogoMenuOpen && !isDebugModalOpen && activeFilePickerRequest == null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.25f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { isLogoMenuOpen = false }
+                )
+
+                LogoQuickMenuCard(
+                    onCycleTheme = { viewModel.cycleTheme() },
+                    onCycleLayout = { viewModel.cycleLayout() },
+                    onCycleClockStyle = { viewModel.cycleClockStyle() },
+                    onOpenDebugModal = { isDebugModalOpen = true },
+                    onOpenSettingsModal = { isSettingsModalOpen = true },
+                    onDismiss = { isLogoMenuOpen = false },
+                    modifier = Modifier
+                        .align(if (isVerticalLeft) Alignment.TopEnd else Alignment.TopStart)
+                        .padding(
+                            top = 182.dp,
+                            start = if (isVerticalLeft) 0.dp else 18.dp,
+                            end = if (isVerticalLeft) 18.dp else 0.dp
+                        )
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun SettingsModalHost(
+        settings: id.algaffar.jwstv.domain.model.AppStateSettings,
+        remoteUiInfo: id.algaffar.jwstv.ui.RemoteUiInfo
+    ) {
+        val statusBanner by viewModel.statusBannerMessage.collectAsState()
+        val takjilPreview by viewModel.takjilPreviewFlow.collectAsState()
+        val relayPinStates by viewModel.relayPinStatesFlow.collectAsState()
+        val onlineFinanceTestResult by viewModel.onlineFinanceTestResult.collectAsState()
+        val audioInventoryTick by viewModel.audioInventoryTick.collectAsState()
+        val previewingAudioKey by viewModel.previewingAudioKey.collectAsState()
+        val storageHealth by viewModel.storageHealthFlow.collectAsState()
+        val activeAppState by viewModel.activeAppStateFlow.collectAsState()
+        val isLiveActiveNow = activeAppState == AppState.LIVE
+        val isDeviceOwner = remember { JwsDeviceAdminReceiver.isDeviceOwner(this@MainActivity) }
+
+        val actions = remember(
+            storageHealth,
+            remoteUiInfo,
+            relayPinStates,
+            onlineFinanceTestResult,
+            audioInventoryTick,
+            previewingAudioKey,
+            isLiveActiveNow,
+            isDeviceOwner,
+            isKioskMaintenanceUnlocked
+        ) {
+            SettingsActions(
+                onUpdateSettings = { viewModel.updateSettings(it) },
+                onExportTakjilTemplate = {
+                    val slug = KtorRemoteServer.sanitizeFileSlug(viewModel.settingsFlow.value.brand.name)
+                    val fileName = "Template_Takjil_Ramadhan_$slug.xlsx"
+                    val mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    if (canHandleCreateDocument(mime)) {
+                        runCatching { exportTakjilExcelLauncher.launch(fileName) }.onFailure {
+                            saveDirectToDownloads(fileName) { out -> viewModel.exportTakjilExcelTemplate(out) }
+                        }
+                    } else {
+                        saveDirectToDownloads(fileName) { out -> viewModel.exportTakjilExcelTemplate(out) }
+                    }
+                },
+                onImportTakjilExcel = {
+                    val mimes = arrayOf(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "application/vnd.ms-excel"
+                    )
+                    openInAppOrSystemFilePicker(
+                        title = "Pilih File Excel Jadwal Ta'jil (.xlsx)",
+                        subtitle = "Pilih file Excel dari Memori Internal atau Flashdisk USB OTG",
+                        allowedExtensions = setOf("xlsx", "xls"),
+                        mimeTypes = mimes,
+                        onFileSelected = { file ->
+                            runCatching {
+                                FileInputStream(file).use { input ->
+                                    viewModel.parseTakjilExcelPreview(input)
+                                }
+                            }.onFailure { err ->
+                                viewModel.postStatusMessage("Gagal membaca Excel: ${err.message}")
+                            }
+                        },
+                        systemLauncherInvoke = { importTakjilExcelLauncher.launch(mimes) }
+                    )
+                },
+                onExportBackupZip = {
+                    val slug = KtorRemoteServer.sanitizeFileSlug(viewModel.settingsFlow.value.brand.name)
+                    val fileName = "Backup_AlGaffarTV_$slug.zip"
+                    val mime = "application/zip"
+                    if (canHandleCreateDocument(mime)) {
+                        runCatching { exportBackupZipLauncher.launch(fileName) }.onFailure {
+                            saveDirectToDownloads(fileName) { out -> viewModel.exportFullBackupZip(out) }
+                        }
+                    } else {
+                        saveDirectToDownloads(fileName) { out -> viewModel.exportFullBackupZip(out) }
+                    }
+                },
+                onImportBackupZip = {
+                    val mimes = arrayOf("application/zip", "application/octet-stream")
+                    openInAppOrSystemFilePicker(
+                        title = "Pilih File Backup JWS (.zip)",
+                        subtitle = "Restore pengaturan & aset dari file backup ZIP di Memori TV / USB",
+                        allowedExtensions = setOf("zip"),
+                        mimeTypes = mimes,
+                        onFileSelected = { file ->
+                            runCatching {
+                                viewModel.importFullBackupZip(FileInputStream(file))
+                            }.onFailure { err ->
+                                viewModel.postStatusMessage("Gagal membuka ZIP: ${err.message}")
+                            }
+                        },
+                        systemLauncherInvoke = { importBackupZipLauncher.launch(mimes) }
+                    )
+                },
+                onSyncUsbFolder = {
+                    hasStoragePermission = checkStorageReadPermission()
+                    if (!hasStoragePermission) {
+                        requestStoragePermissionsSafely()
+                    }
+                    activeFilePickerRequest = TvFilePickerRequest(
+                        title = "Sync Massal 1 Folder dari Flashdisk USB",
+                        subtitle = "Buka folder berisi gambar, video (.mp4), atau audio MP3 lalu tekan 'Sinkronkan Folder Ini ✓'",
+                        allowedExtensions = setOf(
+                            "png", "jpg", "jpeg", "webp", "bmp",
+                            "mp3", "wav", "ogg", "m4a", "aac",
+                            "mp4", "mkv", "webm", "mov", "m4v"
+                        ),
+                        mimeTypes = arrayOf("*/*"),
+                        pickDirectoryMode = true,
+                        onDirectorySelected = { dir ->
+                            viewModel.syncMediaFromExternalFolder(dir)
+                        }
+                    )
+                },
+                onRefreshStorageHealth = {
+                    viewModel.refreshStorageHealth()
+                    viewModel.postStatusMessage("Statistik penyimpanan internal diperbarui.")
+                },
+                onCleanOrphanMedia = {
+                    viewModel.cleanOrphanMedia()
+                },
+                onOpenDebugSimulator = {
+                    isSettingsModalOpen = false
+                    isDebugModalOpen = true
+                },
+                onToggleManualRelay = { pin, turnOn ->
+                    viewModel.toggleManualRelay(pin, turnOn)
+                },
+                onTestOnlineFinance = {
+                    viewModel.testOnlineFinanceConnection()
+                },
+                onStartDirectLive = { src, customId, mins ->
+                    viewModel.startDirectLive(src, customId, mins)
+                    isSettingsModalOpen = false
+                },
+                onStopDirectLive = {
+                    viewModel.stopDirectLive()
+                },
+                onPickImageAsset = { subFolder, onSaved ->
+                    pendingImageSubFolder = subFolder
+                    pendingImageCallback = onSaved
+                    val mimes = arrayOf("image/*")
+                    openInAppOrSystemFilePicker(
+                        title = if (subFolder == "logo") "Pilih Logo Masjid (PNG / JPG)" else "Pilih Gambar / Poster ($subFolder)",
+                        subtitle = "Pilih gambar dari Memori TV, Flashdisk USB, atau unggah langsung lewat Remote PWA",
+                        allowedExtensions = setOf("png", "jpg", "jpeg", "webp", "bmp"),
+                        mimeTypes = mimes,
+                        onFileSelected = { file ->
+                            runCatching {
+                                viewModel.importImageAsset(subFolder, file.name, FileInputStream(file), onSaved)
+                            }.onFailure { err ->
+                                viewModel.postStatusMessage("Gagal mengimpor gambar: ${err.message}")
+                            }
+                            pendingImageCallback = null
+                        },
+                        systemLauncherInvoke = { pickImageAssetLauncher.launch(mimes) }
+                    )
+                },
+                onPickVideoAsset = { onSaved ->
+                    pendingVideoCallback = onSaved
+                    val mimes = arrayOf("video/*")
+                    openInAppOrSystemFilePicker(
+                        title = "Pilih Video Slide Masjid (.mp4 / .webm / .mkv)",
+                        subtitle = "Video akan disalin ke memori internal TV (maks 250 MB) dan diputar otomatis tanpa suara",
+                        allowedExtensions = setOf("mp4", "mkv", "webm", "mov", "m4v"),
+                        mimeTypes = mimes,
+                        onFileSelected = { file ->
+                            runCatching {
+                                viewModel.importVideoAsset(file.name, FileInputStream(file), onSaved)
+                            }.onFailure { err ->
+                                viewModel.postStatusMessage("Gagal mengimpor video: ${err.message}")
+                            }
+                            pendingVideoCallback = null
+                        },
+                        systemLauncherInvoke = { pickVideoAssetLauncher.launch(mimes) }
+                    )
+                },
+                onPickPrayerAudio = { category, slotName ->
+                    pendingAudioCategory = category
+                    pendingAudioSlot = slotName
+                    val mimes = arrayOf("audio/*", "application/octet-stream")
+                    openInAppOrSystemFilePicker(
+                        title = "Pilih Audio ${category.uppercase()} (${slotName.uppercase()})",
+                        subtitle = "Pilih file MP3 / WAV / M4A / OGG dari Memori TV / USB atau unggah lewat Remote PWA",
+                        allowedExtensions = setOf("mp3", "wav", "ogg", "m4a", "aac"),
+                        mimeTypes = mimes,
+                        onFileSelected = { file ->
+                            runCatching {
+                                viewModel.importPrayerAudioSlot(category, slotName, FileInputStream(file))
+                            }.onFailure { err ->
+                                viewModel.postStatusMessage("Gagal mengimpor audio: ${err.message}")
+                            }
+                        },
+                        systemLauncherInvoke = { pickPrayerAudioLauncher.launch(mimes) }
+                    )
+                },
+                onDeletePrayerAudio = { category, slotName ->
+                    viewModel.deletePrayerAudioSlot(category, slotName)
+                },
+                onTogglePreviewPrayerAudio = { category, slotName ->
+                    viewModel.togglePreviewPrayerAudio(category, slotName)
+                },
+                onPickCustomAudio = {
+                    val mimes = arrayOf("audio/*", "application/octet-stream")
+                    openInAppOrSystemFilePicker(
+                        title = "Pilih File Audio Kustom / Murottal",
+                        subtitle = "Pilih file MP3 / WAV / M4A / OGG dari Memori TV atau Flashdisk USB OTG",
+                        allowedExtensions = setOf("mp3", "wav", "ogg", "m4a", "aac"),
+                        mimeTypes = mimes,
+                        onFileSelected = { file ->
+                            runCatching {
+                                viewModel.importCustomAudioFile(file.name, FileInputStream(file))
+                            }.onFailure { err ->
+                                viewModel.postStatusMessage("Gagal mengimpor audio kustom: ${err.message}")
+                            }
+                        },
+                        systemLauncherInvoke = { pickCustomAudioLauncher.launch(mimes) }
+                    )
+                },
+                onDeleteCustomAudio = { fileName ->
+                    viewModel.deleteCustomAudioFile(fileName)
+                },
+                onTogglePreviewCustomAudio = { fileName ->
+                    viewModel.togglePreviewCustomAudio(fileName)
+                },
+                onFindPrayerAudioSlot = { category, slotName ->
+                    viewModel.findPrayerAudioSlot(category, slotName)
+                },
+                onListCustomAudioFiles = {
+                    viewModel.listCustomAudioFilesWithDurations()
+                },
+                assetsRootDir = viewModel.assetsRootDir,
+                storageHealth = storageHealth,
+                remoteServerUrl = remoteUiInfo.remoteServerUrl,
+                remoteQrPairingUrl = remoteUiInfo.remoteQrPairingUrl,
+                remoteAuthToken = remoteUiInfo.remoteAuthToken,
+                deviceCode = remoteUiInfo.deviceCode,
+                relayPinStates = relayPinStates,
+                onlineFinanceTestResult = onlineFinanceTestResult,
+                audioInventoryTick = audioInventoryTick,
+                previewingAudioKey = previewingAudioKey,
+                isLiveActiveNow = isLiveActiveNow,
+                onRegenerateRemoteToken = { viewModel.regenerateRemoteToken() },
+                onResetSuperadminPin = { viewModel.resetSuperadminPin(it) },
+                onUpgradeUserPinHash = { id, pin -> viewModel.upgradeUserPinHash(id, pin) },
+                onRequestUsbPermission = { viewModel.requestUsbRelayPermission() },
+                onReopenOnboarding = {
+                    isSettingsModalOpen = false
+                    viewModel.updateSettings { it.copy(onboardingCompleted = false) }
+                },
+                onCheckOtaUpdate = { viewModel.checkOtaUpdate() },
+                onInstallOtaApkFromUsb = {
+                    openInAppOrSystemFilePicker(
+                        title = "Pilih File Pembaruan Al-Gaffar TV (.apk)",
+                        subtitle = "Pilih file .apk dari Flashdisk USB OTG atau Memori Internal STB",
+                        allowedExtensions = setOf("apk"),
+                        mimeTypes = arrayOf("application/vnd.android.package-archive", "application/octet-stream"),
+                        onFileSelected = { file ->
+                            runCatching {
+                                viewModel.installOfflineApk(FileInputStream(file))
+                            }.onFailure { err ->
+                                viewModel.postStatusMessage("Gagal membuka file APK: ${err.message}")
+                            }
+                        },
+                        systemLauncherInvoke = {}
+                    )
+                },
+                onDownloadAudioPack = { packId -> viewModel.downloadAudioPack(packId) },
+                isDeviceOwner = isDeviceOwner,
+                isKioskMaintenanceUnlocked = isKioskMaintenanceUnlocked,
+                onToggleKioskMaintenance = {
+                    if (isKioskMaintenanceUnlocked) {
+                        isKioskMaintenanceUnlocked = false
+                        JwsDeviceAdminReceiver.startKioskLockTaskIfDeviceOwner(this@MainActivity)
+                        viewModel.postStatusMessage("Mode Kiosk kembali dikunci penuh.")
+                    } else {
+                        isKioskMaintenanceUnlocked = true
+                        JwsDeviceAdminReceiver.stopKioskLockTask(this@MainActivity)
+                        viewModel.postStatusMessage("Mode Kiosk dibuka sementara untuk maintenance. Tekan 'Kunci Kembali' setelah selesai.")
+                    }
+                },
+                onOpenAndroidSettings = {
+                    isKioskMaintenanceUnlocked = true
+                    JwsDeviceAdminReceiver.stopKioskLockTask(this@MainActivity)
+                    val sysIntent = Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    runCatching { startActivity(sysIntent) }.onFailure { err ->
+                        viewModel.postStatusMessage("Gagal membuka Setelan TV Box: ${err.message}")
+                    }
+                },
+                onOpenWifiSettings = {
+                    isKioskMaintenanceUnlocked = true
+                    JwsDeviceAdminReceiver.stopKioskLockTask(this@MainActivity)
+                    val wifiIntent = Intent(android.provider.Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    val sysIntent = Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    runCatching { startActivity(wifiIntent) }.onFailure {
+                        runCatching { startActivity(sysIntent) }.onFailure { err ->
+                            viewModel.postStatusMessage("Gagal membuka Pengaturan Wi-Fi: ${err.message}")
+                        }
+                    }
+                },
+                onTriggerAppRestartNow = { viewModel.triggerAppRestartNow() },
+                onTriggerDeviceRebootNow = { viewModel.triggerDeviceRebootNow() }
+            )
+        }
+
+        SettingsModal(
+            settings = settings,
+            statusBannerMessage = statusBanner,
+            takjilImportPreview = takjilPreview,
+            onConfirmTakjilImport = { viewModel.confirmTakjilImport() },
+            onDismissTakjilImport = { viewModel.dismissTakjilImport() },
+            actions = actions,
+            onClose = {
+                viewModel.stopAudioPreview()
+                isSettingsModalOpen = false
+            }
+        )
+    }
+
+    @Composable
+    private fun DebugModalHost(
+        activePaletteName: String,
+        currentLayoutName: String,
+        currentClockStyle: String
+    ) {
+        val activeState by viewModel.activeAppStateFlow.collectAsState()
+        QuickDebugModalOverlay(
+            activeState = activeState,
+            isManualOverride = viewModel.isManualOverrideNow(),
+            currentThemeName = activePaletteName,
+            currentLayoutName = currentLayoutName,
+            currentClockStyle = currentClockStyle,
+            onSimulateState = { state ->
+                viewModel.simulateState(state, 180L)
+                isDebugModalOpen = false
+            },
+            onClearSimulation = {
+                viewModel.clearSimulation()
+                isDebugModalOpen = false
+            },
+            onTestBeep = { viewModel.testPlayBeep1000Hz() },
+            onTestSirine = { viewModel.testPlayRamadhanSirine() },
+            onCycleTheme = { viewModel.cycleTheme() },
+            onCycleLayout = { viewModel.cycleLayout() },
+            onCycleClock = { viewModel.cycleClockStyle() },
+            onDismiss = { isDebugModalOpen = false }
+        )
     }
 }
 

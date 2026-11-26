@@ -2,32 +2,45 @@ package id.algaffar.jwstv.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.algaffar.jwstv.domain.engine.JwsStateMachine
@@ -813,6 +826,7 @@ fun IdulFitriSettingsTab(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun IdulAdhaQurbanSettingsTab(
     settings: AppStateSettings,
@@ -820,9 +834,42 @@ fun IdulAdhaQurbanSettingsTab(
 ) {
     val palette = LocalJwsTheme.current
     val adha = settings.idulAdha
-    var groupNameInput by remember { mutableStateOf("Kelompok Qurban Baru") }
-    var animalTypeInput by remember { mutableStateOf("Sapi") }
-    var membersCsvInput by remember { mutableStateOf("") }
+    val groups = adha.qurbanGroups
+
+    var selectedGroupId by remember { mutableStateOf(groups.firstOrNull()?.id) }
+    val activeGroupIndex = groups.indexOfFirst { it.id == selectedGroupId }
+        .let { if (it >= 0) it else if (groups.isNotEmpty()) 0 else -1 }
+    val activeGroup = groups.getOrNull(activeGroupIndex)
+
+    fun addNewGroupTab(animalType: String = QurbanGroup.ANIMAL_SAPI) {
+        val newId = "qgrp_${System.currentTimeMillis()}_${groups.size + 1}"
+        actions.onUpdateSettings { prev ->
+            val (updatedGroups, _) = QurbanGroup.addGroup(
+                groups = prev.idulAdha.qurbanGroups,
+                animalType = animalType,
+                id = newId
+            )
+            prev.copy(idulAdha = prev.idulAdha.copy(qurbanGroups = updatedGroups))
+        }
+        selectedGroupId = newId
+    }
+
+    fun deleteGroupTab(groupId: String) {
+        val delIdx = groups.indexOfFirst { it.id == groupId }
+        val remaining = groups.filterNot { it.id == groupId }
+        selectedGroupId = if (remaining.isEmpty()) {
+            null
+        } else {
+            remaining[delIdx.coerceIn(0, remaining.lastIndex)].id
+        }
+        actions.onUpdateSettings { prev ->
+            prev.copy(
+                idulAdha = prev.idulAdha.copy(
+                    qurbanGroups = QurbanGroup.deleteGroup(prev.idulAdha.qurbanGroups, groupId)
+                )
+            )
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         HybridSectionCard(
@@ -830,66 +877,214 @@ fun IdulAdhaQurbanSettingsTab(
             subtitle = "Kelola jadwal Hari Raya Idul Adha, petugas, serta daftar kelompok peserta Qurban"
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HybridToggleRow("Aktifkan Mode Idul Adha", adha.enabled, { v -> actions.onUpdateSettings { it.copy(idulAdha = adha.copy(enabled = v)) } }, modifier = Modifier.weight(1f))
-                HybridToggleRow("Aktifkan Mode Info Qurban", settings.infoQurban.enabled, { v -> actions.onUpdateSettings { it.copy(infoQurban = it.infoQurban.copy(enabled = v)) } }, modifier = Modifier.weight(1f))
+                HybridToggleRow(
+                    label = "Aktifkan Mode Idul Adha",
+                    checked = adha.enabled,
+                    onCheckedChange = { v -> actions.onUpdateSettings { prev -> prev.copy(idulAdha = prev.idulAdha.copy(enabled = v)) } },
+                    modifier = Modifier.weight(1f)
+                )
+                HybridToggleRow(
+                    label = "Aktifkan Mode Info Qurban",
+                    checked = settings.infoQurban.enabled,
+                    onCheckedChange = { v -> actions.onUpdateSettings { prev -> prev.copy(infoQurban = prev.infoQurban.copy(enabled = v)) } },
+                    modifier = Modifier.weight(1f)
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HybridTextInput("Khotib Idul Adha", adha.petugas.khotib, { v -> actions.onUpdateSettings { it.copy(idulAdha = adha.copy(petugas = adha.petugas.copy(khotib = v))) } }, modifier = Modifier.weight(1f))
-                HybridTextInput("Imam Idul Adha", adha.petugas.imam, { v -> actions.onUpdateSettings { it.copy(idulAdha = adha.copy(petugas = adha.petugas.copy(imam = v))) } }, modifier = Modifier.weight(1f))
-                HybridTextInput("Bilal / Muadzin", adha.petugas.bilal, { v -> actions.onUpdateSettings { it.copy(idulAdha = adha.copy(petugas = adha.petugas.copy(bilal = v))) } }, modifier = Modifier.weight(1f))
+                HybridTextInput(
+                    label = "Khotib Idul Adha",
+                    value = adha.petugas.khotib,
+                    onValueChange = { v -> actions.onUpdateSettings { prev -> prev.copy(idulAdha = prev.idulAdha.copy(petugas = prev.idulAdha.petugas.copy(khotib = v))) } },
+                    modifier = Modifier.weight(1f)
+                )
+                HybridTextInput(
+                    label = "Imam Idul Adha",
+                    value = adha.petugas.imam,
+                    onValueChange = { v -> actions.onUpdateSettings { prev -> prev.copy(idulAdha = prev.idulAdha.copy(petugas = prev.idulAdha.petugas.copy(imam = v))) } },
+                    modifier = Modifier.weight(1f)
+                )
+                HybridTextInput(
+                    label = "Bilal / Muadzin",
+                    value = adha.petugas.bilal,
+                    onValueChange = { v -> actions.onUpdateSettings { prev -> prev.copy(idulAdha = prev.idulAdha.copy(petugas = prev.idulAdha.petugas.copy(bilal = v))) } },
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
 
         HybridSectionCard(
-            title = "Kelompok Peserta Qurban (${adha.qurbanGroups.size} Kelompok)",
-            subtitle = "Tambahkan atau hapus kelompok Sapi (7 mudhohi) / Kambing"
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Bottom) {
-                HybridTextInput("Nama Kelompok", groupNameInput, { groupNameInput = it }, modifier = Modifier.weight(1f))
+            title = "Kelompok Peserta Qurban (${groups.size} Kelompok)",
+            subtitle = "Kelola setiap kelompok melalui tab di bawah — maksimal ${QurbanGroup.MAX_MEMBERS} anggota (mudhohi) dalam 1 kelompok",
+            headerAction = {
                 HybridButton(
-                    label = "Hewan: $animalTypeInput",
-                    onClick = { animalTypeInput = if (animalTypeInput == "Sapi") "Kambing" else "Sapi" }
+                    label = "+ Tambah Kelompok",
+                    icon = Icons.Default.Add,
+                    isPrimary = true,
+                    onClick = { addNewGroupTab() }
                 )
             }
-            HybridTextInput("Daftar Nama Peserta (pisahkan dengan koma)", membersCsvInput, { membersCsvInput = it }, "H. Ahmad, Bpk. Budi, Ibu Siti...")
-            HybridButton(
-                label = "+ Simpan Kelompok Qurban",
-                icon = Icons.Default.Add,
-                isPrimary = true,
-                onClick = {
-                    val members = membersCsvInput.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                    if (groupNameInput.isNotBlank() && members.isNotEmpty()) {
-                        val grp = QurbanGroup(System.currentTimeMillis().toString(), animalTypeInput, groupNameInput.trim(), members)
-                        actions.onUpdateSettings { prev -> prev.copy(idulAdha = prev.idulAdha.copy(qurbanGroups = prev.idulAdha.qurbanGroups + grp)) }
-                        membersCsvInput = ""
-                    }
-                }
-            )
-
-            adha.qurbanGroups.forEach { grp ->
-                Row(
+        ) {
+            if (groups.isEmpty()) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(palette.bgPrimary.copy(alpha = 0.8f))
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(palette.bgPrimary.copy(alpha = 0.65f))
+                        .border(1.dp, palette.border, RoundedCornerShape(14.dp))
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("${grp.groupName} (${grp.animalType})", color = palette.accentSecondary, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
-                        Text(grp.members.joinToString(", "), color = palette.textSecondary, fontSize = 13.sp)
-                    }
-                    HybridButton(
-                        label = "Hapus",
-                        icon = Icons.Default.Delete,
-                        isDanger = true,
-                        onClick = {
-                            actions.onUpdateSettings { prev ->
-                                prev.copy(idulAdha = prev.idulAdha.copy(qurbanGroups = prev.idulAdha.qurbanGroups.filterNot { it.id == grp.id }))
-                            }
-                        }
+                    Text(
+                        text = "Belum ada Kelompok Qurban",
+                        color = palette.textPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.ExtraBold
                     )
+                    Text(
+                        text = "Tambahkan tab kelompok baru untuk mengisi daftar peserta Qurban (maksimal ${QurbanGroup.MAX_MEMBERS} anggota per kelompok).",
+                        color = palette.textSecondary,
+                        fontSize = 13.sp
+                    )
+                    HybridButton(
+                        label = "+ Tambah Kelompok Pertama",
+                        icon = Icons.Default.Add,
+                        isPrimary = true,
+                        onClick = { addNewGroupTab() }
+                    )
+                }
+            } else {
+                // ==================== TAB BAR KELOMPOK QURBAN ====================
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(palette.bgPrimary.copy(alpha = 0.6f))
+                        .border(1.dp, palette.border, RoundedCornerShape(14.dp))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "TAB KELOMPOK QURBAN (${groups.size} TAB • PILIH TAB UNTUK CRUD ANGGOTA)",
+                        color = palette.textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.8.sp
+                    )
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        groups.forEachIndexed { idx, grp ->
+                            QurbanGroupTabPill(
+                                group = grp,
+                                index = idx,
+                                isSelected = activeGroup?.id == grp.id,
+                                onSelect = { selectedGroupId = grp.id }
+                            )
+                        }
+                        HybridButton(
+                            label = "+ Tab Kelompok",
+                            icon = Icons.Default.Add,
+                            isPrimary = false,
+                            onClick = { addNewGroupTab() }
+                        )
+                    }
+                }
+
+                // ==================== PANEL CRUD TAB AKTIF ====================
+                if (activeGroup != null) {
+                    key(activeGroup.id) {
+                        QurbanGroupTabEditor(
+                            group = activeGroup,
+                            groupIndex = activeGroupIndex,
+                            totalGroups = groups.size,
+                            onUpdateGroup = { newName, newAnimal ->
+                                actions.onUpdateSettings { prev ->
+                                    prev.copy(
+                                        idulAdha = prev.idulAdha.copy(
+                                            qurbanGroups = QurbanGroup.updateGroup(
+                                                groups = prev.idulAdha.qurbanGroups,
+                                                groupId = activeGroup.id,
+                                                groupName = newName,
+                                                animalType = newAnimal
+                                            )
+                                        )
+                                    )
+                                }
+                            },
+                            onAddMember = { memberName ->
+                                actions.onUpdateSettings { prev ->
+                                    prev.copy(
+                                        idulAdha = prev.idulAdha.copy(
+                                            qurbanGroups = QurbanGroup.addMember(
+                                                groups = prev.idulAdha.qurbanGroups,
+                                                groupId = activeGroup.id,
+                                                memberName = memberName
+                                            )
+                                        )
+                                    )
+                                }
+                            },
+                            onUpdateMember = { memberIdx, memberName ->
+                                actions.onUpdateSettings { prev ->
+                                    prev.copy(
+                                        idulAdha = prev.idulAdha.copy(
+                                            qurbanGroups = QurbanGroup.updateMember(
+                                                groups = prev.idulAdha.qurbanGroups,
+                                                groupId = activeGroup.id,
+                                                memberIndex = memberIdx,
+                                                memberName = memberName
+                                            )
+                                        )
+                                    )
+                                }
+                            },
+                            onDeleteMember = { memberIdx ->
+                                actions.onUpdateSettings { prev ->
+                                    prev.copy(
+                                        idulAdha = prev.idulAdha.copy(
+                                            qurbanGroups = QurbanGroup.deleteMember(
+                                                groups = prev.idulAdha.qurbanGroups,
+                                                groupId = activeGroup.id,
+                                                memberIndex = memberIdx
+                                            )
+                                        )
+                                    )
+                                }
+                            },
+                            onMoveMember = { memberIdx, delta ->
+                                actions.onUpdateSettings { prev ->
+                                    prev.copy(
+                                        idulAdha = prev.idulAdha.copy(
+                                            qurbanGroups = QurbanGroup.moveMember(
+                                                groups = prev.idulAdha.qurbanGroups,
+                                                groupId = activeGroup.id,
+                                                memberIndex = memberIdx,
+                                                delta = delta
+                                            )
+                                        )
+                                    )
+                                }
+                            },
+                            onMoveGroup = { delta ->
+                                actions.onUpdateSettings { prev ->
+                                    prev.copy(
+                                        idulAdha = prev.idulAdha.copy(
+                                            qurbanGroups = QurbanGroup.moveGroup(
+                                                groups = prev.idulAdha.qurbanGroups,
+                                                groupId = activeGroup.id,
+                                                delta = delta
+                                            )
+                                        )
+                                    )
+                                }
+                            },
+                            onDeleteGroup = { deleteGroupTab(activeGroup.id) },
+                            onAddNewGroupTab = { addNewGroupTab(activeGroup.animalType) }
+                        )
+                    }
                 }
             }
         }
@@ -897,8 +1092,504 @@ fun IdulAdhaQurbanSettingsTab(
         TimeSlotListCard(
             title = "Slot Jam Tayang Idul Adha (${adha.timeSlots.size} Slot)",
             slots = adha.timeSlots,
-            onUpdateSlots = { updated -> actions.onUpdateSettings { it.copy(idulAdha = adha.copy(timeSlots = updated)) } }
+            onUpdateSlots = { updated -> actions.onUpdateSettings { prev -> prev.copy(idulAdha = prev.idulAdha.copy(timeSlots = updated)) } }
         )
+    }
+}
+
+@Composable
+private fun QurbanGroupTabPill(
+    group: QurbanGroup,
+    index: Int,
+    isSelected: Boolean,
+    onSelect: () -> Unit
+) {
+    val palette = LocalJwsTheme.current
+    var isFocused by remember { mutableStateOf(false) }
+
+    val memberCount = group.members.size
+    val isFull = memberCount >= QurbanGroup.MAX_MEMBERS
+    val isOverflow = memberCount > QurbanGroup.MAX_MEMBERS
+
+    val bgColor = when {
+        isSelected && isFocused -> palette.accentSecondary
+        isSelected -> palette.accent
+        isFocused -> palette.accent.copy(alpha = 0.28f)
+        else -> palette.bgSecondary.copy(alpha = 0.9f)
+    }
+    val titleColor = if (isSelected) palette.bgPrimary else palette.textPrimary
+    val badgeBg = when {
+        isSelected -> palette.bgPrimary.copy(alpha = 0.22f)
+        isOverflow -> Color(0xFFF59E0B).copy(alpha = 0.22f)
+        isFull -> Color(0xFF10B981).copy(alpha = 0.22f)
+        else -> palette.bgPrimary.copy(alpha = 0.85f)
+    }
+    val badgeTextColor = when {
+        isSelected -> palette.bgPrimary
+        isOverflow -> Color(0xFFFBBF24)
+        isFull -> Color(0xFF34D399)
+        else -> palette.accentSecondary
+    }
+    val borderColor = when {
+        isFocused -> TvFocusAmber
+        isSelected -> palette.accentSecondary
+        else -> palette.border
+    }
+
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(bgColor)
+            .border(
+                width = if (isFocused) 3.dp else if (isSelected) 2.dp else 1.dp,
+                color = borderColor,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
+            .clickable { onSelect() }
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = group.groupName.ifBlank { "Kelompok ${index + 1}" },
+            color = titleColor,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(badgeBg)
+                .padding(horizontal = 7.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "${group.animalType} • $memberCount/${QurbanGroup.MAX_MEMBERS}",
+                color = badgeTextColor,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.ExtraBold
+            )
+            if (memberCount == QurbanGroup.MAX_MEMBERS) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    tint = badgeTextColor,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QurbanGroupTabEditor(
+    group: QurbanGroup,
+    groupIndex: Int,
+    totalGroups: Int,
+    onUpdateGroup: (groupName: String?, animalType: String?) -> Unit,
+    onAddMember: (String) -> Unit,
+    onUpdateMember: (index: Int, name: String) -> Unit,
+    onDeleteMember: (index: Int) -> Unit,
+    onMoveMember: (index: Int, delta: Int) -> Unit,
+    onMoveGroup: (delta: Int) -> Unit,
+    onDeleteGroup: () -> Unit,
+    onAddNewGroupTab: () -> Unit
+) {
+    val palette = LocalJwsTheme.current
+
+    var nextSlotUid by remember(group.id) { mutableLongStateOf(1L) }
+    val slotUids = remember(group.id) {
+        mutableStateListOf<Long>().apply {
+            repeat(group.members.size) { add(nextSlotUid++) }
+        }
+    }
+    val deletedUids = remember(group.id) { mutableSetOf<Long>() }
+    var isDeletingGroup by remember(group.id) { mutableStateOf(false) }
+    var confirmDeleteGroup by remember(group.id) { mutableStateOf(false) }
+
+    var newMemberInput by remember(group.id) { mutableStateOf("") }
+    var addResetCounter by remember(group.id) { mutableIntStateOf(0) }
+
+    // Reconcile local stable row keys if members were added/removed externally (e.g., Remote PWA)
+    while (slotUids.size < group.members.size) {
+        slotUids.add(nextSlotUid++)
+    }
+    while (slotUids.size > group.members.size) {
+        slotUids.removeAt(slotUids.lastIndex)
+    }
+
+    val memberCount = group.members.size
+    val isFull = memberCount >= QurbanGroup.MAX_MEMBERS
+    val isOverflow = memberCount > QurbanGroup.MAX_MEMBERS
+    val remainingSlots = (QurbanGroup.MAX_MEMBERS - memberCount).coerceAtLeast(0)
+
+    fun commitAddMember() {
+        val clean = newMemberInput.trim()
+        if (clean.isBlank() || group.members.size >= QurbanGroup.MAX_MEMBERS) return
+        slotUids.add(nextSlotUid++)
+        onAddMember(clean)
+        newMemberInput = ""
+        addResetCounter++
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(palette.bgPrimary.copy(alpha = 0.85f))
+            .border(1.5.dp, palette.accent.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // ==================== HEADER TAB AKTIF & AKSI KELOMPOK ====================
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(palette.accent.copy(alpha = 0.2f))
+                        .border(1.dp, palette.accent.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "TAB #${groupIndex + 1} / $totalGroups",
+                        color = palette.accent,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+                val statusColor = when {
+                    isOverflow -> Color(0xFFF59E0B)
+                    isFull -> Color(0xFF10B981)
+                    else -> palette.accentSecondary
+                }
+                val statusLabel = when {
+                    isOverflow -> "$memberCount/${QurbanGroup.MAX_MEMBERS} Anggota (Melebihi Batas)"
+                    isFull -> "$memberCount/${QurbanGroup.MAX_MEMBERS} Anggota • PENUH"
+                    else -> "$memberCount/${QurbanGroup.MAX_MEMBERS} Anggota • Sisa $remainingSlots slot"
+                }
+                Text(
+                    text = statusLabel,
+                    color = statusColor,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HybridButton(
+                    label = "⬅",
+                    enabled = groupIndex > 0,
+                    onClick = { onMoveGroup(-1) }
+                )
+                HybridButton(
+                    label = "➡",
+                    enabled = groupIndex < totalGroups - 1,
+                    onClick = { onMoveGroup(1) }
+                )
+                HybridButton(
+                    label = "Hapus Kelompok",
+                    icon = Icons.Default.Delete,
+                    isDanger = true,
+                    onClick = {
+                        if (group.activeMembers.isEmpty()) {
+                            isDeletingGroup = true
+                            onDeleteGroup()
+                        } else {
+                            confirmDeleteGroup = true
+                        }
+                    }
+                )
+            }
+        }
+
+        if (confirmDeleteGroup) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF991B1B).copy(alpha = 0.28f))
+                    .border(1.dp, Color(0xFFEF4444).copy(alpha = 0.65f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Yakin hapus '${group.groupName.ifBlank { "Kelompok ${groupIndex + 1}" }}' beserta ${group.activeMembers.size} anggota?",
+                    color = Color(0xFFFECACA),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HybridButton(
+                        label = "Batal",
+                        onClick = { confirmDeleteGroup = false }
+                    )
+                    HybridButton(
+                        label = "Ya, Hapus",
+                        icon = Icons.Default.Delete,
+                        isDanger = true,
+                        onClick = {
+                            isDeletingGroup = true
+                            confirmDeleteGroup = false
+                            onDeleteGroup()
+                        }
+                    )
+                }
+            }
+        }
+
+        // ==================== IDENTITAS KELOMPOK (NAMA & JENIS HEWAN) ====================
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            HybridTextInput(
+                label = "Nama Kelompok",
+                value = group.groupName,
+                placeholder = "Contoh: Kelompok 1 / Sapi RT 01",
+                onValueChange = { updatedName ->
+                    if (!isDeletingGroup) onUpdateGroup(updatedName, null)
+                },
+                modifier = Modifier.weight(1.35f)
+            )
+            Column(
+                modifier = Modifier.weight(0.85f),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Text(
+                    text = "JENIS HEWAN",
+                    color = palette.textSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HybridButton(
+                        label = QurbanGroup.ANIMAL_SAPI,
+                        isPrimary = group.animalType.equals(QurbanGroup.ANIMAL_SAPI, ignoreCase = true),
+                        onClick = { onUpdateGroup(null, QurbanGroup.ANIMAL_SAPI) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    HybridButton(
+                        label = QurbanGroup.ANIMAL_KAMBING,
+                        isPrimary = group.animalType.equals(QurbanGroup.ANIMAL_KAMBING, ignoreCase = true),
+                        onClick = { onUpdateGroup(null, QurbanGroup.ANIMAL_KAMBING) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        // ==================== DAFTAR ANGGOTA (MAKSIMAL 7 ANGGOTA) ====================
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "DAFTAR ANGGOTA / MUDHOHI ($memberCount/${QurbanGroup.MAX_MEMBERS})",
+                    color = palette.accentSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.8.sp
+                )
+                Text(
+                    text = "Edit langsung pada nama, urutkan (⬆/⬇), atau hapus",
+                    color = palette.textSecondary,
+                    fontSize = 12.sp
+                )
+            }
+
+            if (isOverflow) {
+                HybridInfoBanner(
+                    text = "Kelompok ini memiliki $memberCount anggota (melebihi batas ${QurbanGroup.MAX_MEMBERS}). Hanya ${QurbanGroup.MAX_MEMBERS} anggota pertama yang tampil di layar TV. Hapus kelebihan anggota atau pindahkan ke tab kelompok baru.",
+                    accentColor = Color(0xFFF59E0B)
+                )
+            }
+
+            if (group.members.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(palette.bgSecondary.copy(alpha = 0.55f))
+                        .border(1.dp, palette.border, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                ) {
+                    Text(
+                        text = "Belum ada anggota pada kelompok ini. Ketik nama peserta pada kolom 'Tambah Anggota' di bawah (maksimal ${QurbanGroup.MAX_MEMBERS} anggota).",
+                        color = palette.textSecondary,
+                        fontSize = 13.sp
+                    )
+                }
+            } else {
+                slotUids.forEachIndexed { idx, uid ->
+                    val memberValue = group.members.getOrElse(idx) { "" }
+                    val isExcessRow = idx >= QurbanGroup.MAX_MEMBERS
+                    key(uid) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (isExcessRow) Color(0xFFF59E0B).copy(alpha = 0.1f)
+                                    else palette.bgSecondary.copy(alpha = 0.65f)
+                                )
+                                .border(
+                                    1.dp,
+                                    if (isExcessRow) Color(0xFFF59E0B).copy(alpha = 0.55f) else palette.border,
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(38.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        if (isExcessRow) Color(0xFFF59E0B).copy(alpha = 0.25f)
+                                        else palette.accent.copy(alpha = 0.18f)
+                                    )
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "${idx + 1}.",
+                                    color = if (isExcessRow) Color(0xFFFBBF24) else palette.accent,
+                                    fontSize = 14.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+
+                            HybridTextInput(
+                                label = "",
+                                value = memberValue,
+                                placeholder = "Nama anggota #${idx + 1}",
+                                onValueChange = { updatedText ->
+                                    if (isDeletingGroup || uid in deletedUids) return@HybridTextInput
+                                    val liveIdx = slotUids.indexOf(uid)
+                                    if (liveIdx >= 0) {
+                                        onUpdateMember(liveIdx, updatedText)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            HybridButton(
+                                label = "⬆",
+                                enabled = idx > 0,
+                                onClick = {
+                                    val liveIdx = slotUids.indexOf(uid)
+                                    val targetIdx = liveIdx - 1
+                                    if (liveIdx > 0 && targetIdx in slotUids.indices) {
+                                        val moved = slotUids.removeAt(liveIdx)
+                                        slotUids.add(targetIdx, moved)
+                                        onMoveMember(liveIdx, -1)
+                                    }
+                                }
+                            )
+                            HybridButton(
+                                label = "⬇",
+                                enabled = idx < group.members.lastIndex,
+                                onClick = {
+                                    val liveIdx = slotUids.indexOf(uid)
+                                    val targetIdx = liveIdx + 1
+                                    if (liveIdx >= 0 && targetIdx in slotUids.indices) {
+                                        val moved = slotUids.removeAt(liveIdx)
+                                        slotUids.add(targetIdx, moved)
+                                        onMoveMember(liveIdx, 1)
+                                    }
+                                }
+                            )
+                            HybridButton(
+                                label = "Hapus",
+                                icon = Icons.Default.Delete,
+                                isDanger = true,
+                                onClick = {
+                                    val liveIdx = slotUids.indexOf(uid)
+                                    if (liveIdx >= 0) {
+                                        deletedUids.add(uid)
+                                        slotUids.removeAt(liveIdx)
+                                        onDeleteMember(liveIdx)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ==================== FORM TAMBAH ANGGOTA / INFO KUOTA PENUH ====================
+            if (!isFull) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(palette.bgSecondary.copy(alpha = 0.5f))
+                        .border(1.dp, palette.accent.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        key(addResetCounter) {
+                            HybridTextInput(
+                                label = "Tambah Anggota #${memberCount + 1} (Sisa $remainingSlots dari ${QurbanGroup.MAX_MEMBERS} slot)",
+                                value = newMemberInput,
+                                placeholder = "Contoh: H. Ahmad beserta keluarga",
+                                onValueChange = { newMemberInput = it },
+                                debounceMs = 0L,
+                                onSubmit = { commitAddMember() }
+                            )
+                        }
+                    }
+                    HybridButton(
+                        label = "+ Tambah Anggota",
+                        icon = Icons.Default.Add,
+                        isPrimary = true,
+                        enabled = newMemberInput.isNotBlank(),
+                        onClick = { commitAddMember() }
+                    )
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HybridInfoBanner(
+                        text = "Kuota maksimal ${QurbanGroup.MAX_MEMBERS} anggota dalam 1 kelompok sudah terpenuhi ($memberCount/${QurbanGroup.MAX_MEMBERS}). Tambah tab kelompok baru untuk memasukkan peserta berikutnya.",
+                        accentColor = Color(0xFF10B981)
+                    )
+                    HybridButton(
+                        label = "+ Tambah Tab Kelompok Baru",
+                        icon = Icons.Default.Add,
+                        isPrimary = true,
+                        onClick = onAddNewGroupTab
+                    )
+                }
+            }
+        }
     }
 }
 

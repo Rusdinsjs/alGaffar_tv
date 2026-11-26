@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import id.algaffar.jwstv.domain.engine.DailyPrayerSchedule
 import id.algaffar.jwstv.domain.engine.PrayerTimeItem
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
+import id.algaffar.jwstv.ui.theme.LocalPerformanceMode
 import kotlinx.coroutines.delay
 
 private val SmoothCarouselEasing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
@@ -61,7 +62,23 @@ fun PrayerTimesCarousel(
     isVertical: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val items = schedule.items
+    // Delegate using cached `schedule.items` so 1Hz `secondsToNextPrayer` ticks
+    // do not recompose all 5 PrayerTimeCards every second.
+    PrayerTimesCarouselContent(
+        items = schedule.items,
+        scrollIntervalSeconds = scrollIntervalSeconds,
+        isVertical = isVertical,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun PrayerTimesCarouselContent(
+    items: List<PrayerTimeItem>,
+    scrollIntervalSeconds: Int,
+    isVertical: Boolean,
+    modifier: Modifier = Modifier
+) {
     val totalCount = items.size.coerceAtLeast(1)
     val visibleCount = 4
 
@@ -148,24 +165,30 @@ private fun PrayerTimeCard(
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
+    val isPerformanceMode = LocalPerformanceMode.current
     val isNext = item.isNext
 
-    val cardBgBrush = if (isNext) {
-        Brush.linearGradient(
-            colors = listOf(
-                palette.accent.copy(alpha = 0.92f),
-                palette.accent.copy(alpha = 0.72f)
+    val cardBgBrush = remember(palette, isNext, isPerformanceMode) {
+        if (isPerformanceMode) {
+            null
+        } else if (isNext) {
+            Brush.linearGradient(
+                colors = listOf(
+                    palette.accent.copy(alpha = 0.92f),
+                    palette.accent.copy(alpha = 0.72f)
+                )
             )
-        )
-    } else {
-        Brush.linearGradient(
-            colors = listOf(
-                palette.bgCard,
-                palette.bgPrimary.copy(alpha = 0.85f)
+        } else {
+            Brush.linearGradient(
+                colors = listOf(
+                    palette.bgCard,
+                    palette.bgPrimary.copy(alpha = 0.85f)
+                )
             )
-        )
+        }
     }
 
+    val solidBgColor = if (isNext) palette.accent.copy(alpha = 0.88f) else palette.bgCard
     val borderColor = if (isNext) palette.accentSecondary else palette.border
     val borderWidth = if (isNext) 2.5.dp else 1.5.dp
     val titleColor = if (isNext) palette.bgPrimary else palette.textPrimary
@@ -177,7 +200,10 @@ private fun PrayerTimeCard(
             .size(width = 480.dp, height = 225.dp)
             .padding(4.dp)
             .clip(RoundedCornerShape(18.dp))
-            .background(cardBgBrush)
+            .then(
+                if (cardBgBrush != null) Modifier.background(cardBgBrush)
+                else Modifier.background(solidBgColor)
+            )
             .border(borderWidth, borderColor, RoundedCornerShape(18.dp))
             .padding(horizontal = 20.dp, vertical = 10.dp)
     ) {

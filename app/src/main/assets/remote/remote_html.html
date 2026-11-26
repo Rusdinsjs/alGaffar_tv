@@ -1517,25 +1517,15 @@
                 </div>
                 <button class="submit-btn" onclick="saveIdulAdhaPetugas()">💾 SIMPAN PETUGAS IDUL ADHA</button>
                 <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">
-                <div class="grid-2">
-                    <div class="form-group">
-                        <label>Nama Kelompok</label>
-                        <input type="text" id="qurbanGroupName" placeholder="Kelompok 1">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
+                    <div>
+                        <div style="font-size:13px;font-weight:800;color:var(--text-primary);">Kelompok Peserta Qurban (<span id="qurbanGroupCount">0</span> Kelompok)</div>
+                        <div style="font-size:11px;color:var(--text-secondary);">Pilih tab kelompok untuk CRUD • Maks. 7 anggota per kelompok</div>
                     </div>
-                    <div class="form-group">
-                        <label>Hewan</label>
-                        <select id="qurbanAnimalType">
-                            <option value="Sapi">Sapi</option>
-                            <option value="Kambing">Kambing</option>
-                        </select>
-                    </div>
+                    <button class="mini-btn on" onclick="createQurbanGroupTab()">+ Tab Kelompok</button>
                 </div>
-                <div class="form-group">
-                    <label>Daftar Peserta (Pisahkan dengan koma)</label>
-                    <input type="text" id="qurbanMembersCsv" placeholder="H. Ahmad, Bpk. Budi, Ibu Siti...">
-                </div>
-                <button class="submit-btn secondary" onclick="addQurbanGroup()">+ TAMBAH KELOMPOK QURBAN</button>
-                <div id="qurbanGroupsList" class="list-box" style="margin-top:12px;"></div>
+                <div id="qurbanGroupTabs" class="sub-tabs" style="margin-bottom:8px;"></div>
+                <div id="qurbanGroupEditor"></div>
             </div>
 
             </div>
@@ -3183,29 +3173,226 @@
             }, '✅ Petugas Idul Adha disimpan!');
         }
 
-        function addQurbanGroup() {
-            const groupName = document.getElementById('qurbanGroupName')?.value.trim() || '';
-            const animalType = document.getElementById('qurbanAnimalType')?.value || 'Sapi';
-            const membersCsv = document.getElementById('qurbanMembersCsv')?.value.trim() || '';
-            if (!groupName || !membersCsv) { showToast('Isi nama kelompok & daftar peserta!', true); return; }
+        const MAX_QURBAN_MEMBERS = 7;
+        let qurbanGroupsCache = [];
+        let activeQurbanGroupId = null;
+        let lastQurbanRenderSig = '';
+
+        function createQurbanGroupTab(animalType) {
+            const newId = 'qgrp_' + Date.now() + '_' + (qurbanGroupsCache.length + 1);
+            activeQurbanGroupId = newId;
+            lastQurbanRenderSig = '';
             sendCommand('update_idul_adha', {
-                addGroupName: groupName,
-                addAnimalType: animalType,
-                addMembersCsv: membersCsv
-            }, '✅ Kelompok Qurban ditambahkan!');
-            document.getElementById('qurbanMembersCsv').value = '';
+                createGroup: true,
+                groupId: newId,
+                animalType: animalType || 'Sapi'
+            }, '✅ Tab Kelompok Qurban ditambahkan!');
+        }
+
+        function selectQurbanGroupTab(id) {
+            activeQurbanGroupId = id;
+            renderQurbanGroups(qurbanGroupsCache, true);
+        }
+
+        function saveActiveQurbanGroupMeta(id) {
+            const nameEl = document.getElementById('qurbanEditGroupName');
+            const animalEl = document.getElementById('qurbanEditAnimalType');
+            const groupName = (nameEl?.value || '').trim();
+            const animalType = animalEl?.value || 'Sapi';
+            if (!groupName) { showToast('Nama kelompok tidak boleh kosong!', true); return; }
+            lastQurbanRenderSig = '';
+            sendCommand('update_idul_adha', {
+                updateGroupId: id,
+                groupName: groupName,
+                animalType: animalType
+            }, '✅ Info kelompok Qurban disimpan!');
+        }
+
+        function moveQurbanGroupTab(id, delta) {
+            lastQurbanRenderSig = '';
+            sendCommand('update_idul_adha', {
+                moveGroupId: id,
+                moveDirection: delta
+            }, '↕️ Urutan tab kelompok diperbarui');
         }
 
         function deleteQurbanGroup(id) {
+            const idx = qurbanGroupsCache.findIndex(g => g.id === id);
+            const grp = qurbanGroupsCache[idx];
+            const memberCount = grp && Array.isArray(grp.members) ? grp.members.filter(m => String(m || '').trim()).length : 0;
+            if (memberCount > 0 && !confirm(`Hapus "${grp.groupName || 'Kelompok'}" beserta ${memberCount} anggota?`)) {
+                return;
+            }
+            const remaining = qurbanGroupsCache.filter(g => g.id !== id);
+            activeQurbanGroupId = remaining.length > 0 ? remaining[Math.min(Math.max(idx, 0), remaining.length - 1)].id : null;
+            lastQurbanRenderSig = '';
             sendCommand('update_idul_adha', { deleteGroupId: id }, '🗑️ Kelompok Qurban dihapus');
         }
 
-        function renderQurbanGroups(groups) {
-            const box = document.getElementById('qurbanGroupsList');
-            if (!box) return;
-            box.innerHTML = groups.length
-                ? groups.map(g => `<div class="list-item"><div class="list-item-text"><div class="list-item-title">${escapeHtml(g.groupName)} (${escapeHtml(g.animalType)})</div><div class="list-item-sub">${(g.members || []).map(escapeHtml).join(', ')}</div></div><button class="mini-btn del" onclick="deleteQurbanGroup('${escapeHtml(g.id)}')">Hapus</button></div>`).join('')
-                : '<div style="font-size:12px;color:var(--text-secondary);">Belum ada kelompok Qurban.</div>';
+        function addQurbanMember(groupId) {
+            const grp = qurbanGroupsCache.find(g => g.id === groupId);
+            const currentCount = grp && Array.isArray(grp.members) ? grp.members.length : 0;
+            if (currentCount >= MAX_QURBAN_MEMBERS) {
+                showToast(`Maksimal ${MAX_QURBAN_MEMBERS} anggota dalam 1 kelompok!`, true);
+                return;
+            }
+            const input = document.getElementById('qurbanNewMemberInput');
+            const name = (input?.value || '').trim();
+            if (!name) { showToast('Ketik nama peserta terlebih dahulu!', true); return; }
+            if (input) input.value = '';
+            lastQurbanRenderSig = '';
+            sendCommand('update_idul_adha', {
+                addMemberGroupId: groupId,
+                memberName: name
+            }, '✅ Anggota Qurban ditambahkan!');
+        }
+
+        function saveQurbanMember(groupId, idx) {
+            const input = document.getElementById('qurbanMemberInput_' + idx);
+            if (!input) return;
+            const val = input.value.trim();
+            const grp = qurbanGroupsCache.find(g => g.id === groupId);
+            if (grp && Array.isArray(grp.members) && grp.members[idx] === val) return;
+            lastQurbanRenderSig = '';
+            sendCommand('update_idul_adha', {
+                updateMemberGroupId: groupId,
+                memberIndex: idx,
+                memberName: val
+            }, '✅ Nama anggota diperbarui!');
+        }
+
+        function moveQurbanMember(groupId, idx, delta) {
+            lastQurbanRenderSig = '';
+            sendCommand('update_idul_adha', {
+                moveMemberGroupId: groupId,
+                memberIndex: idx,
+                moveMemberDelta: delta
+            }, '↕️ Urutan anggota diperbarui');
+        }
+
+        function deleteQurbanMember(groupId, idx) {
+            lastQurbanRenderSig = '';
+            sendCommand('update_idul_adha', {
+                deleteMemberGroupId: groupId,
+                memberIndex: idx
+            }, '🗑️ Anggota Qurban dihapus');
+        }
+
+        function renderQurbanGroups(groups, force = false) {
+            const list = Array.isArray(groups) ? groups : [];
+            const tabsEl = document.getElementById('qurbanGroupTabs');
+            const editorEl = document.getElementById('qurbanGroupEditor');
+            const countEl = document.getElementById('qurbanGroupCount');
+            if (!tabsEl || !editorEl) return;
+
+            if (countEl) countEl.textContent = String(list.length);
+
+            let activeIdx = list.findIndex(g => g.id === activeQurbanGroupId);
+            if (activeIdx < 0 && list.length > 0) {
+                activeIdx = 0;
+                activeQurbanGroupId = list[0].id;
+            } else if (list.length === 0) {
+                activeQurbanGroupId = null;
+            }
+
+            const sig = JSON.stringify(list) + '|' + (activeQurbanGroupId || '');
+            if (!force && sig === lastQurbanRenderSig) return;
+            if (!force && editorEl.contains(document.activeElement) && JSON.stringify(list) === JSON.stringify(qurbanGroupsCache)) {
+                return;
+            }
+
+            qurbanGroupsCache = list;
+            lastQurbanRenderSig = sig;
+
+            if (list.length === 0) {
+                tabsEl.innerHTML = '';
+                editorEl.innerHTML = `
+                    <div style="text-align:center;padding:18px 12px;border:1px dashed var(--border);border-radius:12px;background:rgba(255,255,255,0.02);">
+                        <div style="font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:4px;">Belum ada Kelompok Qurban</div>
+                        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">Tambahkan tab kelompok baru (maksimal ${MAX_QURBAN_MEMBERS} anggota per kelompok).</div>
+                        <button class="submit-btn secondary" onclick="createQurbanGroupTab()">+ TAMBAH KELOMPOK PERTAMA</button>
+                    </div>`;
+                return;
+            }
+
+            tabsEl.innerHTML = list.map((g, idx) => {
+                const isActive = idx === activeIdx;
+                const members = Array.isArray(g.members) ? g.members : [];
+                const countBadge = `${members.length}/${MAX_QURBAN_MEMBERS}${members.length === MAX_QURBAN_MEMBERS ? ' ✓' : ''}`;
+                const title = escapeHtml((g.groupName || '').trim() || `Kelompok ${idx + 1}`);
+                const animal = escapeHtml(g.animalType || 'Sapi');
+                const safeId = escapeHtml(g.id).replace(/'/g, '&#39;');
+                return `<button class="sub-tab-btn ${isActive ? 'active' : ''}" onclick="selectQurbanGroupTab('${safeId}')">${title} • ${animal} (${countBadge})</button>`;
+            }).join('') + `<button class="sub-tab-btn" style="border-style:dashed;color:#6ee7b7;" onclick="createQurbanGroupTab()">+ Tab Baru</button>`;
+
+            const activeGroup = list[activeIdx];
+            if (!activeGroup) { editorEl.innerHTML = ''; return; }
+
+            const gid = escapeHtml(activeGroup.id).replace(/'/g, '&#39;');
+            const members = Array.isArray(activeGroup.members) ? activeGroup.members : [];
+            const isFull = members.length >= MAX_QURBAN_MEMBERS;
+            const isOverflow = members.length > MAX_QURBAN_MEMBERS;
+            const remaining = Math.max(0, MAX_QURBAN_MEMBERS - members.length);
+            const animalType = activeGroup.animalType === 'Kambing' ? 'Kambing' : 'Sapi';
+
+            const memberRowsHtml = members.length === 0
+                ? `<div style="font-size:11px;color:var(--text-secondary);padding:10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.02);">Belum ada anggota pada kelompok ini. Tambahkan nama peserta di bawah (maks. ${MAX_QURBAN_MEMBERS} anggota).</div>`
+                : members.map((m, mIdx) => `
+                    <div style="display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid ${mIdx >= MAX_QURBAN_MEMBERS ? 'rgba(245,158,11,0.5)' : 'var(--border)'};border-radius:10px;background:rgba(255,255,255,0.03);">
+                        <span style="min-width:22px;font-size:12px;font-weight:800;color:${mIdx >= MAX_QURBAN_MEMBERS ? '#fbbf24' : '#34d399'};font-family:monospace;">${mIdx + 1}.</span>
+                        <input type="text" id="qurbanMemberInput_${mIdx}" value="${escapeHtml(m || '')}" placeholder="Nama anggota #${mIdx + 1}" onblur="saveQurbanMember('${gid}', ${mIdx})" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}" style="flex:1;padding:7px 9px;font-size:12px;">
+                        <button class="mini-btn" ${mIdx === 0 ? 'disabled style="opacity:0.35;"' : ''} onclick="moveQurbanMember('${gid}', ${mIdx}, -1)">⬆</button>
+                        <button class="mini-btn" ${mIdx >= members.length - 1 ? 'disabled style="opacity:0.35;"' : ''} onclick="moveQurbanMember('${gid}', ${mIdx}, 1)">⬇</button>
+                        <button class="mini-btn del" onclick="deleteQurbanMember('${gid}', ${mIdx})">✕</button>
+                    </div>
+                `).join('');
+
+            const addOrFullHtml = !isFull
+                ? `
+                    <div style="display:flex;gap:6px;margin-top:8px;">
+                        <input type="text" id="qurbanNewMemberInput" placeholder="Tambah anggota #${members.length + 1} (sisa ${remaining} slot)..." onkeydown="if(event.key==='Enter'){event.preventDefault();addQurbanMember('${gid}');}" style="flex:1;padding:9px 10px;font-size:12px;">
+                        <button class="mini-btn on" onclick="addQurbanMember('${gid}')">+ Tambah</button>
+                    </div>
+                `
+                : `
+                    <div style="margin-top:8px;padding:10px;border-radius:10px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);font-size:11px;color:#a7f3d0;">
+                        Kuota maksimal ${MAX_QURBAN_MEMBERS} anggota dalam 1 kelompok sudah terpenuhi (${members.length}/${MAX_QURBAN_MEMBERS}).
+                        <div style="margin-top:8px;">
+                            <button class="mini-btn on" onclick="createQurbanGroupTab('${animalType}')">+ Tambah Tab Kelompok Baru</button>
+                        </div>
+                    </div>
+                `;
+
+            editorEl.innerHTML = `
+                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(16,185,129,0.35);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;">
+                        <div style="font-size:11px;font-weight:800;color:#6ee7b7;">TAB #${activeIdx + 1}/${list.length} • ${members.length}/${MAX_QURBAN_MEMBERS} Anggota${isFull ? ' (PENUH)' : ''}</div>
+                        <div style="display:flex;gap:5px;">
+                            <button class="mini-btn" ${activeIdx === 0 ? 'disabled style="opacity:0.35;"' : ''} onclick="moveQurbanGroupTab('${gid}', -1)">⬅</button>
+                            <button class="mini-btn" ${activeIdx >= list.length - 1 ? 'disabled style="opacity:0.35;"' : ''} onclick="moveQurbanGroupTab('${gid}', 1)">➡</button>
+                            <button class="mini-btn del" onclick="deleteQurbanGroup('${gid}')">🗑️ Hapus Tab</button>
+                        </div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>Nama Kelompok</label>
+                            <input type="text" id="qurbanEditGroupName" value="${escapeHtml(activeGroup.groupName || '')}" placeholder="Kelompok ${activeIdx + 1}" onkeydown="if(event.key==='Enter'){event.preventDefault();saveActiveQurbanGroupMeta('${gid}');}">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>Jenis Hewan</label>
+                            <select id="qurbanEditAnimalType" onchange="saveActiveQurbanGroupMeta('${gid}')">
+                                <option value="Sapi" ${animalType === 'Sapi' ? 'selected' : ''}>Sapi</option>
+                                <option value="Kambing" ${animalType === 'Kambing' ? 'selected' : ''}>Kambing</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="submit-btn secondary" onclick="saveActiveQurbanGroupMeta('${gid}')">💾 SIMPAN NAMA &amp; HEWAN KELOMPOK</button>
+                    ${isOverflow ? `<div style="padding:8px 10px;border-radius:8px;background:rgba(245,158,11,0.14);border:1px solid rgba(245,158,11,0.4);font-size:11px;color:#fde68a;">Kelompok melebihi ${MAX_QURBAN_MEMBERS} anggota. Hanya ${MAX_QURBAN_MEMBERS} pertama yang tampil di TV.</div>` : ''}
+                    <div style="font-size:11px;font-weight:800;color:var(--text-secondary);text-transform:uppercase;margin-top:2px;">Daftar Anggota (${members.length}/${MAX_QURBAN_MEMBERS})</div>
+                    <div style="display:flex;flex-direction:column;gap:6px;">${memberRowsHtml}</div>
+                    ${addOrFullHtml}
+                </div>
+            `;
         }
 
         function saveScreensaver() {

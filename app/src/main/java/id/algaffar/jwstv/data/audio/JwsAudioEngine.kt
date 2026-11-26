@@ -15,6 +15,7 @@ import id.algaffar.jwstv.domain.model.PrayerId
 import java.io.File
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Media3 [ExoPlayer] Audio Orchestrator for JWS TV Masjid Al-Gaffar.
@@ -36,6 +37,7 @@ class JwsAudioEngine(
     private var activePlaybackKey: String? = null
     private var lastSirineTriggerMinuteKey: String? = null
     private var lastScheduledAudioMinuteKey: String? = null
+    private val audioDurationCache = ConcurrentHashMap<String, Long>()
 
     private val hhMmFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -334,8 +336,11 @@ class JwsAudioEngine(
     }
 
     private fun readAudioDurationSeconds(file: File): Long {
+        val cacheKey = "${file.absolutePath}|${file.lastModified()}|${file.length()}"
+        audioDurationCache[cacheKey]?.let { return it }
+
         val retriever = MediaMetadataRetriever()
-        return try {
+        val durationSec = try {
             retriever.setDataSource(file.absolutePath)
             val durationMsStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
             val durationMs = durationMsStr?.toLongOrNull() ?: 0L
@@ -345,6 +350,12 @@ class JwsAudioEngine(
         } finally {
             runCatching { retriever.release() }
         }
+
+        if (audioDurationCache.size >= 256) {
+            audioDurationCache.clear()
+        }
+        audioDurationCache[cacheKey] = durationSec
+        return durationSec
     }
 
     companion object {

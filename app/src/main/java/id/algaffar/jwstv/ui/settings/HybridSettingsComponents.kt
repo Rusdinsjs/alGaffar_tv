@@ -822,13 +822,16 @@ fun HybridTextInput(
     placeholder: String = "",
     singleLine: Boolean = true,
     keyboardType: KeyboardType = KeyboardType.Text,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    debounceMs: Long = 250L,
+    onSubmit: (() -> Unit)? = null
 ) {
     val palette = LocalJwsTheme.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val vkPolicy = LocalVirtualKeyboardPolicy.current
     val latestOnValueChange by rememberUpdatedState(onValueChange)
+    val latestOnSubmit by rememberUpdatedState(onSubmit)
 
     var isFocused by remember { mutableStateOf(false) }
     var fieldValue by remember {
@@ -860,10 +863,10 @@ fun HybridTextInput(
     }
 
     // Debounced commit while typing (smooth zero-jank typing on both D-Pad IME & PC keyboard)
-    LaunchedEffect(fieldValue.text) {
+    LaunchedEffect(fieldValue.text, debounceMs) {
         val pending = fieldValue.text
-        if (pending != lastEmittedText) {
-            delay(250L)
+        if (debounceMs > 0L && pending != lastEmittedText) {
+            delay(debounceMs)
             if (fieldValue.text == pending && pending != lastEmittedText) {
                 lastEmittedText = pending
                 latestOnValueChange(pending)
@@ -917,6 +920,10 @@ fun HybridTextInput(
                         updated
                     }
                     fieldValue = sanitized
+                    if (debounceMs <= 0L && sanitized.text != lastEmittedText) {
+                        lastEmittedText = sanitized.text
+                        latestOnValueChange(sanitized.text)
+                    }
                 },
                 singleLine = singleLine,
                 maxLines = if (singleLine) 1 else 6,
@@ -928,7 +935,11 @@ fun HybridTextInput(
                 keyboardActions = KeyboardActions(
                     onDone = {
                         flushNow()
-                        keyboardController?.hide()
+                        if (latestOnSubmit != null) {
+                            latestOnSubmit?.invoke()
+                        } else {
+                            keyboardController?.hide()
+                        }
                     }
                 ),
                 textStyle = TextStyle(
@@ -975,8 +986,12 @@ fun HybridTextInput(
                             Key.Enter, Key.NumPadEnter -> {
                                 if (singleLine) {
                                     flushNow()
-                                    keyboardController?.hide()
-                                    focusManager.moveFocus(FocusDirection.Down)
+                                    if (latestOnSubmit != null) {
+                                        latestOnSubmit?.invoke()
+                                    } else {
+                                        keyboardController?.hide()
+                                        focusManager.moveFocus(FocusDirection.Down)
+                                    }
                                     true
                                 } else {
                                     false

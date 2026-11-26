@@ -1447,7 +1447,7 @@ fun SimpleStateOverlayFullscreen(
                                 textAlign = TextAlign.End,
                                 style = TextStyle(
                                     platformStyle = PlatformTextStyle(includeFontPadding = false),
-                                    shadow = androidx.compose.ui.graphics.Shadow(
+                                    shadow = if (isPerformanceMode) null else androidx.compose.ui.graphics.Shadow(
                                         color = Color.Black.copy(alpha = 0.75f),
                                         offset = Offset(0f, 2f),
                                         blurRadius = 8f

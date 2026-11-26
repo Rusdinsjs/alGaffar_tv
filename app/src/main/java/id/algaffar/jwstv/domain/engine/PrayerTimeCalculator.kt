@@ -17,6 +17,7 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Date
+import java.util.concurrent.ConcurrentHashMap
 
 data class PrayerTimeItem(
     val id: PrayerId,
@@ -46,13 +47,36 @@ data class DailyPrayerSchedule(
 
 class PrayerTimeCalculator {
 
+    private data class DailyTimesCacheKey(
+        val date: LocalDate,
+        val zoneId: ZoneId,
+        val latitude: Double,
+        val longitude: Double,
+        val calculationMethod: String,
+        val madhab: String,
+        val ihtiyati: Int,
+        val corrections: id.algaffar.jwstv.domain.model.PrayerCorrections
+    )
+
+    private data class DailyItemsCacheKey(
+        val timesKey: DailyTimesCacheKey,
+        val isFriday: Boolean,
+        val isJumatEnabled: Boolean,
+        val nextPrayerId: PrayerId
+    )
+
     private val timeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+    private val zoneIdCache = ConcurrentHashMap<String, ZoneId>()
+    private val dailyTimesCache = ConcurrentHashMap<DailyTimesCacheKey, Map<PrayerId, ZonedDateTime>>()
+    private val dailyItemsCache = ConcurrentHashMap<DailyItemsCacheKey, List<PrayerTimeItem>>()
 
     fun resolveZoneId(timezone: String): ZoneId {
-        return try {
-            ZoneId.of(timezone)
-        } catch (_: Exception) {
-            ZoneId.of("Asia/Makassar")
+        return zoneIdCache.computeIfAbsent(timezone) { tz ->
+            try {
+                ZoneId.of(tz)
+            } catch (_: Exception) {
+                ZoneId.of("Asia/Makassar")
+            }
         }
     }
 
@@ -70,14 +94,15 @@ class PrayerTimeCalculator {
         val today = zonedNow.toLocalDate()
         val isFriday = today.dayOfWeek == DayOfWeek.FRIDAY
 
-        val todayTimesMap = computeEightTimesForDate(today, zoneId, settings)
+        val todayKey = buildTimesCacheKey(today, zoneId, settings)
+        val todayTimesMap = getCachedEightTimes(todayKey, settings)
 
         // Determine next prayer strictly among today's 5 obligatory (Fardhu) prayers
         // Mirrors `PrayerTimeContext.tsx` in jws-android-algaffar
         var nextPrayerId: PrayerId? = null
         var nextPrayerTime: ZonedDateTime? = null
 
-        for (prayerId in PrayerId.entries.filter { it.isFiveTimeFardhu }) {
+        for (prayerId in PrayerId.FIVE_FARDHU) {
             val candidateTime = todayTimesMap.getValue(prayerId)
             if (candidateTime.isAfter(zonedNow)) {
                 nextPrayerId = prayerId
@@ -89,23 +114,21 @@ class PrayerTimeCalculator {
         // If all 5 Fardhu prayers today have passed (after Isha), next prayer is tomorrow's Fajr (Subuh)
         if (nextPrayerId == null || nextPrayerTime == null) {
             val tomorrow = today.plusDays(1)
-            val tomorrowTimesMap = computeEightTimesForDate(tomorrow, zoneId, settings)
+            val tomorrowKey = buildTimesCacheKey(tomorrow, zoneId, settings)
+            val tomorrowTimesMap = getCachedEightTimes(tomorrowKey, settings)
             nextPrayerId = PrayerId.FAJR
             nextPrayerTime = tomorrowTimesMap.getValue(PrayerId.FAJR)
         }
 
         val secondsToNext = ChronoUnit.SECONDS.between(zonedNow, nextPrayerTime).coerceAtLeast(0L)
 
-        val items = PrayerId.entries.map { id ->
-            val t = todayTimesMap.getValue(id)
-            PrayerTimeItem(
-                id = id,
-                label = id.displayName(isFriday = isFriday && isJumatEnabled),
-                time = t,
-                formattedTime = t.format(timeFormatter),
-                isNext = (id == nextPrayerId)
-            )
-        }
+        val itemsKey = DailyItemsCacheKey(
+            timesKey = todayKey,
+            isFriday = isFriday,
+            isJumatEnabled = isJumatEnabled,
+            nextPrayerId = nextPrayerId
+        )
+        val items = getCachedDailyItems(itemsKey, todayTimesMap)
 
         val nextItem = PrayerTimeItem(
             id = nextPrayerId,
@@ -123,6 +146,56 @@ class PrayerTimeCalculator {
             nextPrayer = nextItem,
             secondsToNextPrayer = secondsToNext
         )
+    }
+
+    private fun buildTimesCacheKey(
+        localDate: LocalDate,
+        zoneId: ZoneId,
+        settings: PrayerSettings
+    ): DailyTimesCacheKey = DailyTimesCacheKey(
+        date = localDate,
+        zoneId = zoneId,
+        latitude = settings.latitude,
+        longitude = settings.longitude,
+        calculationMethod = settings.calculationMethod,
+        madhab = settings.madhab,
+        ihtiyati = settings.ihtiyati,
+        corrections = settings.corrections
+    )
+
+    private fun getCachedEightTimes(
+        key: DailyTimesCacheKey,
+        settings: PrayerSettings
+    ): Map<PrayerId, ZonedDateTime> {
+        dailyTimesCache[key]?.let { return it }
+        if (dailyTimesCache.size >= 8) {
+            dailyTimesCache.clear()
+        }
+        val computed = computeEightTimesForDate(key.date, key.zoneId, settings)
+        dailyTimesCache[key] = computed
+        return computed
+    }
+
+    private fun getCachedDailyItems(
+        key: DailyItemsCacheKey,
+        todayTimesMap: Map<PrayerId, ZonedDateTime>
+    ): List<PrayerTimeItem> {
+        dailyItemsCache[key]?.let { return it }
+        if (dailyItemsCache.size >= 8) {
+            dailyItemsCache.clear()
+        }
+        val computed = PrayerId.entries.map { id ->
+            val t = todayTimesMap.getValue(id)
+            PrayerTimeItem(
+                id = id,
+                label = id.displayName(isFriday = key.isFriday && key.isJumatEnabled),
+                time = t,
+                formattedTime = t.format(timeFormatter),
+                isNext = (id == key.nextPrayerId)
+            )
+        }
+        dailyItemsCache[key] = computed
+        return computed
     }
 
     /**

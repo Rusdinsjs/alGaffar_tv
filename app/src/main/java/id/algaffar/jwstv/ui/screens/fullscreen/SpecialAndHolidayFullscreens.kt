@@ -1443,7 +1443,7 @@ internal fun QurbanGroupSlideView(
     isExpanded: Boolean = true
 ) {
     val palette = LocalJwsTheme.current
-    val members = group.members.take(7)
+    val members = group.activeMembers
     val (nameFontSize, badgeFontSize, badgeWidth) = if (isExpanded) {
         when {
             members.size <= 3 -> Triple(54.sp, 32.sp, 84.dp)
@@ -1476,7 +1476,7 @@ internal fun QurbanGroupSlideView(
             )
             Column {
                 Text(
-                    text = "${group.groupName.uppercase()} (HEWAN: ${group.animalType.uppercase()})",
+                    text = "${group.groupName.ifBlank { "Kelompok $groupNumber" }.uppercase()} (HEWAN: ${group.animalType.uppercase()})",
                     color = palette.textPrimary,
                     fontSize = if (isExpanded) 36.sp else 28.sp,
                     fontWeight = FontWeight.ExtraBold
@@ -1496,6 +1496,25 @@ internal fun QurbanGroupSlideView(
                 .weight(1f),
             verticalArrangement = Arrangement.spacedBy(if (isExpanded) 10.dp else 7.dp)
         ) {
+            if (members.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .clip(RoundedCornerShape(if (isExpanded) 16.dp else 12.dp))
+                        .background(palette.bgPrimary.copy(alpha = 0.55f))
+                        .border(1.5.dp, palette.border, RoundedCornerShape(if (isExpanded) 16.dp else 12.dp))
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Belum ada peserta pada kelompok ini",
+                        color = palette.textSecondary,
+                        fontSize = if (isExpanded) 32.sp else 24.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
             members.forEachIndexed { idx, rawMember ->
                 // Strip leading "1. " if already numbered in settings so badge doesn't duplicate number
                 val cleanName = rawMember.trim().replace(Regex("^\\d+\\.\\s*"), "")

@@ -63,7 +63,9 @@ import id.algaffar.jwstv.domain.model.BrandSettings
 import id.algaffar.jwstv.ui.components.clock.ArtisticClock
 import id.algaffar.jwstv.ui.components.clock.ClockVariant
 import id.algaffar.jwstv.ui.theme.LocalJwsTheme
+import id.algaffar.jwstv.ui.theme.LocalPerformanceMode
 import java.io.File
+import java.time.LocalDate
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -91,53 +93,101 @@ fun HeaderBar(
     showAddress: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    // Only extract LocalDate (changes once per day, not every second) so HeaderBarInner
+    // skips recomposition and GPU redraws across 1Hz clock ticks.
+    HeaderBarInner(
+        masehiDate = now.toLocalDate(),
+        brand = brand,
+        hijriDate = hijriDate,
+        assetsRootDir = assetsRootDir,
+        isReversed = isReversed,
+        isLogoMenuOpen = isLogoMenuOpen,
+        onLogoClick = onLogoClick,
+        showAddress = showAddress,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun HeaderBarInner(
+    masehiDate: LocalDate,
+    brand: BrandSettings,
+    hijriDate: HijriDateInfo,
+    assetsRootDir: File?,
+    isReversed: Boolean,
+    isLogoMenuOpen: Boolean,
+    onLogoClick: () -> Unit,
+    showAddress: Boolean,
+    modifier: Modifier = Modifier
+) {
     val palette = LocalJwsTheme.current
+    val isPerformanceMode = LocalPerformanceMode.current
     val masehiFormatter = remember {
         DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy", Locale("id", "ID"))
     }
+    val masehiDateText = remember(masehiDate) { masehiDate.format(masehiFormatter) }
 
     Box(
         modifier = modifier
             .size(width = 1440.dp, height = 180.dp)
             .padding(4.dp)
     ) {
-        // Feathered/blurred-edge background so the header blends smoothly into the screen background without a border
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
-                .drawBehind {
-                    drawRect(color = palette.bgCard)
-                    // Horizontal feather (left & right edges fade to transparent)
-                    drawRect(
-                        brush = Brush.horizontalGradient(
-                            0.00f to Color.Transparent,
-                            0.025f to Color.Black.copy(alpha = 0.25f),
-                            0.06f to Color.Black.copy(alpha = 0.70f),
-                            0.11f to Color.Black,
-                            0.89f to Color.Black,
-                            0.94f to Color.Black.copy(alpha = 0.70f),
-                            0.975f to Color.Black.copy(alpha = 0.25f),
-                            1.00f to Color.Transparent
-                        ),
-                        blendMode = BlendMode.DstIn
-                    )
-                    // Vertical feather (top & bottom edges fade to transparent)
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            0.00f to Color.Transparent,
-                            0.08f to Color.Black.copy(alpha = 0.25f),
-                            0.18f to Color.Black.copy(alpha = 0.70f),
-                            0.28f to Color.Black,
-                            0.72f to Color.Black,
-                            0.82f to Color.Black.copy(alpha = 0.70f),
-                            0.92f to Color.Black.copy(alpha = 0.25f),
-                            1.00f to Color.Transparent
-                        ),
-                        blendMode = BlendMode.DstIn
-                    )
-                }
-        )
+        if (isPerformanceMode) {
+            // Single-pass feathered horizontal gradient (avoids 1440x180 Offscreen FBO + 2x DstIn blend on Mali-450 GLES 2.0)
+            val perfFeatherBrush = remember(palette.bgCard) {
+                Brush.horizontalGradient(
+                    0.00f to Color.Transparent,
+                    0.05f to palette.bgCard.copy(alpha = palette.bgCard.alpha * 0.55f),
+                    0.11f to palette.bgCard,
+                    0.89f to palette.bgCard,
+                    0.95f to palette.bgCard.copy(alpha = palette.bgCard.alpha * 0.55f),
+                    1.00f to Color.Transparent
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(perfFeatherBrush)
+            )
+        } else {
+            // Feathered/blurred-edge background so the header blends smoothly into the screen background without a border
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                    .drawBehind {
+                        drawRect(color = palette.bgCard)
+                        // Horizontal feather (left & right edges fade to transparent)
+                        drawRect(
+                            brush = Brush.horizontalGradient(
+                                0.00f to Color.Transparent,
+                                0.025f to Color.Black.copy(alpha = 0.25f),
+                                0.06f to Color.Black.copy(alpha = 0.70f),
+                                0.11f to Color.Black,
+                                0.89f to Color.Black,
+                                0.94f to Color.Black.copy(alpha = 0.70f),
+                                0.975f to Color.Black.copy(alpha = 0.25f),
+                                1.00f to Color.Transparent
+                            ),
+                            blendMode = BlendMode.DstIn
+                        )
+                        // Vertical feather (top & bottom edges fade to transparent)
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                0.00f to Color.Transparent,
+                                0.08f to Color.Black.copy(alpha = 0.25f),
+                                0.18f to Color.Black.copy(alpha = 0.70f),
+                                0.28f to Color.Black,
+                                0.72f to Color.Black,
+                                0.82f to Color.Black.copy(alpha = 0.70f),
+                                0.92f to Color.Black.copy(alpha = 0.25f),
+                                1.00f to Color.Transparent
+                            ),
+                            blendMode = BlendMode.DstIn
+                        )
+                    }
+            )
+        }
 
         Row(
             modifier = Modifier
@@ -158,8 +208,7 @@ fun HeaderBar(
                     modifier = Modifier.weight(1.04f)
                 )
                 HeaderDateBlock(
-                    now = now,
-                    masehiFormatter = masehiFormatter,
+                    masehiDateText = masehiDateText,
                     brand = brand,
                     hijriDate = hijriDate,
                     alignStart = false,
@@ -168,8 +217,7 @@ fun HeaderBar(
             } else {
                 // VERTICAL_LEFT: 1. Tanggal (Rata Kiri)  ->  2. Identitas (Nama/Alamat, Logo)
                 HeaderDateBlock(
-                    now = now,
-                    masehiFormatter = masehiFormatter,
+                    masehiDateText = masehiDateText,
                     brand = brand,
                     hijriDate = hijriDate,
                     alignStart = true,
@@ -460,8 +508,7 @@ private fun MosqueIdentityBlock(
 
 @Composable
 private fun HeaderDateBlock(
-    now: ZonedDateTime,
-    masehiFormatter: DateTimeFormatter,
+    masehiDateText: String,
     brand: BrandSettings,
     hijriDate: HijriDateInfo,
     alignStart: Boolean,
@@ -479,7 +526,7 @@ private fun HeaderDateBlock(
         // Baris 1 (Atas): Tanggal Masehi (disesuaikan untuk tinggi header 180dp)
         if (brand.showMasehiDate) {
             Text(
-                text = now.format(masehiFormatter),
+                text = masehiDateText,
                 color = palette.textPrimary,
                 fontSize = 40.sp,
                 lineHeight = 42.sp,

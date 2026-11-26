@@ -23,6 +23,13 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.time.ZonedDateTime
 
+data class RemoteUiInfo(
+    val remoteServerUrl: String = "http://127.0.0.1:1421/remote",
+    val remoteQrPairingUrl: String = "http://127.0.0.1:1421/remote",
+    val remoteAuthToken: String = "",
+    val deviceCode: String = ""
+)
+
 data class JwsRuntimeSnapshot(
     val now: ZonedDateTime,
     val settings: AppStateSettings,
@@ -52,6 +59,10 @@ class MainViewModel(
     val deviceCode: String get() = engine.deviceCode
 
     val snapshotFlow: StateFlow<JwsRuntimeSnapshot> = engine.snapshotFlow
+    val settingsFlow: StateFlow<AppStateSettings> = engine.settingsRepository.settingsFlow
+    val currentHourFlow: StateFlow<Int> = engine.currentHourFlow
+    val activeAppStateFlow: StateFlow<AppState> = engine.activeAppStateFlow
+    val remoteUiInfoFlow: StateFlow<RemoteUiInfo> = engine.remoteUiInfoFlow
     val storageHealthFlow: StateFlow<StorageHealthSnapshot> = engine.storageHealthFlow
     val statusBannerMessage: StateFlow<String> = engine.statusBannerMessage
     val takjilPreviewFlow: StateFlow<List<TakjilImportPreviewRow>?> = engine.takjilPreviewFlow
@@ -67,6 +78,7 @@ class MainViewModel(
         engine.ensureStarted()
     }
 
+    fun isManualOverrideNow(): Boolean = engine.snapshotFlow.value.tickResult.isManualOverride
     fun postStatusMessage(msg: String) = engine.postStatusMessage(msg)
     fun refreshStorageHealth() = engine.refreshStorageHealth()
     fun refreshAudioDurationsAsync() = engine.refreshAudioDurationsAsync()

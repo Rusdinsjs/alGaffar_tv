@@ -23,11 +23,15 @@ import id.algaffar.jwstv.data.update.OtaCheckResult
 import id.algaffar.jwstv.data.update.OtaUpdateManager
 import id.algaffar.jwstv.domain.engine.AudioFileDurations
 import id.algaffar.jwstv.domain.engine.ClockIntegrityGuard
+import id.algaffar.jwstv.domain.engine.FastingInfoSummary
 import id.algaffar.jwstv.domain.engine.HijriCalculator
+import id.algaffar.jwstv.domain.engine.HijriDateInfo
+import id.algaffar.jwstv.domain.engine.IslamicEventItem
 import id.algaffar.jwstv.domain.engine.JwsStateMachine
 import id.algaffar.jwstv.domain.engine.PrayerTimeCalculator
 import id.algaffar.jwstv.domain.model.AppState
 import id.algaffar.jwstv.domain.model.AppStateSettings
+import id.algaffar.jwstv.domain.model.CustomIslamicEventItem
 import id.algaffar.jwstv.domain.model.FloatingOverlayItem
 import id.algaffar.jwstv.domain.model.InfoCardItem
 import id.algaffar.jwstv.domain.model.JumatPetugasRecord
@@ -38,6 +42,7 @@ import id.algaffar.jwstv.domain.model.SlideItem
 import id.algaffar.jwstv.domain.model.SlideshowGroup
 import id.algaffar.jwstv.domain.model.UserAccount
 import id.algaffar.jwstv.ui.JwsRuntimeSnapshot
+import id.algaffar.jwstv.ui.RemoteUiInfo
 import id.algaffar.jwstv.ui.theme.ThemeEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +60,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import java.time.LocalDate
 import java.time.ZonedDateTime
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -131,8 +137,53 @@ class JwsRuntimeEngine(
         }
     )
 
-    private val _snapshotFlow = MutableStateFlow(computeSnapshot(currentEffectiveNow()))
+    private data class HijriCacheKey(
+        val effectiveLocalDate: LocalDate,
+        val hijriAdjustment: Int,
+        val isAfterMaghrib: Boolean
+    )
+
+    private data class UpcomingEventsCacheKey(
+        val effectiveLocalDate: LocalDate,
+        val hijriAdjustment: Int,
+        val maxDays: Int,
+        val customEvents: List<CustomIslamicEventItem>
+    )
+
+    @Volatile
+    private var cachedHijriKey: HijriCacheKey? = null
+
+    @Volatile
+    private var cachedHijriDate: HijriDateInfo? = null
+
+    @Volatile
+    private var cachedFastingInfo: FastingInfoSummary? = null
+
+    @Volatile
+    private var cachedEventsKey: UpcomingEventsCacheKey? = null
+
+    @Volatile
+    private var cachedUpcomingEvents: List<IslamicEventItem> = emptyList()
+
+    private val initialSnapshot = computeSnapshot(currentEffectiveNow())
+    private val _snapshotFlow = MutableStateFlow(initialSnapshot)
     val snapshotFlow: StateFlow<JwsRuntimeSnapshot> = _snapshotFlow.asStateFlow()
+
+    private val _currentHourFlow = MutableStateFlow(initialSnapshot.now.hour)
+    val currentHourFlow: StateFlow<Int> = _currentHourFlow.asStateFlow()
+
+    private val _activeAppStateFlow = MutableStateFlow(initialSnapshot.tickResult.state)
+    val activeAppStateFlow: StateFlow<AppState> = _activeAppStateFlow.asStateFlow()
+
+    private val _remoteUiInfoFlow = MutableStateFlow(
+        RemoteUiInfo(
+            remoteServerUrl = initialSnapshot.remoteServerUrl,
+            remoteQrPairingUrl = initialSnapshot.remoteQrPairingUrl,
+            remoteAuthToken = initialSnapshot.remoteAuthToken,
+            deviceCode = initialSnapshot.deviceCode
+        )
+    )
+    val remoteUiInfoFlow: StateFlow<RemoteUiInfo> = _remoteUiInfoFlow.asStateFlow()
 
     private val _statusBannerMessage = MutableStateFlow("")
     val statusBannerMessage: StateFlow<String> = _statusBannerMessage.asStateFlow()
@@ -170,6 +221,21 @@ class JwsRuntimeEngine(
     @Volatile
     var onBeforeLaunchExternalInstaller: (() -> Unit)? = null
 
+    private fun publishSnapshot(snap: JwsRuntimeSnapshot) {
+        _snapshotFlow.value = snap
+        _currentHourFlow.value = snap.now.hour
+        _activeAppStateFlow.value = snap.tickResult.state
+        val nextRemote = RemoteUiInfo(
+            remoteServerUrl = snap.remoteServerUrl,
+            remoteQrPairingUrl = snap.remoteQrPairingUrl,
+            remoteAuthToken = snap.remoteAuthToken,
+            deviceCode = snap.deviceCode
+        )
+        if (_remoteUiInfoFlow.value != nextRemote) {
+            _remoteUiInfoFlow.value = nextRemote
+        }
+    }
+
     fun ensureStarted() {
         if (!started.compareAndSet(false, true)) return
 
@@ -179,16 +245,35 @@ class JwsRuntimeEngine(
 
         // Start Embedded Ktor Remote Server on Port 1421 (survives Activity lifecycle!)
         engineScope.launch(Dispatchers.IO) {
+            KtorRemoteServer.refreshCachedLocalIp()
             remoteServer.start()
             AppLogger.info("REMOTE", "Ktor Remote Server aktif di ${remoteServer.getRemoteUrl(false)}")
-            _snapshotFlow.value = computeSnapshot(currentEffectiveNow())
+            publishSnapshot(computeSnapshot(currentEffectiveNow()))
+        }
+
+        // Refresh cached LAN IP off the Main thread every 15s (zero netlink syscalls on 1Hz UI ticker)
+        engineScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                delay(15_000L)
+                KtorRemoteServer.refreshCachedLocalIp()
+                val (url, qrUrl) = remoteServer.getRemoteUrlsNonBlocking()
+                val nextRemote = RemoteUiInfo(
+                    remoteServerUrl = url,
+                    remoteQrPairingUrl = qrUrl,
+                    remoteAuthToken = remoteServer.authToken,
+                    deviceCode = deviceCode
+                )
+                if (_remoteUiInfoFlow.value != nextRemote) {
+                    _remoteUiInfoFlow.value = nextRemote
+                }
+            }
         }
 
         // 1Hz real-time ticker driving StateMachine, Media3 AudioEngine & 8-Channel SwitchController
         engineScope.launch {
             while (isActive) {
                 val snap = computeSnapshot(currentEffectiveNow())
-                _snapshotFlow.value = snap
+                publishSnapshot(snap)
 
                 if (snap.tickResult.state != lastLoggedState) {
                     AppLogger.info(
@@ -306,7 +391,7 @@ class JwsRuntimeEngine(
         val res = clockIntegrityGuard.syncFromTrustedReference(epochMs)
         return res.map { offsetMs ->
             val snap = computeSnapshot(currentEffectiveNow())
-            _snapshotFlow.value = snap
+            publishSnapshot(snap)
             val msg = "Jam TV berhasil disinkronkan dengan HP (offset ${offsetMs / 1000L} detik)."
             AppLogger.info("CLOCK", msg)
             _statusBannerMessage.value = msg
@@ -337,7 +422,7 @@ class JwsRuntimeEngine(
 
     fun regenerateRemoteToken() {
         val newToken = remoteServer.regenerateAuthToken()
-        _snapshotFlow.value = computeSnapshot(currentEffectiveNow())
+        publishSnapshot(computeSnapshot(currentEffectiveNow()))
         val msg = "Token Remote baru dibuat (${newToken.take(6)}...). Semua HP lama otomatis terputus."
         AppLogger.warn("SECURITY", msg)
         _statusBannerMessage.value = msg
@@ -528,30 +613,66 @@ class JwsRuntimeEngine(
         )
         val maghribTime = schedule.timeFor(PrayerId.MAGHRIB)
         val hijriAdjustment = settings.prayerSettings.hijriAdjustment
+        val isAfterMaghrib = !zonedNow.isBefore(maghribTime)
+        val effectiveHijriDate = zonedNow.toLocalDate().plusDays(if (isAfterMaghrib) 1L else 0L)
 
-        val hijriDate = hijriCalculator.calculateHijriDate(
-            now = zonedNow,
-            maghribTime = maghribTime,
-            hijriAdjustment = hijriAdjustment
-        )
-        val fastingInfo = hijriCalculator.getFastingInfo(
-            now = zonedNow,
-            maghribTime = maghribTime,
-            hijriAdjustment = hijriAdjustment
-        )
-        val upcomingEvents = hijriCalculator.getUpcomingIslamicEvents(
-            now = zonedNow,
-            maghribTime = maghribTime,
+        val hijriKey = HijriCacheKey(
+            effectiveLocalDate = effectiveHijriDate,
             hijriAdjustment = hijriAdjustment,
-            maxDays = settings.infoSettings.lookaheadDays.coerceIn(7, 365),
+            isAfterMaghrib = isAfterMaghrib
+        )
+        val hijriDate: HijriDateInfo
+        val fastingInfo: FastingInfoSummary
+        val prevHijri = cachedHijriDate
+        val prevFasting = cachedFastingInfo
+        if (cachedHijriKey == hijriKey && prevHijri != null && prevFasting != null) {
+            hijriDate = prevHijri
+            fastingInfo = prevFasting
+        } else {
+            hijriDate = hijriCalculator.calculateHijriDate(
+                now = zonedNow,
+                maghribTime = maghribTime,
+                hijriAdjustment = hijriAdjustment
+            )
+            fastingInfo = hijriCalculator.getFastingInfo(
+                now = zonedNow,
+                maghribTime = maghribTime,
+                hijriAdjustment = hijriAdjustment
+            )
+            cachedHijriDate = hijriDate
+            cachedFastingInfo = fastingInfo
+            cachedHijriKey = hijriKey
+        }
+
+        val safeMaxDays = settings.infoSettings.lookaheadDays.coerceIn(7, 365)
+        val eventsKey = UpcomingEventsCacheKey(
+            effectiveLocalDate = effectiveHijriDate,
+            hijriAdjustment = hijriAdjustment,
+            maxDays = safeMaxDays,
             customEvents = settings.infoSettings.islamicEvents
         )
+        val upcomingEvents = if (cachedEventsKey == eventsKey) {
+            cachedUpcomingEvents
+        } else {
+            val computed = hijriCalculator.getUpcomingIslamicEvents(
+                now = zonedNow,
+                maghribTime = maghribTime,
+                hijriAdjustment = hijriAdjustment,
+                maxDays = safeMaxDays,
+                customEvents = settings.infoSettings.islamicEvents
+            )
+            cachedUpcomingEvents = computed
+            cachedEventsKey = eventsKey
+            computed
+        }
+
         val tickResult = stateMachine.evaluateTick(
             now = zonedNow,
             settings = settings,
             schedule = schedule,
             audioDurations = cachedAudioDurations
         )
+        val (remoteUrl, remoteQrUrl) = remoteServer.getRemoteUrlsNonBlocking()
 
         return JwsRuntimeSnapshot(
             now = zonedNow,
@@ -561,8 +682,8 @@ class JwsRuntimeEngine(
             fastingInfo = fastingInfo,
             upcomingEvents = upcomingEvents,
             tickResult = tickResult,
-            remoteServerUrl = remoteServer.getRemoteUrl(includeTokenQuery = false),
-            remoteQrPairingUrl = remoteServer.getRemoteUrl(includeTokenQuery = true),
+            remoteServerUrl = remoteUrl,
+            remoteQrPairingUrl = remoteQrUrl,
             remoteAuthToken = remoteServer.authToken,
             deviceCode = deviceCode,
             isClockSuspect = clockIntegrityGuard.isEffectiveClockSuspect()
@@ -573,14 +694,14 @@ class JwsRuntimeEngine(
         val nowEpoch = currentEffectiveNow().toEpochSecond()
         stateMachine.setManualOverride(state, durationSeconds, nowEpoch)
         val snap = computeSnapshot(currentEffectiveNow())
-        _snapshotFlow.value = snap
+        publishSnapshot(snap)
         audioEngine.onTick(snap.now, snap.settings, snap.schedule, snap.tickResult)
     }
 
     fun clearSimulation() {
         stateMachine.clearManualOverride()
         val snap = computeSnapshot(currentEffectiveNow())
-        _snapshotFlow.value = snap
+        publishSnapshot(snap)
         audioEngine.onTick(snap.now, snap.settings, snap.schedule, snap.tickResult)
     }
 
@@ -965,7 +1086,7 @@ class JwsRuntimeEngine(
     fun updateSettings(transform: (AppStateSettings) -> AppStateSettings) {
         engineScope.launch {
             settingsRepository.updateSettings(transform)
-            _snapshotFlow.value = computeSnapshot(currentEffectiveNow())
+            publishSnapshot(computeSnapshot(currentEffectiveNow()))
             refreshStorageHealth()
         }
     }
@@ -1045,7 +1166,7 @@ class JwsRuntimeEngine(
             res.onSuccess { summary ->
                 refreshAudioDurationsAsync()
                 refreshStorageHealth()
-                _snapshotFlow.value = computeSnapshot(currentEffectiveNow())
+                publishSnapshot(computeSnapshot(currentEffectiveNow()))
                 _statusBannerMessage.value = "Restore berhasil (${summary.restoredMosqueName})! " +
                     "Diekstrak ${summary.extractedAssetFilesCount} file media."
             }.onFailure { err ->
@@ -2341,24 +2462,83 @@ class JwsRuntimeEngine(
                     val khotib = payload.rawStringArg("khotib")
                     val imam = payload.rawStringArg("imam")
                     val bilal = payload.rawStringArg("bilal")
+
+                    // Full CRUD payloads for Tabbed Qurban Groups (max 7 members per group)
+                    val createGroup = payload.booleanArg("createGroup") == true
+                    val groupIdArg = payload.stringArg("groupId")?.trim()
+                    val groupNameArg = payload.rawStringArg("groupName", maxLen = 120)
+                    val animalTypeArg = payload.stringArg("animalType")?.trim()
+                    val membersArg = payload.stringListArg("members", maxItems = id.algaffar.jwstv.domain.model.QurbanGroup.MAX_MEMBERS, maxLen = 120)
+
+                    val updateGroupId = payload.stringArg("updateGroupId")?.trim()
+                    val deleteGroupId = payload.stringArg("deleteGroupId")?.trim()
+                    val moveGroupId = payload.stringArg("moveGroupId")?.trim()
+                    val moveDirection = payload.intArg("moveDirection")
+
+                    val addMemberGroupId = payload.stringArg("addMemberGroupId")?.trim()
+                    val updateMemberGroupId = payload.stringArg("updateMemberGroupId")?.trim()
+                    val deleteMemberGroupId = payload.stringArg("deleteMemberGroupId")?.trim()
+                    val moveMemberGroupId = payload.stringArg("moveMemberGroupId")?.trim()
+                    val memberNameArg = payload.rawStringArg("memberName", maxLen = 120)
+                    val memberIndexArg = payload.intArg("memberIndex")
+                    val moveMemberDelta = payload.intArg("moveMemberDelta")
+
+                    // Legacy add-group CSV payload (backward compatible, capped at 7 members)
                     val addGroupName = payload.stringArg("addGroupName")?.trim()
                     val addAnimalType = payload.stringArg("addAnimalType")?.trim()?.ifBlank { "Sapi" }
                     val addMembersCsv = payload.stringArg("addMembersCsv").orEmpty()
-                    val deleteGroupId = payload.stringArg("deleteGroupId")
 
                     updateSettings { prev ->
                         val a = prev.idulAdha
                         var groups = a.qurbanGroups
-                        if (!deleteGroupId.isNullOrBlank()) groups = groups.filterNot { it.id == deleteGroupId }
+                        if (!deleteGroupId.isNullOrBlank()) {
+                            groups = id.algaffar.jwstv.domain.model.QurbanGroup.deleteGroup(groups, deleteGroupId)
+                        }
+                        if (createGroup) {
+                            val (updated, _) = id.algaffar.jwstv.domain.model.QurbanGroup.addGroup(
+                                groups = groups,
+                                animalType = animalTypeArg ?: id.algaffar.jwstv.domain.model.QurbanGroup.ANIMAL_SAPI,
+                                customName = groupNameArg,
+                                initialMembers = membersArg ?: emptyList(),
+                                id = groupIdArg?.takeIf { it.isNotBlank() }
+                                    ?: "qgrp_${System.currentTimeMillis()}_${groups.size + 1}"
+                            )
+                            groups = updated
+                        }
+                        if (!updateGroupId.isNullOrBlank()) {
+                            groups = id.algaffar.jwstv.domain.model.QurbanGroup.updateGroup(
+                                groups = groups,
+                                groupId = updateGroupId,
+                                groupName = groupNameArg,
+                                animalType = animalTypeArg,
+                                members = membersArg
+                            )
+                        }
+                        if (!moveGroupId.isNullOrBlank() && moveDirection != null) {
+                            groups = id.algaffar.jwstv.domain.model.QurbanGroup.moveGroup(groups, moveGroupId, moveDirection)
+                        }
+                        if (!addMemberGroupId.isNullOrBlank() && !memberNameArg.isNullOrBlank()) {
+                            groups = id.algaffar.jwstv.domain.model.QurbanGroup.addMember(groups, addMemberGroupId, memberNameArg)
+                        }
+                        if (!updateMemberGroupId.isNullOrBlank() && memberIndexArg != null && memberNameArg != null) {
+                            groups = id.algaffar.jwstv.domain.model.QurbanGroup.updateMember(groups, updateMemberGroupId, memberIndexArg, memberNameArg)
+                        }
+                        if (!deleteMemberGroupId.isNullOrBlank() && memberIndexArg != null) {
+                            groups = id.algaffar.jwstv.domain.model.QurbanGroup.deleteMember(groups, deleteMemberGroupId, memberIndexArg)
+                        }
+                        if (!moveMemberGroupId.isNullOrBlank() && memberIndexArg != null && moveMemberDelta != null) {
+                            groups = id.algaffar.jwstv.domain.model.QurbanGroup.moveMember(groups, moveMemberGroupId, memberIndexArg, moveMemberDelta)
+                        }
                         if (!addGroupName.isNullOrBlank()) {
                             val members = addMembersCsv.split(",").map { it.trim() }.filter { it.isNotBlank() }
                             if (members.isNotEmpty()) {
-                                groups = groups + id.algaffar.jwstv.domain.model.QurbanGroup(
-                                    id = System.currentTimeMillis().toString(),
-                                    animalType = addAnimalType ?: "Sapi",
-                                    groupName = addGroupName,
-                                    members = members
+                                val (updated, _) = id.algaffar.jwstv.domain.model.QurbanGroup.addGroup(
+                                    groups = groups,
+                                    animalType = addAnimalType ?: id.algaffar.jwstv.domain.model.QurbanGroup.ANIMAL_SAPI,
+                                    customName = addGroupName,
+                                    initialMembers = members
                                 )
+                                groups = updated
                             }
                         }
                         prev.copy(

@@ -283,7 +283,7 @@ private fun InfoRotatorCardFrame(
                                 maxLines = typography.maxLines,
                                 overflow = TextOverflow.Ellipsis,
                                 style = TextStyle(
-                                    shadow = if (palette.isLight) null else Shadow(
+                                    shadow = if (palette.isLight || isPerformanceMode) null else Shadow(
                                         color = Color.Black.copy(alpha = 0.55f),
                                         offset = Offset(0f, 3f),
                                         blurRadius = 10f

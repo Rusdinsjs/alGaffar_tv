@@ -343,7 +343,168 @@ data class QurbanGroup(
     val animalType: String = "Sapi", // "Sapi" | "Kambing"
     val groupName: String = "Kelompok 1",
     val members: List<String> = emptyList()
-)
+) {
+    /** Non-blank member names capped at [MAX_MEMBERS] (7) for TV display. */
+    val activeMembers: List<String>
+        get() = sanitizeMembers(members)
+
+    /** True when this group has already reached the maximum [MAX_MEMBERS] (7) members. */
+    val isFull: Boolean
+        get() = members.size >= MAX_MEMBERS
+
+    companion object {
+        const val MAX_MEMBERS: Int = 7
+        const val ANIMAL_SAPI: String = "Sapi"
+        const val ANIMAL_KAMBING: String = "Kambing"
+
+        fun normalizeAnimalType(raw: String?): String =
+            if (raw.equals(ANIMAL_KAMBING, ignoreCase = true)) ANIMAL_KAMBING else ANIMAL_SAPI
+
+        /** Trims, removes blank entries, and enforces the maximum of [MAX_MEMBERS] (7) members. */
+        fun sanitizeMembers(rawMembers: List<String>): List<String> =
+            rawMembers.map { it.trim() }.filter { it.isNotBlank() }.take(MAX_MEMBERS)
+
+        /** Generates the next unused default tab name: "Kelompok 1", "Kelompok 2", ... */
+        fun nextDefaultGroupName(existing: List<QurbanGroup>): String {
+            val usedNumbers = existing.mapNotNull { grp ->
+                Regex("^Kelompok\\s+(\\d+)$", RegexOption.IGNORE_CASE)
+                    .matchEntire(grp.groupName.trim())
+                    ?.groupValues?.getOrNull(1)?.toIntOrNull()
+            }.toSet()
+            var n = 1
+            while (n in usedNumbers) n++
+            return "Kelompok $n"
+        }
+
+        fun createNew(
+            existing: List<QurbanGroup>,
+            animalType: String = ANIMAL_SAPI,
+            customName: String? = null,
+            initialMembers: List<String> = emptyList(),
+            id: String = "qgrp_${System.currentTimeMillis()}_${existing.size + 1}"
+        ): QurbanGroup {
+            val resolvedName = customName?.trim()?.takeIf { it.isNotBlank() }
+                ?: nextDefaultGroupName(existing)
+            return QurbanGroup(
+                id = id.ifBlank { "qgrp_${System.currentTimeMillis()}_${existing.size + 1}" },
+                animalType = normalizeAnimalType(animalType),
+                groupName = resolvedName,
+                members = sanitizeMembers(initialMembers)
+            )
+        }
+
+        fun addGroup(
+            groups: List<QurbanGroup>,
+            animalType: String = ANIMAL_SAPI,
+            customName: String? = null,
+            initialMembers: List<String> = emptyList(),
+            id: String = "qgrp_${System.currentTimeMillis()}_${groups.size + 1}"
+        ): Pair<List<QurbanGroup>, QurbanGroup> {
+            val created = createNew(
+                existing = groups,
+                animalType = animalType,
+                customName = customName,
+                initialMembers = initialMembers,
+                id = id
+            )
+            return (groups + created) to created
+        }
+
+        fun updateGroup(
+            groups: List<QurbanGroup>,
+            groupId: String,
+            groupName: String? = null,
+            animalType: String? = null,
+            members: List<String>? = null
+        ): List<QurbanGroup> {
+            val idx = groups.indexOfFirst { it.id == groupId }
+            if (idx < 0) return groups
+            val target = groups[idx]
+            val updated = target.copy(
+                groupName = groupName ?: target.groupName,
+                animalType = animalType?.let { normalizeAnimalType(it) } ?: target.animalType,
+                members = members?.let { sanitizeMembers(it) } ?: target.members
+            )
+            return groups.toMutableList().apply { this[idx] = updated }
+        }
+
+        fun deleteGroup(groups: List<QurbanGroup>, groupId: String): List<QurbanGroup> =
+            groups.filterNot { it.id == groupId }
+
+        fun moveGroup(groups: List<QurbanGroup>, groupId: String, delta: Int): List<QurbanGroup> {
+            val idx = groups.indexOfFirst { it.id == groupId }
+            val targetIdx = idx + delta
+            if (idx < 0 || targetIdx !in groups.indices || idx == targetIdx) return groups
+            return groups.toMutableList().apply {
+                val moved = removeAt(idx)
+                add(targetIdx, moved)
+            }
+        }
+
+        fun addMember(groups: List<QurbanGroup>, groupId: String, memberName: String): List<QurbanGroup> {
+            val clean = memberName.trim()
+            if (clean.isBlank()) return groups
+            val idx = groups.indexOfFirst { it.id == groupId }
+            if (idx < 0) return groups
+            val target = groups[idx]
+            if (target.members.size >= MAX_MEMBERS) return groups
+            return groups.toMutableList().apply {
+                this[idx] = target.copy(members = target.members + clean)
+            }
+        }
+
+        fun updateMember(
+            groups: List<QurbanGroup>,
+            groupId: String,
+            memberIndex: Int,
+            memberName: String
+        ): List<QurbanGroup> {
+            val idx = groups.indexOfFirst { it.id == groupId }
+            if (idx < 0) return groups
+            val target = groups[idx]
+            if (memberIndex !in target.members.indices) return groups
+            val updatedMembers = target.members.toMutableList().apply {
+                this[memberIndex] = memberName
+            }
+            return groups.toMutableList().apply {
+                this[idx] = target.copy(members = updatedMembers)
+            }
+        }
+
+        fun deleteMember(groups: List<QurbanGroup>, groupId: String, memberIndex: Int): List<QurbanGroup> {
+            val idx = groups.indexOfFirst { it.id == groupId }
+            if (idx < 0) return groups
+            val target = groups[idx]
+            if (memberIndex !in target.members.indices) return groups
+            val updatedMembers = target.members.filterIndexed { i, _ -> i != memberIndex }
+            return groups.toMutableList().apply {
+                this[idx] = target.copy(members = updatedMembers)
+            }
+        }
+
+        fun moveMember(
+            groups: List<QurbanGroup>,
+            groupId: String,
+            memberIndex: Int,
+            delta: Int
+        ): List<QurbanGroup> {
+            val idx = groups.indexOfFirst { it.id == groupId }
+            if (idx < 0) return groups
+            val target = groups[idx]
+            val destIdx = memberIndex + delta
+            if (memberIndex !in target.members.indices || destIdx !in target.members.indices || memberIndex == destIdx) {
+                return groups
+            }
+            val updatedMembers = target.members.toMutableList().apply {
+                val moved = removeAt(memberIndex)
+                add(destIdx, moved)
+            }
+            return groups.toMutableList().apply {
+                this[idx] = target.copy(members = updatedMembers)
+            }
+        }
+    }
+}
 
 @Serializable
 data class IdulAdhaSettings(

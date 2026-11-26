@@ -158,4 +158,31 @@ class PrayerTimeCalculatorTest {
         assertEquals("1:00:00", id.algaffar.jwstv.ui.screens.standby.formatNextPrayerCountdown(3600L))
         assertEquals("10:05:09", id.algaffar.jwstv.ui.screens.standby.formatNextPrayerCountdown(36309L))
     }
+
+    @Test
+    fun `calculateSchedule reuses cached items across 1Hz ticks and invalidates on settings or date change`() {
+        val settings = PrayerSettings(ihtiyati = 2)
+        val t1 = ZonedDateTime.of(2026, 3, 10, 8, 0, 0, 0, makassarZone)
+        val t2 = t1.plusSeconds(1)
+
+        val s1 = calculator.calculateSchedule(t1, settings)
+        val s2 = calculator.calculateSchedule(t2, settings)
+
+        // Same day, same nextPrayer -> identical cached items reference, decremented countdown
+        assertTrue(s1.items === s2.items)
+        assertEquals(s1.secondsToNextPrayer - 1L, s2.secondsToNextPrayer)
+
+        // Settings change immediately invalidates cache
+        val s3 = calculator.calculateSchedule(t2, settings.copy(ihtiyati = 3))
+        assertTrue(s1.items !== s3.items)
+        assertEquals(
+            1L,
+            ChronoUnit.MINUTES.between(s1.timeFor(PrayerId.DHUHR), s3.timeFor(PrayerId.DHUHR))
+        )
+
+        // Next day immediately invalidates cache
+        val sNextDay = calculator.calculateSchedule(t1.plusDays(1), settings)
+        assertTrue(s1.items !== sNextDay.items)
+        assertEquals(t1.toLocalDate().plusDays(1), sNextDay.date)
+    }
 }

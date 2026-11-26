@@ -471,16 +471,24 @@ fun AudioSholatSettingsTab(
                 onSelect = { selectedSlot = it }
             )
 
-            // Re-read inventory whenever audioInventoryTick increments
+            // Re-read inventory off the Main thread whenever slot or audioInventoryTick changes
             val tick = actions.audioInventoryTick
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 categories.forEach { (catId, catLabel) ->
-                    val (exists, duration) = remember(catId, selectedSlot, tick) {
-                        actions.onFindPrayerAudioSlot(catId, selectedSlot)
+                    val slotInfo by androidx.compose.runtime.produceState(
+                        initialValue = false to "",
+                        key1 = catId,
+                        key2 = selectedSlot,
+                        key3 = tick
+                    ) {
+                        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            actions.onFindPrayerAudioSlot(catId, selectedSlot)
+                        }
                     }
+                    val (exists, duration) = slotInfo
                     val isPlaying = actions.previewingAudioKey == "$catId:$selectedSlot"
 
                     Column(
@@ -557,7 +565,14 @@ fun CustomAudioSettingsTab(
     val palette = LocalJwsTheme.current
     var subTab by remember { mutableStateOf("library") }
     val customAudio = settings.customAudio
-    val files = remember(actions.audioInventoryTick) { actions.onListCustomAudioFiles() }
+    val files by androidx.compose.runtime.produceState(
+        initialValue = emptyList<Pair<String, String>>(),
+        key1 = actions.audioInventoryTick
+    ) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            actions.onListCustomAudioFiles()
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         HybridSectionCard(

@@ -126,22 +126,6 @@ fun StaticFloatingOverlayBanner(
     val messageText = overlay?.message?.trim().orEmpty()
     val isVisible = messageText.isNotBlank()
 
-    val dotAlpha: Float = if (isPerformanceMode) {
-        1f
-    } else {
-        val infiniteTransition = rememberInfiniteTransition(label = "OverlayPulseTransition")
-        val animated by infiniteTransition.animateFloat(
-            initialValue = 0.35f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 800),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "OverlayPulseDotAlpha"
-        )
-        animated
-    }
-
     // Flush flat on the outer edge (left or right), rounded on the inner end — capped at 40.dp so 3+ line overlays stay clean
     val overlayShape = if (isRightSide) {
         RoundedCornerShape(
@@ -175,6 +159,22 @@ fun StaticFloatingOverlayBanner(
             .wrapContentWidth()
             .wrapContentHeight()
     ) {
+        val dotAlpha: Float = if (isPerformanceMode) {
+            1f
+        } else {
+            val infiniteTransition = rememberInfiniteTransition(label = "OverlayPulseTransition")
+            val animated by infiniteTransition.animateFloat(
+                initialValue = 0.35f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 800),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "OverlayPulseDotAlpha"
+            )
+            animated
+        }
+
         AnimatedContent(
             targetState = messageText,
             transitionSpec = {
@@ -195,7 +195,10 @@ fun StaticFloatingOverlayBanner(
                     )
                     .wrapContentWidth()
                     .wrapContentHeight()
-                    .shadow(elevation = 12.dp, shape = overlayShape)
+                    .then(
+                        if (isPerformanceMode) Modifier
+                        else Modifier.shadow(elevation = 12.dp, shape = overlayShape)
+                    )
                     .clip(overlayShape)
                     .background(palette.accent)
                     .border(
@@ -364,7 +367,10 @@ fun FloatingRotatingQrCard(
                 Column(
                     modifier = Modifier
                         .width(if (isFullscreen) 168.dp else 144.dp)
-                        .shadow(elevation = 14.dp, shape = RoundedCornerShape(18.dp))
+                        .then(
+                            if (isPerformanceMode) Modifier
+                            else Modifier.shadow(elevation = 14.dp, shape = RoundedCornerShape(18.dp))
+                        )
                         .clip(RoundedCornerShape(18.dp))
                         .background(palette.bgPrimary.copy(alpha = 0.93f))
                         .border(2.dp, accentColor, RoundedCornerShape(18.dp))

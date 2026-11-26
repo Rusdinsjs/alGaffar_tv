@@ -422,18 +422,27 @@ fun WelcomeMasjidSlideView(
     }
     val textShadowColor = Color.Black.copy(alpha = if (palette.isLight) 0.14f else 0.72f)
 
+    val bgBrush = remember(palette, bgOuter, isPerformanceMode) {
+        if (isPerformanceMode) {
+            Brush.verticalGradient(colors = listOf(palette.bgPrimary, bgOuter))
+        } else {
+            Brush.radialGradient(
+                colorStops = arrayOf(
+                    0.0f to palette.bgSecondary,
+                    0.6f to palette.bgPrimary,
+                    1.0f to bgOuter
+                )
+            )
+        }
+    }
+    val heroTextBrush = remember(heroGradient) {
+        Brush.horizontalGradient(colors = heroGradient)
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colorStops = arrayOf(
-                        0.0f to palette.bgSecondary,
-                        0.6f to palette.bgPrimary,
-                        1.0f to bgOuter
-                    )
-                )
-            ),
+            .background(bgBrush),
         contentAlignment = Alignment.Center
     ) {
         // Subtle Islamic Dot Motif Overlay harmonized with theme accentSecondary
@@ -480,7 +489,7 @@ fun WelcomeMasjidSlideView(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = TextStyle(
-                    shadow = Shadow(
+                    shadow = if (isPerformanceMode) null else Shadow(
                         color = textShadowColor,
                         offset = Offset(0f, 3f),
                         blurRadius = 8f
@@ -500,8 +509,8 @@ fun WelcomeMasjidSlideView(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style = TextStyle(
-                    brush = Brush.horizontalGradient(colors = heroGradient),
-                    shadow = Shadow(
+                    brush = heroTextBrush,
+                    shadow = if (isPerformanceMode) null else Shadow(
                         color = textShadowColor,
                         offset = Offset(0f, 6f),
                         blurRadius = 22f
@@ -620,7 +629,7 @@ fun WelcomeMasjidSlideView(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = TextStyle(
-                        shadow = Shadow(
+                        shadow = if (isPerformanceMode) null else Shadow(
                             color = textShadowColor,
                             offset = Offset(0f, 2f),
                             blurRadius = 6f
