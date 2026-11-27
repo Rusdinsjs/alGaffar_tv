@@ -312,7 +312,7 @@ fun FloatingRotatingQrCard(
                     RotatingQrCardModel(
                         id = "qr_kas_online",
                         badgeTitle = "QR KAS ONLINE",
-                        label = "Laporan Keuangan Online",
+                        label = onlineFinance.qrLabel.ifBlank { "Laporan Keuangan Online" },
                         subtitle = "Scan untuk mutasi kas ${brandName.ifBlank { "Masjid" }}",
                         qrPayload = financePayload,
                         customQrImage = "",

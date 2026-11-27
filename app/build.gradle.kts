@@ -22,8 +22,8 @@ android {
         applicationId = "id.algaffar.jwstv"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "2.2.0-stb"
+        versionCode = 4
+        versionName = "2.2.1-stb"
     }
 
     signingConfigs {

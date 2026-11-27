@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap
  * 1. Folder hierarchy playlist resolution (`audio/{category}/{prayerId}/[files]` -> `{prayerId}.mp3` -> `default/` -> `default.mp3`)
  * 2. Exact MP3 duration scanning for Tarhim & Adzan auto-sync (`AudioFileDurations`)
  * 3. Smooth 3-second volume fade-out before state transitions
- * 4. 1000Hz countdown beeps via [BeepGenerator] (3x before Adzan, 5x before Iqomah)
+ * 4. 1500Hz countdown beeps via [BeepGenerator] (3x before Adzan, 5x before Iqomah)
  * 5. Ramadhan Sirine playback (Maghrib, Sahur, Imsak)
  * 6. Live & Scheduled Custom Audio playback
  * Mirrors `src/components/Audio/AudioPlayer.tsx` and `src/hooks/useSirine.ts`.
@@ -101,7 +101,7 @@ class JwsAudioEngine(
     ) {
         val baseVolume = settings.globalVolume.coerceIn(0f, 1.0f)
 
-        // 1. Trigger 1000Hz Beep if requested by StateMachine (3x before Adzan, 5x before Iqomah)
+        // 1. Trigger 1500Hz Beep if requested by StateMachine (3x before Adzan, 5x before Iqomah)
         if (tickResult.shouldTriggerBeep) {
             beepGenerator.triggerCountdownBeepOncePerSecond(now.toEpochSecond(), baseVolume)
         }

@@ -493,7 +493,7 @@ fun FirstRunOnboardingWizard(
                                 }
                             }
                             HybridButton(
-                                label = "Uji Bunyi Beep 1000Hz Speaker TV",
+                                label = "Uji Bunyi Beep 1500Hz Speaker TV",
                                 icon = Icons.Default.VolumeUp,
                                 onClick = onTestBeep
                             )

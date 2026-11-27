@@ -85,7 +85,7 @@ class MainViewModel(
 
     fun simulateState(state: AppState?, durationSeconds: Long? = 120L) = engine.simulateState(state, durationSeconds)
     fun clearSimulation() = engine.clearSimulation()
-    fun testPlayBeep1000Hz() = engine.testPlayBeep1000Hz()
+    fun testPlayBeep1500Hz() = engine.testPlayBeep1500Hz()
     fun testPlayRamadhanSirine() = engine.testPlayRamadhanSirine()
     fun toggleManualRelay(pin: Int, turnOn: Boolean) = engine.toggleManualRelay(pin, turnOn)
 

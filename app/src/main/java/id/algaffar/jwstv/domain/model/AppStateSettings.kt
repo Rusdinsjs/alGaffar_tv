@@ -845,6 +845,7 @@ data class MasjidQrSettings(
 @Serializable
 data class OnlineFinanceSettings(
     val enabled: Boolean = false,
+    val qrLabel: String = "Laporan Keuangan Online",
     val sheetUrl: String = "",
     val reportUrl: String = "",
     val bankName: String = "",

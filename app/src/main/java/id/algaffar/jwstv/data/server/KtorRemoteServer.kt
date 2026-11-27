@@ -918,6 +918,7 @@ class KtorRemoteServer(
 
             putJsonObject("onlineFinance") {
                 put("enabled", settings.onlineFinance.enabled)
+                put("qrLabel", settings.onlineFinance.qrLabel)
                 put("showFloatingOnMain", settings.onlineFinance.showFloatingOnMain)
                 put("url", settings.onlineFinance.sheetUrl)
                 put("reportUrl", settings.onlineFinance.reportUrl)

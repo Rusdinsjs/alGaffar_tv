@@ -32,13 +32,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,6 +59,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -559,7 +561,7 @@ class MainActivity : ComponentActivity() {
                                     val onboardingSnapshot by viewModel.snapshotFlow.collectAsState()
                                     FirstRunOnboardingWizard(
                                         snapshot = onboardingSnapshot,
-                                        onTestBeep = { viewModel.testPlayBeep1000Hz() },
+                                        onTestBeep = { viewModel.testPlayBeep1500Hz() },
                                         onCompleteOnboarding = { transform -> viewModel.updateSettings(transform) }
                                     )
                                 }
@@ -1013,7 +1015,7 @@ class MainActivity : ComponentActivity() {
                 viewModel.clearSimulation()
                 isDebugModalOpen = false
             },
-            onTestBeep = { viewModel.testPlayBeep1000Hz() },
+            onTestBeep = { viewModel.testPlayBeep1500Hz() },
             onTestSirine = { viewModel.testPlayRamadhanSirine() },
             onCycleTheme = { viewModel.cycleTheme() },
             onCycleLayout = { viewModel.cycleLayout() },
@@ -1051,20 +1053,22 @@ private fun QuickDebugModalOverlay(
     ) {
         Column(
             modifier = Modifier
-                .widthIn(max = 1280.dp)
+                .fillMaxWidth(0.88f)
+                .widthIn(max = 1440.dp)
                 .clip(RoundedCornerShape(24.dp))
                 .background(palette.bgPrimary)
                 .border(2.dp, palette.accent, RoundedCornerShape(24.dp))
                 .clickable(enabled = false) {}
+                .verticalScroll(rememberScrollState())
                 .padding(32.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Panel Simulasi 31-State & Uji Audio (D-Pad / Touch)",
                         color = palette.textPrimary,
@@ -1079,24 +1083,35 @@ private fun QuickDebugModalOverlay(
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HybridActionChip(label = "Uji Beep 1000Hz", isActive = false, onClick = onTestBeep)
-                    HybridActionChip(label = "Uji Sirine", isActive = false, onClick = onTestSirine)
-                    HybridActionChip(label = "Ganti Tema", isActive = false, onClick = onCycleTheme)
-                    HybridActionChip(label = "Ganti Layout", isActive = false, onClick = onCycleLayout)
-                    HybridActionChip(label = "Ganti Jam", isActive = false, onClick = onCycleClock)
-                    HybridActionChip(
-                        label = "Mode Otomatis",
-                        isActive = !isManualOverride,
-                        onClick = onClearSimulation
-                    )
-                    HybridActionChip(label = "Tutup [X]", isActive = false, onClick = onDismiss)
-                }
+                HybridActionChip(label = "Tutup [X]", isActive = false, onClick = onDismiss)
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                HybridActionChip(label = "Uji Beep 1500Hz", isActive = false, onClick = onTestBeep)
+                HybridActionChip(label = "Uji Sirine", isActive = false, onClick = onTestSirine)
+                HybridActionChip(label = "Ganti Tema", isActive = false, onClick = onCycleTheme)
+                HybridActionChip(label = "Ganti Layout", isActive = false, onClick = onCycleLayout)
+                HybridActionChip(label = "Ganti Jam", isActive = false, onClick = onCycleClock)
+                HybridActionChip(
+                    label = "Mode Otomatis",
+                    isActive = !isManualOverride,
+                    onClick = onClearSimulation
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(palette.border.copy(alpha = 0.6f))
+            )
 
             FlowRow(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -1141,7 +1156,10 @@ private fun HybridActionChip(
             text = label,
             color = if (isActive) palette.bgPrimary else palette.textPrimary,
             fontSize = 13.sp,
-            fontWeight = if (isActive || isFocused) FontWeight.ExtraBold else FontWeight.Medium
+            fontWeight = if (isActive || isFocused) FontWeight.ExtraBold else FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

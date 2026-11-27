@@ -218,9 +218,16 @@ fun MasjidQrSettingsTab(
         ) {
             HybridToggleRow(
                 label = "Aktifkan QR Infaq Masjid",
-                description = "Tampil bergiliran dengan QR Kas Online di sudut berlawanan dari Floating Overlay pada Group Slideshow yang mencentang Card QR",
+                description = "Aktifkan modul QR Infaq Digital Masjid (Layar Penuh & Card Melayang)",
                 checked = qr.enabled,
                 onCheckedChange = { v -> actions.onUpdateSettings { it.copy(masjidQr = it.masjidQr.copy(enabled = v)) } }
+            )
+
+            HybridToggleRow(
+                label = "Tampilkan Banner Melayang QR Infaq Digital",
+                description = "Tampil bergiliran dengan QR Kas Online di sudut berlawanan dari Floating Overlay pada Group Slideshow yang mencentang Card QR",
+                checked = qr.showFloatingOnMain,
+                onCheckedChange = { v -> actions.onUpdateSettings { it.copy(masjidQr = it.masjidQr.copy(showFloatingOnMain = v)) } }
             )
 
             HybridInfoBanner(
@@ -362,6 +369,13 @@ fun OnlineFinanceSettingsTab(
             HybridInfoBanner(
                 text = "Modul ini menampilkan Laporan Kas Umum Masjid via Google Sheets dan berdiri terpisah dari pembukuan Kas Jum'at manual (kecuali jika di tab Jum'at Anda memilih sumber Online).",
                 accentColor = Color(0xFF10B981)
+            )
+
+            HybridTextInput(
+                label = "Label Teks QR Keuangan Online",
+                value = fin.qrLabel,
+                placeholder = "Laporan Keuangan Online",
+                onValueChange = { v -> actions.onUpdateSettings { it.copy(onlineFinance = it.onlineFinance.copy(qrLabel = v)) } }
             )
 
             HybridTextInput(

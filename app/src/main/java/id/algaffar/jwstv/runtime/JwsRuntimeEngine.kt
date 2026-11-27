@@ -768,7 +768,7 @@ class JwsRuntimeEngine(
         }
     }
 
-    fun testPlayBeep1000Hz() {
+    fun testPlayBeep1500Hz() {
         audioEngine.beepGenerator.playBeepImmediate(settingsRepository.currentSettings.globalVolume)
     }
 
@@ -1391,7 +1391,7 @@ class JwsRuntimeEngine(
                 "play_infaq" -> toggleOrSimulate(AppState.MASJID_QR, 300L)
                 "play_online_finance" -> toggleOrSimulate(AppState.ONLINE_FINANCE, 300L)
                 "test_adzan" -> toggleOrSimulate(AppState.ADZAN, 180L)
-                "test_beep" -> testPlayBeep1000Hz()
+                "test_beep" -> testPlayBeep1500Hz()
 
                 "regenerate_remote_token" -> regenerateRemoteToken()
 
@@ -2036,12 +2036,14 @@ class JwsRuntimeEngine(
                     val bankName = payload.rawStringArg("bankName")
                     val nomorRekening = payload.rawStringArg("nomorRekening")
                     val atasNama = payload.rawStringArg("atasNama")
+                    val qrLabel = payload.stringArg("qrLabel")
                     val refreshInterval = payload.intArg("refreshIntervalMinutes")
                     updateSettings { prev ->
                         val f = prev.onlineFinance
                         prev.copy(
                             onlineFinance = f.copy(
                                 enabled = enabled ?: f.enabled,
+                                qrLabel = qrLabel ?: f.qrLabel,
                                 showFloatingOnMain = showFloating ?: f.showFloatingOnMain,
                                 sheetUrl = url ?: f.sheetUrl,
                                 reportUrl = reportUrl ?: f.reportUrl,

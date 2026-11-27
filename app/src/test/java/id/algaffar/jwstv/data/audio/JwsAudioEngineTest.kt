@@ -80,12 +80,60 @@ class JwsAudioEngineTest {
     }
 
     @Test
-    fun `generateSineWavePcm produces non-zero 1000Hz PCM samples with smooth envelope`() {
-        val pcm = BeepGenerator.generateSineWavePcm(frequencyHz = 1000.0, durationMs = 280, sampleRate = 44100)
-        assertEquals((44100 * 280) / 1000, pcm.size)
+    fun `generateSineWavePcm produces 1500Hz 600ms PCM samples with smooth envelope and 400ms delay config`() {
+        assertEquals(1500.0, BeepGenerator.BEEP_FREQUENCY_HZ, 0.001)
+        assertEquals(600, BeepGenerator.BEEP_DURATION_MS)
+        assertEquals(400L, BeepGenerator.BEEP_DELAY_MS)
+
+        val sampleRate = BeepGenerator.DEFAULT_SAMPLE_RATE
+        val pcm = BeepGenerator.generateSineWavePcm(
+            frequencyHz = BeepGenerator.BEEP_FREQUENCY_HZ,
+            durationMs = BeepGenerator.BEEP_DURATION_MS,
+            sampleRate = sampleRate
+        )
+        assertEquals((sampleRate * 600) / 1000, pcm.size)
         // First sample is 0 due to attack envelope, middle samples have high amplitude
         assertEquals(0, pcm.first().toInt())
         val maxAmp = pcm.maxOf { kotlin.math.abs(it.toInt()) }
         assertTrue("Expected peak amplitude > 20000, got $maxAmp", maxAmp > 20000)
+
+        // Verify measured frequency in middle steady-state window via positive zero-crossings (~1500Hz)
+        val measuredHz = estimateFrequencyHz(pcm, startIdx = 4410, endIdx = 22050, sampleRate = sampleRate)
+        assertEquals(1500.0, measuredHz, 15.0)
+    }
+
+    @Test
+    fun `generateSirenSweepPcm produces 5s sweep from 800Hz to 1500Hz and down to 600Hz`() {
+        assertEquals(5, BeepGenerator.SIREN_DURATION_SECONDS)
+        assertEquals(800.0, BeepGenerator.sirenFrequencyAt(0.0), 0.001)
+        assertEquals(1500.0, BeepGenerator.sirenFrequencyAt(0.5), 0.001)
+        assertEquals(600.0, BeepGenerator.sirenFrequencyAt(1.0), 0.001)
+
+        val sampleRate = BeepGenerator.DEFAULT_SAMPLE_RATE
+        val pcm = BeepGenerator.generateSirenSweepPcm()
+        assertEquals(sampleRate * 5, pcm.size)
+        assertEquals(0, pcm.first().toInt())
+        val maxAmp = pcm.maxOf { kotlin.math.abs(it.toInt()) }
+        assertTrue("Expected peak amplitude > 20000, got $maxAmp", maxAmp > 20000)
+
+        // Verify actual synthesized waveform frequency rises 800 -> 1500 Hz then drops to 600 Hz
+        val earlyHz = estimateFrequencyHz(pcm, startIdx = 2500, endIdx = 6910, sampleRate = sampleRate)
+        val midHz = estimateFrequencyHz(pcm, startIdx = (pcm.size / 2) - 2205, endIdx = (pcm.size / 2) + 2205, sampleRate = sampleRate)
+        val lateHz = estimateFrequencyHz(pcm, startIdx = pcm.size - 6910, endIdx = pcm.size - 2500, sampleRate = sampleRate)
+
+        assertTrue("Expected early sweep freq in 800..900Hz, got $earlyHz", earlyHz in 790.0..920.0)
+        assertTrue("Expected peak sweep freq near 1500Hz, got $midHz", midHz in 1430.0..1510.0)
+        assertTrue("Expected late sweep freq in 600..700Hz, got $lateHz", lateHz in 590.0..710.0)
+    }
+
+    private fun estimateFrequencyHz(pcm: ShortArray, startIdx: Int, endIdx: Int, sampleRate: Int): Double {
+        var positiveCrossings = 0
+        for (i in (startIdx + 1) until endIdx) {
+            if (pcm[i - 1] <= 0 && pcm[i] > 0) {
+                positiveCrossings++
+            }
+        }
+        val windowSec = (endIdx - startIdx).toDouble() / sampleRate.toDouble()
+        return positiveCrossings / windowSec
     }
 }

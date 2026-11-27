@@ -619,7 +619,7 @@
                     <button id="btn-audio" class="action-btn" onclick="sendCommand('play_custom_audio')">🎵 AUDIO KUSTOM</button>
                     <button id="btn-slideshow" class="action-btn" onclick="sendCommand('play_slideshow')">🎞️ SLIDESHOW</button>
                     <button id="btn-screensaver" class="action-btn" onclick="sendCommand('screensaver')">🌙 SCREENSAVER</button>
-                    <button class="action-btn" onclick="sendCommand('test_beep')">🔔 UJI BEEP 1000Hz</button>
+                    <button class="action-btn" onclick="sendCommand('test_beep')">🔔 UJI BEEP 1500Hz</button>
                     <button id="btn-adzan" class="action-btn" onclick="sendCommand('test_adzan')" style="grid-column: span 2;">📢 UJI LAYAR ADZAN</button>
                 </div>
                 <div style="display:flex; gap:8px; margin-top:12px;">
@@ -693,7 +693,7 @@
                 <span class="card-title">QR Infaq Digital &amp; Keuangan Online</span>
                 <div class="grid-2" style="margin-bottom:10px;">
                     <button id="qrEnabledBtn" class="toggle-btn" onclick="toggleRemoteFlag('qrEnabledBtn')">Aktifkan QR Infaq</button>
-                    <button id="qrShowFloatingBtn" class="toggle-btn" onclick="toggleRemoteFlag('qrShowFloatingBtn')">Banner Melayang</button>
+                    <button id="qrShowFloatingBtn" class="toggle-btn" onclick="toggleRemoteFlag('qrShowFloatingBtn')">Banner Melayang QR Infaq</button>
                 </div>
                 <div class="form-group">
                     <label>Tautan / Payload QRIS Infaq Digital</label>
@@ -724,7 +724,11 @@
                 <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
                 <div class="grid-2" style="margin-bottom:10px;">
                     <button id="financeEnabledBtn" class="toggle-btn" onclick="toggleRemoteFlag('financeEnabledBtn')">Aktifkan Keuangan Online</button>
-                    <button id="financeShowFloatingBtn" class="toggle-btn" onclick="toggleRemoteFlag('financeShowFloatingBtn')">Banner Melayang</button>
+                    <button id="financeShowFloatingBtn" class="toggle-btn" onclick="toggleRemoteFlag('financeShowFloatingBtn')">Banner Melayang Kas Online</button>
+                </div>
+                <div class="form-group">
+                    <label>Label Teks QR Keuangan Online</label>
+                    <input type="text" id="financeQrLabel" placeholder="Laporan Keuangan Online">
                 </div>
                 <div class="form-group">
                     <label>Refresh (Menit)</label>
@@ -2164,6 +2168,7 @@
             const floatingBtn = document.getElementById('financeShowFloatingBtn');
             sendCommand('update_online_finance', {
                 enabled: enabledBtn ? enabledBtn.classList.contains('on') : true,
+                qrLabel: (document.getElementById('financeQrLabel')?.value || '').trim(),
                 showFloatingOnMain: floatingBtn ? floatingBtn.classList.contains('on') : true,
                 url: document.getElementById('financeUrl').value.trim(),
                 reportUrl: document.getElementById('financeReportUrl').value.trim(),
@@ -2755,6 +2760,7 @@
                     if (!pendingUpdates['financeShowFloatingBtn'] || (Date.now() - pendingUpdates['financeShowFloatingBtn'] >= 2500)) {
                         document.getElementById('financeShowFloatingBtn')?.classList.toggle('on', status.onlineFinance.showFloatingOnMain !== false);
                     }
+                    setInputSafely('financeQrLabel', status.onlineFinance.qrLabel);
                     setInputSafely('financeUrl', status.onlineFinance.url);
                     setInputSafely('financeReportUrl', status.onlineFinance.reportUrl);
                     setInputSafely('financeBank', status.onlineFinance.bankName);
