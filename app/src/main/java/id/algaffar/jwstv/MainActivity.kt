@@ -1,11 +1,17 @@
 package id.algaffar.jwstv
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import id.algaffar.jwstv.data.hardware.SwitchController
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
@@ -412,7 +418,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val usbPermissionReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != SwitchController.ACTION_USB_PERMISSION) return
+            val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+            @Suppress("DEPRECATION")
+            val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+            } else {
+                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+            }
+            viewModel.handleUsbPermissionBroadcast(granted, device?.deviceName)
+        }
+    }
+
     override fun onDestroy() {
+        runCatching { unregisterReceiver(usbPermissionReceiver) }
         mainHandler.removeCallbacks(hideMouseCursorRunnable)
         viewModel.setOnBeforeLaunchExternalInstaller(null)
         super.onDestroy()
@@ -427,6 +448,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ContextCompat.registerReceiver(
+            this,
+            usbPermissionReceiver,
+            IntentFilter(SwitchController.ACTION_USB_PERMISSION),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         // Always keep TV screen awake for 24/7 digital signage
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         applyImmersiveKioskMode()

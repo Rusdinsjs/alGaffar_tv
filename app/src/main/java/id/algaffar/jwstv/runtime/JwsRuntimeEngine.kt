@@ -471,13 +471,23 @@ class JwsRuntimeEngine(
     }
 
     fun requestUsbRelayPermission() {
-        val res = switchController.requestUsbRelayPermission()
+        val preferredPort = settingsRepository.currentSettings.switchSettings.usbPort
+        val res = switchController.requestUsbRelayPermission(preferredPort)
         res.onSuccess { msg ->
             AppLogger.info("USB", msg)
             _statusBannerMessage.value = msg
         }.onFailure { err ->
             AppLogger.warn("USB", err.message ?: "Gagal mendeteksi USB Relay")
             _statusBannerMessage.value = err.message ?: "Gagal mendeteksi USB Relay"
+        }
+    }
+
+    fun handleUsbPermissionBroadcast(granted: Boolean, deviceName: String?) {
+        switchController.onUsbPermissionResult(granted, deviceName)
+        _statusBannerMessage.value = if (granted) {
+            "Izin USB OTG disetujui${if (!deviceName.isNullOrBlank()) " ($deviceName)" else ""}. Relay siap digunakan."
+        } else {
+            "Izin USB OTG ditolak. Relay USB tidak dapat diakses."
         }
     }
 
@@ -2621,6 +2631,7 @@ class JwsRuntimeEngine(
                     val wifiIp = payload.stringArg("wifiIp")?.trim()
                     val usbPort = payload.stringArg("usbPort")?.trim()
                     val baudRate = payload.intArg("baudRate")?.coerceIn(9600, 115200)
+                    val boardProfile = payload.stringArg("boardProfile")?.lowercase()
                     updateSettings { prev ->
                         prev.copy(
                             switchSettings = prev.switchSettings.copy(
@@ -2628,7 +2639,8 @@ class JwsRuntimeEngine(
                                 connectionType = connectionType?.takeIf { it in setOf("wifi", "usb") } ?: prev.switchSettings.connectionType,
                                 wifiIp = wifiIp ?: prev.switchSettings.wifiIp,
                                 usbPort = usbPort ?: prev.switchSettings.usbPort,
-                                baudRate = baudRate ?: prev.switchSettings.baudRate
+                                baudRate = baudRate ?: prev.switchSettings.baudRate,
+                                boardProfile = boardProfile?.takeIf { it in setOf("esp32_8", "wemos_4", "wemos_2") } ?: prev.switchSettings.boardProfile
                             )
                         )
                     }

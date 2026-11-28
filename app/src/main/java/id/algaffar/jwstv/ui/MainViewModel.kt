@@ -101,6 +101,8 @@ class MainViewModel(
     fun resetSuperadminPin(newPin: String) = engine.resetSuperadminPin(newPin)
     fun upgradeUserPinHash(userId: String, rawPin: String) = engine.upgradeUserPinHash(userId, rawPin)
     fun requestUsbRelayPermission() = engine.requestUsbRelayPermission()
+    fun handleUsbPermissionBroadcast(granted: Boolean, deviceName: String?) =
+        engine.handleUsbPermissionBroadcast(granted, deviceName)
     fun checkOtaUpdate() = engine.checkOtaUpdate()
     fun installOfflineApk(inputStream: InputStream) = engine.installOfflineApk(inputStream)
     fun downloadAudioPack(packId: String) = engine.downloadAudioPack(packId)

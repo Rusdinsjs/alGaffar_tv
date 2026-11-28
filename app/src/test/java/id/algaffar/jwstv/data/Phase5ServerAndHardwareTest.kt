@@ -13,6 +13,7 @@ import id.algaffar.jwstv.domain.model.PrayerSettings
 import id.algaffar.jwstv.domain.model.SwitchChannelConfig
 import id.algaffar.jwstv.domain.model.SwitchSettings
 import id.algaffar.jwstv.domain.model.UserAccount
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -207,5 +208,70 @@ class Phase5ServerAndHardwareTest {
         assertEquals(4_000_000L, parsed.balance)
         assertEquals(3, parsed.recentTransactions.size)
         assertEquals("Infaq QRIS Jamaah", parsed.recentTransactions.first().description)
+    }
+
+    @Test
+    fun `SwitchController enforces boardProfile pin limits for ESP32 8-pin and Wemos 4 or 2-pin`() = runBlocking {
+        val calc = PrayerTimeCalculator()
+        val zone = ZoneId.of("Asia/Makassar")
+        val baseTime = ZonedDateTime.of(2026, 3, 20, 12, 0, 0, 0, zone)
+        val schedule = calc.calculateSchedule(baseTime, PrayerSettings())
+        val controller = SwitchController()
+
+        val channels = (1..8).map { pin ->
+            SwitchChannelConfig(
+                id = "pin_$pin",
+                name = "RELAY $pin",
+                pin = pin,
+                enabled = true,
+                triggerMode = "state",
+                onState = "tartil",
+                offState = "standby"
+            )
+        }
+
+        val esp32 = controller.computeDesiredPinStates(
+            now = baseTime,
+            currentState = AppState.TARTIL,
+            stateElapsedSeconds = 5,
+            switchSettings = SwitchSettings(enabled = true, boardProfile = "esp32_8", switches = channels),
+            schedule = schedule
+        )
+        assertEquals((1..8).toSet(), esp32.keys)
+
+        val wemos4 = controller.computeDesiredPinStates(
+            now = baseTime,
+            currentState = AppState.TARTIL,
+            stateElapsedSeconds = 5,
+            switchSettings = SwitchSettings(enabled = true, boardProfile = "wemos_4", switches = channels),
+            schedule = schedule
+        )
+        assertEquals((1..4).toSet(), wemos4.keys)
+
+        val wemos2 = controller.computeDesiredPinStates(
+            now = baseTime,
+            currentState = AppState.TARTIL,
+            stateElapsedSeconds = 5,
+            switchSettings = SwitchSettings(enabled = true, boardProfile = "wemos_2", switches = channels),
+            schedule = schedule
+        )
+        assertEquals((1..2).toSet(), wemos2.keys)
+
+        // Manual toggle on pin 5 must be rejected when boardProfile is wemos_4
+        val rejected = controller.setManualPinState(
+            pin = 5,
+            turnOn = true,
+            settings = SwitchSettings(enabled = true, boardProfile = "wemos_4", connectionType = "usb")
+        )
+        assertTrue(rejected.isFailure)
+
+        // Failed USB dispatch in evaluateAndDispatch (no Android Context in unit test) must NOT commit activePinStates
+        controller.evaluateAndDispatch(
+            now = baseTime,
+            currentState = AppState.TARTIL,
+            switchSettings = SwitchSettings(enabled = true, boardProfile = "wemos_2", connectionType = "usb", switches = channels),
+            schedule = schedule
+        )
+        assertTrue(controller.pinStateFlow.value.isEmpty())
     }
 }

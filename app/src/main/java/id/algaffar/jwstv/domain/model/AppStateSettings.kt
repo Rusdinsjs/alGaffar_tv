@@ -921,8 +921,15 @@ data class SwitchSettings(
     val wifiIp: String = "192.168.1.50",
     val usbPort: String = "/dev/ttyUSB0",
     val baudRate: Int = 9600,
+    val boardProfile: String = "esp32_8", // "esp32_8" | "wemos_4" | "wemos_2"
     val switches: List<SwitchChannelConfig> = defaultSwitchChannels()
 ) {
+    fun maxRelayPins(): Int = when (boardProfile.lowercase()) {
+        "wemos_2" -> 2
+        "wemos_4" -> 4
+        else -> 8
+    }
+
     companion object {
         private fun acSchedules(): Map<String, PrayerSwitchSchedule> = linkedMapOf(
             "fajr" to PrayerSwitchSchedule(onOffset = 60, offOffset = 30),

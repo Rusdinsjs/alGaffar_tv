@@ -1875,9 +1875,39 @@ fun SwitchHardwareSettingsTab(
         }
     }
 
+    val maxPins = sw.maxRelayPins()
+    val visibleSwitches = sw.switches.filter { it.pin in 1..maxPins }
+
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         HybridSectionCard(
-            title = "Pilih Konfigurasi / Channel Saklar (8 Pin)",
+            title = "Profil Board & Jumlah Pin Relay ($maxPins Pin Aktif)",
+            subtitle = "Pilih tipe mikrokontroler untuk menyesuaikan jumlah pin relay yang aktif (ESP32: 8 Pin, Wemos D1 Mini: 4 atau 2 Pin)"
+        ) {
+            HybridSegmentedRow(
+                options = listOf(
+                    "esp32_8" to "ESP32 (8 Pin)",
+                    "wemos_4" to "Wemos D1 Mini (4 Pin)",
+                    "wemos_2" to "Wemos D1 Mini (2 Pin)"
+                ),
+                selectedId = sw.boardProfile,
+                onSelect = { profile ->
+                    val newMax = when (profile) {
+                        "wemos_2" -> 2
+                        "wemos_4" -> 4
+                        else -> 8
+                    }
+                    if (selectedChannel != null && selectedChannel.pin > newMax) {
+                        selectedId = "hardware"
+                    }
+                    actions.onUpdateSettings { prev ->
+                        prev.copy(switchSettings = prev.switchSettings.copy(boardProfile = profile))
+                    }
+                }
+            )
+        }
+
+        HybridSectionCard(
+            title = "Pilih Konfigurasi / Channel Saklar ($maxPins Pin)",
             subtitle = "Pilih channel untuk mengatur jadwal otomatis berdasarkan waktu sholat atau transisi state layar"
         ) {
             FlowRow(
@@ -1889,7 +1919,7 @@ fun SwitchHardwareSettingsTab(
                     isPrimary = selectedId == "hardware",
                     onClick = { selectedId = "hardware" }
                 )
-                sw.switches.forEach { ch ->
+                visibleSwitches.forEach { ch ->
                     val isPinOn = actions.relayPinStates[ch.pin] == true
                     val activeTag = if (ch.enabled) "•" else ""
                     HybridButton(
@@ -1901,13 +1931,13 @@ fun SwitchHardwareSettingsTab(
             }
         }
 
-        if (selectedId == "hardware" || selectedChannel == null) {
+        if (selectedId == "hardware" || selectedChannel == null || selectedChannel.pin > maxPins) {
             HybridSectionCard(
                 title = "Konfigurasi Hardware Relay (WiFi HTTP & USB Serial OTG)",
-                subtitle = "Atur mode koneksi ke modul relay 8 channel dan aktifkan otomasi saklar"
+                subtitle = "Atur mode koneksi ke modul relay ($maxPins channel) dan aktifkan otomasi saklar"
             ) {
                 HybridToggleRow(
-                    label = "Aktifkan Otomasi Saklar Relay 8 Channel",
+                    label = "Aktifkan Otomasi Saklar Relay ($maxPins Pin)",
                     checked = sw.enabled,
                     onCheckedChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(enabled = v)) } }
                 )
@@ -1929,24 +1959,33 @@ fun SwitchHardwareSettingsTab(
                         isPrimary = true,
                         onClick = actions.onRequestUsbPermission
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        HybridTextInput(
-                            label = "Port USB Serial",
-                            value = sw.usbPort,
-                            placeholder = "/dev/ttyUSB0",
-                            onValueChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(usbPort = v)) } },
-                            modifier = Modifier.weight(1f)
-                        )
-                        HybridNumberStepper(
-                            label = "Baud Rate",
-                            value = sw.baudRate,
-                            min = 9600,
-                            max = 115200,
-                            unit = "bps",
-                            onValueChange = { b -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(baudRate = b)) } },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
+                    HybridTextInput(
+                        label = "Device USB Serial (Opsional, kosongkan / biarkan default untuk deteksi otomatis)",
+                        value = sw.usbPort,
+                        placeholder = "/dev/ttyUSB0",
+                        onValueChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(usbPort = v)) } }
+                    )
+                    Text(
+                        text = "Baud Rate Serial USB (bps)",
+                        color = palette.textSecondary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    HybridSegmentedRow(
+                        options = listOf(
+                            "9600" to "9600",
+                            "19200" to "19200",
+                            "38400" to "38400",
+                            "57600" to "57600",
+                            "115200" to "115200"
+                        ),
+                        selectedId = sw.baudRate.toString(),
+                        onSelect = { bStr ->
+                            bStr.toIntOrNull()?.let { b ->
+                                actions.onUpdateSettings { it.copy(switchSettings = sw.copy(baudRate = b)) }
+                            }
+                        }
+                    )
                 }
             }
         } else {

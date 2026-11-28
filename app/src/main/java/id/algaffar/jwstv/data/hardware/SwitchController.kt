@@ -48,6 +48,19 @@ class SwitchController(
     private var lastObservedAppState: AppState? = null
     private var stateEnteredAtEpochSec: Long = 0L
 
+    private val usbLock = Any()
+    @Volatile
+    private var openSerialPort: UsbSerialPort? = null
+    @Volatile
+    private var openDeviceName: String? = null
+    @Volatile
+    private var openBaudRate: Int = -1
+
+    @Volatile
+    private var lastDispatchFailureAtMs: Long = 0L
+    @Volatile
+    private var lastAutoPermissionRequestAtMs: Long = 0L
+
     /**
      * Pure calculation of desired pin states (`pin -> Boolean`) for a given timestamp,
      * prayer schedule, and current [AppState].
@@ -61,12 +74,13 @@ class SwitchController(
     ): Map<Int, Boolean> {
         if (!switchSettings.enabled) return emptyMap()
 
+        val maxPins = switchSettings.maxRelayPins()
         val result = linkedMapOf<Int, Boolean>()
         val nowEpochSec = now.toEpochSecond()
         val zoneId: ZoneId = now.zone
 
         for (channel in switchSettings.switches) {
-            if (!channel.enabled || channel.pin !in 1..8) continue
+            if (!channel.enabled || channel.pin !in 1..maxPins) continue
 
             when (channel.triggerMode.lowercase()) {
                 "prayer" -> {
@@ -181,6 +195,8 @@ class SwitchController(
 
     /**
      * Evaluates and dispatches hardware commands only for pins whose desired state changed.
+     * State is committed to [activePinStates] only when hardware dispatch succeeds; on failure,
+     * a 5-second backoff is applied before retrying automatically on the 1Hz ticker.
      */
     suspend fun evaluateAndDispatch(
         now: ZonedDateTime,
@@ -203,34 +219,52 @@ class SwitchController(
             schedule = schedule
         )
 
+        val nowMs = System.currentTimeMillis()
+        if (lastDispatchFailureAtMs > 0L && (nowMs - lastDispatchFailureAtMs) < DISPATCH_RETRY_BACKOFF_MS) {
+            return
+        }
+
         for ((pin, shouldBeOn) in desired) {
             val previous = activePinStates[pin]
             if (previous != shouldBeOn) {
-                activePinStates[pin] = shouldBeOn
-                _pinStateFlow.value = activePinStates.toMap()
-                sendHardwareCommand(
+                val res = sendHardwareCommand(
                     pin = pin,
                     turnOn = shouldBeOn,
                     settings = switchSettings
                 )
+                if (res.isSuccess) {
+                    activePinStates[pin] = shouldBeOn
+                    _pinStateFlow.value = activePinStates.toMap()
+                    lastDispatchFailureAtMs = 0L
+                } else {
+                    lastDispatchFailureAtMs = System.currentTimeMillis()
+                    val errMsg = res.exceptionOrNull()?.message ?: "Gagal mengirim perintah relay"
+                    id.algaffar.jwstv.data.logging.AppLogger.warn("RELAY", "Pin $pin -> ${if (shouldBeOn) "ON" else "OFF"} gagal: $errMsg")
+                    break
+                }
             }
         }
     }
 
     /**
-     * Manually toggles a specific relay pin (1..8) and dispatches the command to WiFi or USB hardware.
+     * Manually toggles a specific relay pin (1..maxRelayPins) and dispatches the command to WiFi or USB hardware.
      */
     suspend fun setManualPinState(
         pin: Int,
         turnOn: Boolean,
         settings: SwitchSettings
     ): Result<Unit> {
-        if (pin !in 1..8) {
-            return Result.failure(IllegalArgumentException("Invalid relay pin $pin (must be 1..8)"))
+        val maxPins = settings.maxRelayPins()
+        if (pin !in 1..maxPins) {
+            return Result.failure(IllegalArgumentException("Pin relay $pin tidak aktif untuk profil ${settings.boardProfile} (maks $maxPins pin)"))
         }
-        activePinStates[pin] = turnOn
-        _pinStateFlow.value = activePinStates.toMap()
-        return sendHardwareCommand(pin = pin, turnOn = turnOn, settings = settings)
+        val res = sendHardwareCommand(pin = pin, turnOn = turnOn, settings = settings)
+        if (res.isSuccess) {
+            activePinStates[pin] = turnOn
+            _pinStateFlow.value = activePinStates.toMap()
+            lastDispatchFailureAtMs = 0L
+        }
+        return res
     }
 
     suspend fun sendHardwareCommand(
@@ -238,12 +272,13 @@ class SwitchController(
         turnOn: Boolean,
         settings: SwitchSettings
     ): Result<Unit> = withContext(ioDispatcher) {
-        if (pin !in 1..8) {
-            return@withContext Result.failure(IllegalArgumentException("Pin must be 1..8, got $pin"))
+        val maxPins = settings.maxRelayPins()
+        if (pin !in 1..maxPins) {
+            return@withContext Result.failure(IllegalArgumentException("Pin harus 1..$maxPins, diterima $pin"))
         }
 
         when (settings.connectionType.lowercase()) {
-            "usb", "serial" -> sendUsbSerialRelayCommand(pin, turnOn, settings.baudRate)
+            "usb", "serial" -> sendUsbSerialRelayCommand(pin, turnOn, settings.baudRate, settings.usbPort)
             else -> sendWifiRelayCommand(settings.wifiIp, pin, turnOn)
         }
     }
@@ -269,11 +304,22 @@ class SwitchController(
         }
     }
 
+    private fun selectUsbDriver(
+        drivers: List<com.hoho.android.usbserial.driver.UsbSerialDriver>,
+        preferredPort: String
+    ): com.hoho.android.usbserial.driver.UsbSerialDriver {
+        val trimmed = preferredPort.trim()
+        if (trimmed.isNotEmpty() && !trimmed.equals("/dev/ttyUSB0", ignoreCase = true)) {
+            drivers.firstOrNull { it.device.deviceName.equals(trimmed, ignoreCase = true) }?.let { return it }
+        }
+        return drivers.first()
+    }
+
     /**
      * Checks if a supported USB Serial Relay adapter (CH340/CP210x/FTDI/PL2303) is attached
      * and requests Android USB Host permission if not yet granted.
      */
-    fun requestUsbRelayPermission(): Result<String> = runCatching {
+    fun requestUsbRelayPermission(preferredPort: String = ""): Result<String> = runCatching {
         val appContext = context ?: throw IllegalStateException("Android Context tidak tersedia")
         val usbManager = appContext.getSystemService(Context.USB_SERVICE) as? UsbManager
             ?: throw IllegalStateException("UsbManager tidak tersedia pada perangkat ini")
@@ -283,9 +329,10 @@ class SwitchController(
             throw IllegalStateException("Tidak ada modul USB Serial (CH340/CP210x/FTDI/PL2303) yang terdeteksi di port USB OTG")
         }
 
-        val device = drivers.first().device
+        val device = selectUsbDriver(drivers, preferredPort).device
         val deviceLabel = "${device.productName ?: "USB Serial"} (${device.deviceName})"
         if (usbManager.hasPermission(device)) {
+            lastDispatchFailureAtMs = 0L
             return@runCatching "Izin USB OTG sudah aktif untuk $deviceLabel"
         }
 
@@ -300,10 +347,43 @@ class SwitchController(
         "Permintaan izin USB OTG dikirim untuk $deviceLabel. Tekan OK pada dialog izin di layar TV."
     }
 
+    /**
+     * Called by BroadcastReceiver when the user responds to the Android USB permission dialog.
+     */
+    fun onUsbPermissionResult(granted: Boolean, deviceName: String? = null) {
+        if (granted) {
+            lastDispatchFailureAtMs = 0L
+            lastAutoPermissionRequestAtMs = 0L
+            id.algaffar.jwstv.data.logging.AppLogger.info(
+                "USB",
+                "Izin USB OTG disetujui${if (!deviceName.isNullOrBlank()) " untuk $deviceName" else ""}"
+            )
+        } else {
+            closeUsbSerial()
+            id.algaffar.jwstv.data.logging.AppLogger.warn(
+                "USB",
+                "Izin USB OTG ditolak oleh pengguna${if (!deviceName.isNullOrBlank()) " ($deviceName)" else ""}"
+            )
+        }
+    }
+
+    /**
+     * Closes the persistent USB Serial port if currently open.
+     */
+    fun closeUsbSerial() {
+        synchronized(usbLock) {
+            runCatching { openSerialPort?.close() }
+            openSerialPort = null
+            openDeviceName = null
+            openBaudRate = -1
+        }
+    }
+
     private fun sendUsbSerialRelayCommand(
         pin: Int,
         turnOn: Boolean,
-        baudRate: Int
+        baudRate: Int,
+        preferredPort: String = ""
     ): Result<Unit> = runCatching {
         val appContext = context ?: throw IllegalStateException("Android Context required for USB OTG Serial")
         val usbManager = appContext.getSystemService(Context.USB_SERVICE) as? UsbManager
@@ -311,41 +391,85 @@ class SwitchController(
 
         val availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
         if (availableDrivers.isEmpty()) {
+            closeUsbSerial()
             throw IllegalStateException("Tidak ada modul USB Serial (CH340/CP210x/FTDI) yang terdeteksi")
         }
 
-        val driver = availableDrivers.first()
+        val driver = selectUsbDriver(availableDrivers, preferredPort)
         if (!usbManager.hasPermission(driver.device)) {
-            requestUsbRelayPermission()
+            closeUsbSerial()
+            val nowMs = System.currentTimeMillis()
+            if (nowMs - lastAutoPermissionRequestAtMs >= AUTO_PERMISSION_COOLDOWN_MS) {
+                lastAutoPermissionRequestAtMs = nowMs
+                requestUsbRelayPermission(preferredPort)
+            }
             throw SecurityException(
-                "Izin USB OTG diminta untuk ${driver.device.productName ?: driver.device.deviceName}. " +
+                "Izin USB OTG belum diberikan untuk ${driver.device.productName ?: driver.device.deviceName}. " +
                     "Setujui dialog izin di layar TV lalu coba lagi."
             )
         }
 
-        val connection = usbManager.openDevice(driver.device)
-            ?: throw SecurityException("Izin akses USB OTG belum diberikan untuk perangkat ${driver.device.deviceName}")
+        val targetBaud = baudRate.coerceIn(1200, 115200)
+        val deviceName = driver.device.deviceName
+        val payload = formatSerialRelayPayload(pin, turnOn).toByteArray(Charsets.US_ASCII)
 
-        val port = driver.ports.firstOrNull()
-            ?: throw IllegalStateException("Port serial tidak ditemukan pada perangkat USB")
+        synchronized(usbLock) {
+            var port = openSerialPort
+            val needsReopen = port == null ||
+                !port.isOpen ||
+                openDeviceName != deviceName ||
+                openBaudRate != targetBaud
 
-        port.open(connection)
-        try {
-            port.setParameters(
-                baudRate.coerceIn(1200, 115200),
-                8,
-                UsbSerialPort.STOPBITS_1,
-                UsbSerialPort.PARITY_NONE
-            )
-            val payload = formatSerialRelayPayload(pin, turnOn).toByteArray(Charsets.US_ASCII)
-            port.write(payload, 500)
-        } finally {
-            runCatching { port.close() }
+            if (needsReopen) {
+                runCatching { port?.close() }
+                openSerialPort = null
+                openDeviceName = null
+                openBaudRate = -1
+
+                val connection = usbManager.openDevice(driver.device)
+                    ?: throw SecurityException("Gagal membuka koneksi USB OTG untuk $deviceName")
+                val newPort = driver.ports.firstOrNull()
+                    ?: throw IllegalStateException("Port serial tidak ditemukan pada perangkat USB")
+
+                newPort.open(connection)
+                try {
+                    newPort.setParameters(
+                        targetBaud,
+                        8,
+                        UsbSerialPort.STOPBITS_1,
+                        UsbSerialPort.PARITY_NONE
+                    )
+                    // Prevent DTR/RTS auto-reset pulse on Arduino/ESP boards when possible
+                    runCatching { newPort.dtr = false }
+                    runCatching { newPort.rts = false }
+                } catch (t: Throwable) {
+                    runCatching { newPort.close() }
+                    throw t
+                }
+
+                openSerialPort = newPort
+                openDeviceName = deviceName
+                openBaudRate = targetBaud
+                port = newPort
+            }
+
+            try {
+                port!!.write(payload, 500)
+            } catch (t: Throwable) {
+                // Reset cached port on I/O failure so the next call reconnects cleanly
+                runCatching { openSerialPort?.close() }
+                openSerialPort = null
+                openDeviceName = null
+                openBaudRate = -1
+                throw t
+            }
         }
     }
 
     companion object {
         const val ACTION_USB_PERMISSION = "id.algaffar.jwstv.USB_RELAY_PERMISSION"
+        private const val DISPATCH_RETRY_BACKOFF_MS = 5_000L
+        private const val AUTO_PERMISSION_COOLDOWN_MS = 30_000L
         fun buildWifiRelayUrl(ip: String, pin: Int, turnOn: Boolean): String {
             val stateSegment = if (turnOn) "on" else "off"
             return "http://${ip.trim()}/relay/$pin/$stateSegment"

@@ -855,6 +855,7 @@ class KtorRemoteServer(
                 put("wifiIp", settings.switchSettings.wifiIp)
                 put("usbPort", settings.switchSettings.usbPort)
                 put("baudRate", settings.switchSettings.baudRate)
+                put("boardProfile", settings.switchSettings.boardProfile)
                 putJsonArray("channels") {
                     settings.switchSettings.switches.forEach { ch ->
                         addJsonObject {
