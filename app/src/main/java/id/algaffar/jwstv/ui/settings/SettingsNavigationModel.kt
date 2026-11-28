@@ -179,7 +179,7 @@ object SettingsNavigationModel {
                 SettingsSubTabSpec(
                     id = "switches",
                     label = "Hardware Saklar",
-                    subtitle = "Otomasi 8 channel saklar relay WiFi HTTP & USB Serial OTG",
+                    subtitle = "Otomasi saklar relay WiFi HTTP, USB HID Plug & Play (2-Ch) & USB Serial OTG",
                     icon = Icons.Default.PowerSettingsNew
                 )
             )

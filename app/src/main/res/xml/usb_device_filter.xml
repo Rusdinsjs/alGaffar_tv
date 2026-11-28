@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- DCTTECH / V-USB Programmable USB HID Relay (1/2/4/8 Channel USB-Relay-2) -->
+    <usb-device vendor-id="5824" product-id="1503" />
+    <!-- WCH CH9326 / CH552 USB HID Relay -->
+    <usb-device vendor-id="6790" product-id="57382" />
+    <usb-device vendor-id="6790" product-id="21815" />
+    <!-- QinHeng / LCUS USB HID Relay -->
+    <usb-device vendor-id="20785" product-id="8207" />
     <!-- WCH CH340 / CH341 USB-to-Serial (Most common 8-ch USB Relay & Arduino Nano) -->
     <usb-device vendor-id="6790" product-id="29987" />
     <usb-device vendor-id="6790" product-id="21795" />

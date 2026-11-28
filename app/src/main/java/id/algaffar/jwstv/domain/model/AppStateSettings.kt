@@ -918,16 +918,26 @@ data class SwitchChannelConfig(
 data class SwitchSettings(
     val enabled: Boolean = false,
     val connectionType: String = "wifi", // "wifi" | "usb"
-    val wifiIp: String = "192.168.1.50",
+    val wifiIp: String = "192.168.1.250",
+    val wifiMode: String = "online", // "online" (WiFi Masjid + Live Aktif) | "offline_ap" (Hotspot AP 192.168.4.1)
+    val targetWifiSsid: String = "",
+    val targetWifiPassword: String = "",
+    val staticIpLastOctet: Int = 250,
     val usbPort: String = "/dev/ttyUSB0",
     val baudRate: Int = 9600,
-    val boardProfile: String = "esp32_8", // "esp32_8" | "wemos_4" | "wemos_2"
+    val boardProfile: String = "esp32_8", // "esp32_8" | "wemos_4" | "wemos_2" | "usb_relay_2"
     val switches: List<SwitchChannelConfig> = defaultSwitchChannels()
 ) {
     fun maxRelayPins(): Int = when (boardProfile.lowercase()) {
-        "wemos_2" -> 2
+        "usb_relay_1" -> 1
+        "wemos_2", "usb_relay_2" -> 2
         "wemos_4" -> 4
         else -> 8
+    }
+
+    fun isPlugAndPlayUsbRelay(): Boolean = when (boardProfile.lowercase()) {
+        "usb_relay_1", "usb_relay_2" -> true
+        else -> false
     }
 
     companion object {

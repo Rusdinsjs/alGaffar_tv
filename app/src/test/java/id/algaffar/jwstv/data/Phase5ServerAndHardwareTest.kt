@@ -257,6 +257,39 @@ class Phase5ServerAndHardwareTest {
         )
         assertEquals((1..2).toSet(), wemos2.keys)
 
+        val usbRelay2Settings = SwitchSettings(enabled = true, boardProfile = "usb_relay_2", switches = channels)
+        assertTrue(usbRelay2Settings.isPlugAndPlayUsbRelay())
+        val usbRelay2 = controller.computeDesiredPinStates(
+            now = baseTime,
+            currentState = AppState.TARTIL,
+            stateElapsedSeconds = 5,
+            switchSettings = usbRelay2Settings,
+            schedule = schedule
+        )
+        assertEquals((1..2).toSet(), usbRelay2.keys)
+
+        // Verify 2-Channel USB HID Programmable Relay (USB-Relay-2 DCTTECH) & LCUS binary payload formatting
+        val hidCh1On = SwitchController.formatUsbHidRelayPayload(1, true)
+        assertEquals(8, hidCh1On.size)
+        assertEquals(0xFF.toByte(), hidCh1On[0])
+        assertEquals(0x01.toByte(), hidCh1On[1])
+        assertEquals(0x00.toByte(), hidCh1On[2])
+
+        val hidCh2Off = SwitchController.formatUsbHidRelayPayload(2, false)
+        assertEquals(8, hidCh2Off.size)
+        assertEquals(0xFD.toByte(), hidCh2Off[0])
+        assertEquals(0x02.toByte(), hidCh2Off[1])
+
+        val lcusCh1On = SwitchController.formatLcusRelayPayload(1, true)
+        assertTrue(lcusCh1On.contentEquals(byteArrayOf(0xA0.toByte(), 0x01, 0x01, 0xA2.toByte())))
+        val lcusCh2Off = SwitchController.formatLcusRelayPayload(2, false)
+        assertTrue(lcusCh2Off.contentEquals(byteArrayOf(0xA0.toByte(), 0x02, 0x00, 0xA2.toByte())))
+
+        assertTrue(SwitchController.isKnownUsbHidRelayVidPid(0x16C0, 0x05DF))
+        assertTrue(SwitchController.isKnownUsbHidRelayVidPid(0x1A86, 0xE026))
+        assertTrue(SwitchController.isKnownUsbHidRelayVidPid(0x5131, 0x2007))
+        assertFalse(SwitchController.isKnownUsbHidRelayVidPid(0x046D, 0xC52B))
+
         // Manual toggle on pin 5 must be rejected when boardProfile is wemos_4
         val rejected = controller.setManualPinState(
             pin = 5,
@@ -273,5 +306,26 @@ class Phase5ServerAndHardwareTest {
             schedule = schedule
         )
         assertTrue(controller.pinStateFlow.value.isEmpty())
+
+        // Verify Dynamic WiFi Provisioning URL & Serial payload formatting (Online vs Offline AP)
+        val onlineUrl = SwitchController.buildWifiProvisionUrl(
+            ip = "192.168.4.1",
+            onlineMode = true,
+            ssid = "WiFi Masjid Al-Gaffar",
+            password = "rahasia123",
+            staticOctet = 250
+        )
+        assertEquals(
+            "http://192.168.4.1/api/wifi-config?json=1&mode=online&ssid=WiFi+Masjid+Al-Gaffar&pass=rahasia123&octet=250",
+            onlineUrl
+        )
+        assertEquals(
+            "WIFI:ONLINE:WiFi Masjid Al-Gaffar:rahasia123:250\n",
+            SwitchController.formatSerialWifiProvisionPayload(true, "WiFi Masjid Al-Gaffar", "rahasia123", 250)
+        )
+        assertEquals(
+            "WIFI:OFFLINE\n",
+            SwitchController.formatSerialWifiProvisionPayload(false, "", "", 250)
+        )
     }
 }

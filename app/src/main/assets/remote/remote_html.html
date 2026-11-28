@@ -1913,12 +1913,21 @@
 
             <div id="sub-acara-saklar" class="sub-panel">
             <div class="card">
-                <span class="card-title">Hardware Saklar Otomatis (Relay WiFi &amp; USB)</span>
+                <span class="card-title">Hardware Saklar Otomatis (Relay WiFi, USB HID &amp; Serial)</span>
                 <div class="grid-2" style="margin-bottom:10px;">
                     <button id="switchMasterBtn" class="toggle-btn" onclick="toggleSwitchMaster()">⚡ Saklar Otomatis</button>
+                    <select id="switchBoardProfile" onchange="if(this.value==='usb_relay_2'){document.getElementById('switchConnType').value='usb';} renderSwitchChannels(cachedSwitchChannels);">
+                        <option value="usb_relay_2">USB Relay 2-Ch (HID Plug &amp; Play)</option>
+                        <option value="esp32_8">ESP32 (8 Pin)</option>
+                        <option value="wemos_4">Wemos D1 Mini (4 Pin)</option>
+                        <option value="wemos_2">Wemos D1 Mini (2 Pin)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Mode Koneksi</label>
                     <select id="switchConnType">
                         <option value="wifi">WiFi HTTP Relay</option>
-                        <option value="usb">USB Serial OTG</option>
+                        <option value="usb">USB OTG (HID / Serial)</option>
                     </select>
                 </div>
                 <div class="grid-3">
@@ -1927,7 +1936,7 @@
                         <input type="text" id="switchWifiIp" placeholder="192.168.1.50">
                     </div>
                     <div class="form-group">
-                        <label>Port USB Serial</label>
+                        <label>Port USB</label>
                         <input type="text" id="switchUsbPort" placeholder="/dev/ttyUSB0">
                     </div>
                     <div class="form-group">
@@ -1939,7 +1948,7 @@
 
                 <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">
                 <div class="form-group">
-                    <label>Pilih Channel Saklar (PIN 1–8)</label>
+                    <label>Pilih Channel Saklar</label>
                     <select id="switchChannelSelect" onchange="renderSelectedSwitchEditor()"></select>
                 </div>
                 <div id="switchChannelEditor"></div>
@@ -3308,6 +3317,7 @@
 
                 if (status.switchConfig) {
                     syncToggleFlag('switchMasterBtn', !!status.switchConfig.enabled);
+                    setInputSafely('switchBoardProfile', status.switchConfig.boardProfile || 'esp32_8');
                     setInputSafely('switchConnType', status.switchConfig.connectionType || 'wifi');
                     setInputSafely('switchWifiIp', status.switchConfig.wifiIp || '192.168.1.50');
                     setInputSafely('switchUsbPort', status.switchConfig.usbPort || '/dev/ttyUSB0');
@@ -4033,8 +4043,13 @@
         }
 
         function saveSwitchConfig() {
+            const boardProfile = document.getElementById('switchBoardProfile')?.value || 'esp32_8';
+            const connectionType = (boardProfile === 'usb_relay_2' || boardProfile === 'usb_relay_1')
+                ? 'usb'
+                : (document.getElementById('switchConnType')?.value || 'wifi');
             sendCommand('toggle_switch_master', {
-                connectionType: document.getElementById('switchConnType')?.value || 'wifi',
+                boardProfile,
+                connectionType,
                 wifiIp: (document.getElementById('switchWifiIp')?.value || '').trim(),
                 usbPort: (document.getElementById('switchUsbPort')?.value || '/dev/ttyUSB0').trim(),
                 baudRate: parseInt(document.getElementById('switchBaudRate')?.value, 10) || 9600
@@ -4047,15 +4062,25 @@
 
         let cachedSwitchChannels = [];
 
+        function getMaxPinsForProfile(profile) {
+            const p = String(profile || 'esp32_8').toLowerCase();
+            if (p === 'usb_relay_1') return 1;
+            if (p === 'wemos_2' || p === 'usb_relay_2') return 2;
+            if (p === 'wemos_4') return 4;
+            return 8;
+        }
+
         function renderSwitchChannels(channels) {
             cachedSwitchChannels = channels || [];
             const sel = document.getElementById('switchChannelSelect');
             if (!sel) return;
+            const maxPins = getMaxPinsForProfile(document.getElementById('switchBoardProfile')?.value);
+            const visible = cachedSwitchChannels.filter(ch => ch.pin >= 1 && ch.pin <= maxPins);
             const prevVal = sel.value;
-            sel.innerHTML = cachedSwitchChannels.map(ch =>
+            sel.innerHTML = visible.map(ch =>
                 `<option value="${escapeHtml(ch.id)}">PIN ${ch.pin} — ${escapeHtml(ch.name)} ${ch.enabled ? '(AKTIF)' : '(OFF)'}</option>`
             ).join('');
-            if (prevVal && cachedSwitchChannels.some(c => c.id === prevVal)) {
+            if (prevVal && visible.some(c => c.id === prevVal)) {
                 sel.value = prevVal;
             }
             const editor = document.getElementById('switchChannelEditor');

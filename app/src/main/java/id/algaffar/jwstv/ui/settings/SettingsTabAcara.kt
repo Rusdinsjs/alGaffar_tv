@@ -1887,18 +1887,20 @@ fun SwitchHardwareSettingsTab(
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         HybridSectionCard(
             title = "Profil Board & Jumlah Pin Relay ($maxPins Pin Aktif)",
-            subtitle = "Pilih tipe mikrokontroler untuk menyesuaikan jumlah pin relay yang aktif (ESP32: 8 Pin, Wemos D1 Mini: 4 atau 2 Pin)"
+            subtitle = "Pilih tipe modul relay (USB Relay 2-Channel HID Plug & Play tanpa mikrokontroler, ESP32 8-Pin, atau Wemos D1 Mini 4/2-Pin)"
         ) {
             HybridSegmentedRow(
                 options = listOf(
+                    "usb_relay_2" to "USB Relay 2-Ch (HID Plug & Play)",
                     "esp32_8" to "ESP32 (8 Pin)",
-                    "wemos_4" to "Wemos D1 Mini (4 Pin)",
-                    "wemos_2" to "Wemos D1 Mini (2 Pin)"
+                    "wemos_4" to "Wemos D1 (4 Pin)",
+                    "wemos_2" to "Wemos D1 (2 Pin)"
                 ),
                 selectedId = sw.boardProfile,
                 onSelect = { profile ->
                     val newMax = when (profile) {
-                        "wemos_2" -> 2
+                        "usb_relay_1" -> 1
+                        "wemos_2", "usb_relay_2" -> 2
                         "wemos_4" -> 4
                         else -> 8
                     }
@@ -1906,7 +1908,17 @@ fun SwitchHardwareSettingsTab(
                         selectedId = "hardware"
                     }
                     actions.onUpdateSettings { prev ->
-                        prev.copy(switchSettings = prev.switchSettings.copy(boardProfile = profile))
+                        val nextConn = if (profile == "usb_relay_2" || profile == "usb_relay_1") {
+                            "usb"
+                        } else {
+                            prev.switchSettings.connectionType
+                        }
+                        prev.copy(
+                            switchSettings = prev.switchSettings.copy(
+                                boardProfile = profile,
+                                connectionType = nextConn
+                            )
+                        )
                     }
                 }
             )
@@ -1939,7 +1951,7 @@ fun SwitchHardwareSettingsTab(
 
         if (selectedId == "hardware" || selectedChannel == null || selectedChannel.pin > maxPins) {
             HybridSectionCard(
-                title = "Konfigurasi Hardware Relay (WiFi HTTP & USB Serial OTG)",
+                title = "Konfigurasi Hardware Relay (WiFi HTTP, USB HID & USB Serial OTG)",
                 subtitle = "Atur mode koneksi ke modul relay ($maxPins channel) dan aktifkan otomasi saklar"
             ) {
                 HybridToggleRow(
@@ -1948,31 +1960,117 @@ fun SwitchHardwareSettingsTab(
                     onCheckedChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(enabled = v)) } }
                 )
                 HybridSegmentedRow(
-                    options = listOf("wifi" to "Mode Koneksi: WiFi HTTP Relay", "usb" to "Mode Koneksi: USB OTG Serial"),
+                    options = listOf(
+                        "wifi" to "Mode Koneksi: WiFi HTTP Relay",
+                        "usb" to "Mode Koneksi: USB OTG (HID / Serial)"
+                    ),
                     selectedId = sw.connectionType,
                     onSelect = { ct -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(connectionType = ct)) } }
                 )
                 if (sw.connectionType == "wifi") {
+                    Text(
+                        text = "MODE JARINGAN WIFI RELAY (ONLINE VS OFFLINE)",
+                        color = palette.textSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    HybridSegmentedRow(
+                        options = listOf(
+                            "online" to "ONLINE (Gabung WiFi Masjid • Fitur Live Aktif)",
+                            "offline_ap" to "OFFLINE (Hotspot AP Mandiri 192.168.4.1)"
+                        ),
+                        selectedId = sw.wifiMode.ifBlank { "online" },
+                        onSelect = { mode ->
+                            actions.onUpdateSettings { prev ->
+                                val nextIp = if (mode == "offline_ap") "192.168.4.1" else prev.switchSettings.wifiIp
+                                prev.copy(
+                                    switchSettings = prev.switchSettings.copy(
+                                        wifiMode = mode,
+                                        wifiIp = nextIp
+                                    )
+                                )
+                            }
+                        }
+                    )
+
                     HybridTextInput(
-                        label = "IP Address Modul WiFi Relay (LAN Privat)",
+                        label = "IP Address Modul WiFi Relay (LAN Privat / 192.168.4.1 untuk Mode Offline AP)",
                         value = sw.wifiIp,
-                        placeholder = "192.168.1.50",
+                        placeholder = if (sw.wifiMode == "offline_ap") "192.168.4.1" else "192.168.1.250",
                         onValueChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(wifiIp = v)) } }
+                    )
+
+                    if (sw.wifiMode != "offline_ap") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            HybridTextInput(
+                                label = "Nama WiFi Masjid / Hotspot TV Box (SSID)",
+                                value = sw.targetWifiSsid,
+                                placeholder = "Contoh: WiFi_Masjid_AlGaffar",
+                                onValueChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(targetWifiSsid = v)) } },
+                                modifier = Modifier.weight(1f)
+                            )
+                            HybridTextInput(
+                                label = "Password WiFi Masjid",
+                                value = sw.targetWifiPassword,
+                                placeholder = "Password WiFi Masjid",
+                                onValueChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(targetWifiPassword = v)) } },
+                                modifier = Modifier.weight(1f)
+                            )
+                            HybridTextInput(
+                                label = "Kunci Akhiran IP (.250)",
+                                value = sw.staticIpLastOctet.toString(),
+                                placeholder = "250",
+                                onValueChange = { raw ->
+                                    val digits = raw.filter { it.isDigit() }.toIntOrNull()?.coerceIn(0, 254) ?: 250
+                                    actions.onUpdateSettings { it.copy(switchSettings = sw.copy(staticIpLastOctet = digits)) }
+                                },
+                                modifier = Modifier.weight(0.6f)
+                            )
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        HybridButton(
+                            label = "Kirim Pengaturan WiFi ke ESP32/Wemos (via USB/WiFi)",
+                            isPrimary = true,
+                            onClick = actions.onProvisionRelayWifiConfig
+                        )
+                        if (sw.wifiMode == "offline_ap" && sw.wifiIp != "192.168.4.1") {
+                            HybridButton(
+                                label = "Set IP ke 192.168.4.1",
+                                onClick = {
+                                    actions.onUpdateSettings { it.copy(switchSettings = sw.copy(wifiIp = "192.168.4.1")) }
+                                }
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Tip: Anda juga bisa mengubah Nama WiFi & Password masjid kapan saja dari HP dengan menyambung ke Hotspot 'JWS_Relay_AP' (sandi: algaffar123) lalu buka http://192.168.4.1 di browser.",
+                        color = palette.textSecondary,
+                        fontSize = 12.sp
                     )
                 } else {
                     HybridButton(
-                        label = "Deteksi & Minta Izin Modul USB Serial OTG",
+                        label = "Deteksi & Minta Izin Modul USB Relay (USB HID / Serial OTG)",
                         isPrimary = true,
                         onClick = actions.onRequestUsbPermission
                     )
+                    if (sw.isPlugAndPlayUsbRelay()) {
+                        Text(
+                            text = "Mode Plug & Play Aktif (USB-Relay-2 HID / LCUS): Cukup colok kabel USB dari modul relay 2-channel ke port USB TV/STB lalu klik tombol 'Deteksi & Minta Izin' di atas. Tanpa perlu coding Arduino/ESP32.",
+                            color = Color(0xFF34D399),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                     HybridTextInput(
-                        label = "Device USB Serial (Opsional, kosongkan / biarkan default untuk deteksi otomatis)",
+                        label = "Device USB (Opsional, kosongkan / biarkan default untuk deteksi otomatis)",
                         value = sw.usbPort,
                         placeholder = "/dev/ttyUSB0",
                         onValueChange = { v -> actions.onUpdateSettings { it.copy(switchSettings = sw.copy(usbPort = v)) } }
                     )
                     Text(
-                        text = "Baud Rate Serial USB (bps)",
+                        text = "Baud Rate Serial USB (bps — khusus CH340/ESP32/Wemos, diabaikan untuk USB HID)",
                         color = palette.textSecondary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold

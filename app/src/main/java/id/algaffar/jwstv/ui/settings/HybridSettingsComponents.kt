@@ -258,6 +258,7 @@ data class SettingsActions(
     val onResetSuperadminPin: (newPin: String) -> Unit = {},
     val onUpgradeUserPinHash: (userId: String, rawPin: String) -> Unit = { _, _ -> },
     val onRequestUsbPermission: () -> Unit = {},
+    val onProvisionRelayWifiConfig: () -> Unit = {},
     val onReopenOnboarding: () -> Unit = {},
     val onCheckOtaUpdate: () -> Unit = {},
     val onInstallOtaApkFromUsb: () -> Unit = {},

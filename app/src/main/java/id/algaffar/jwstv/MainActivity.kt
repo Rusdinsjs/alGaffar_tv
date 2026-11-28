@@ -947,6 +947,7 @@ class MainActivity : ComponentActivity() {
                 onResetSuperadminPin = { viewModel.resetSuperadminPin(it) },
                 onUpgradeUserPinHash = { id, pin -> viewModel.upgradeUserPinHash(id, pin) },
                 onRequestUsbPermission = { viewModel.requestUsbRelayPermission() },
+                onProvisionRelayWifiConfig = { viewModel.provisionRelayWifiConfig() },
                 onReopenOnboarding = {
                     isSettingsModalOpen = false
                     viewModel.updateSettings { it.copy(onboardingCompleted = false) }

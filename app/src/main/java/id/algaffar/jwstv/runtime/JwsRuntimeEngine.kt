@@ -482,6 +482,22 @@ class JwsRuntimeEngine(
         }
     }
 
+    fun provisionRelayWifiConfig() {
+        engineScope.launch {
+            val sw = settingsRepository.currentSettings.switchSettings
+            _statusBannerMessage.value = "Mengirim konfigurasi WiFi ke modul Relay..."
+            val res = switchController.provisionRelayWifiConfig(sw)
+            res.onSuccess { msg ->
+                AppLogger.info("RELAY", msg)
+                _statusBannerMessage.value = msg
+            }.onFailure { err ->
+                val errMsg = err.message ?: "Gagal mengirim konfigurasi WiFi ke Relay"
+                AppLogger.warn("RELAY", errMsg)
+                _statusBannerMessage.value = errMsg
+            }
+        }
+    }
+
     fun handleUsbPermissionBroadcast(granted: Boolean, deviceName: String?) {
         switchController.onUsbPermissionResult(granted, deviceName)
         _statusBannerMessage.value = if (granted) {
@@ -2659,15 +2675,22 @@ class JwsRuntimeEngine(
                     val usbPort = payload.stringArg("usbPort")?.trim()
                     val baudRate = payload.intArg("baudRate")?.coerceIn(9600, 115200)
                     val boardProfile = payload.stringArg("boardProfile")?.lowercase()
+                        ?.takeIf { it in setOf("esp32_8", "wemos_4", "wemos_2", "usb_relay_2", "usb_relay_1") }
                     updateSettings { prev ->
+                        val nextProfile = boardProfile ?: prev.switchSettings.boardProfile
+                        val nextConn = when {
+                            boardProfile in setOf("usb_relay_2", "usb_relay_1") -> "usb"
+                            connectionType in setOf("wifi", "usb") -> connectionType!!
+                            else -> prev.switchSettings.connectionType
+                        }
                         prev.copy(
                             switchSettings = prev.switchSettings.copy(
                                 enabled = enabled ?: prev.switchSettings.enabled,
-                                connectionType = connectionType?.takeIf { it in setOf("wifi", "usb") } ?: prev.switchSettings.connectionType,
+                                connectionType = nextConn,
                                 wifiIp = wifiIp ?: prev.switchSettings.wifiIp,
                                 usbPort = usbPort ?: prev.switchSettings.usbPort,
                                 baudRate = baudRate ?: prev.switchSettings.baudRate,
-                                boardProfile = boardProfile?.takeIf { it in setOf("esp32_8", "wemos_4", "wemos_2") } ?: prev.switchSettings.boardProfile
+                                boardProfile = nextProfile
                             )
                         )
                     }

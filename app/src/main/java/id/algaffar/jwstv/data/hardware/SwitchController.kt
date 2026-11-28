@@ -3,6 +3,9 @@ package id.algaffar.jwstv.data.hardware
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.hardware.usb.UsbConstants
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import android.os.Build
 import com.hoho.android.usbserial.driver.UsbSerialPort
@@ -277,8 +280,16 @@ class SwitchController(
             return@withContext Result.failure(IllegalArgumentException("Pin harus 1..$maxPins, diterima $pin"))
         }
 
-        when (settings.connectionType.lowercase()) {
-            "usb", "serial" -> sendUsbSerialRelayCommand(pin, turnOn, settings.baudRate, settings.usbPort)
+        val isPlugAndPlayUsb = settings.isPlugAndPlayUsbRelay()
+        when {
+            isPlugAndPlayUsb || settings.connectionType.lowercase() in setOf("usb", "serial", "usb_hid") ->
+                sendUsbRelayCommand(
+                    pin = pin,
+                    turnOn = turnOn,
+                    baudRate = settings.baudRate,
+                    preferredPort = settings.usbPort,
+                    boardProfile = settings.boardProfile
+                )
             else -> sendWifiRelayCommand(settings.wifiIp, pin, turnOn)
         }
     }
@@ -316,21 +327,67 @@ class SwitchController(
     }
 
     /**
-     * Checks if a supported USB Serial Relay adapter (CH340/CP210x/FTDI/PL2303) is attached
-     * and requests Android USB Host permission if not yet granted.
+     * Locates an attached USB HID Programmable Relay module (such as the 2-Channel DCTTECH `USB-Relay-2`
+     * VID 0x16C0 / PID 0x05DF, WCH HID Relay 0x1A86:0xE026/0x5537, or QinHeng/LCUS HID Relay 0x5131:0x2007).
+     */
+    private fun findUsbHidRelayDevice(
+        usbManager: UsbManager,
+        preferredPort: String = ""
+    ): UsbDevice? {
+        val allDevices = usbManager.deviceList?.values ?: return null
+        val trimmed = preferredPort.trim()
+        val candidates = allDevices.filter { isUsbHidRelayDevice(it) }
+        if (candidates.isEmpty()) return null
+        if (trimmed.isNotEmpty() && !trimmed.equals("/dev/ttyUSB0", ignoreCase = true)) {
+            candidates.firstOrNull { it.deviceName.equals(trimmed, ignoreCase = true) }?.let { return it }
+        }
+        return candidates.first()
+    }
+
+    private fun isUsbHidRelayDevice(device: UsbDevice): Boolean {
+        if (isKnownUsbHidRelayVidPid(device.vendorId, device.productId)) {
+            return true
+        }
+        val prod = (device.productName ?: "").lowercase()
+        val mfg = (device.manufacturerName ?: "").lowercase()
+        if (prod.contains("usbrelay") || prod.contains("usb-relay") || prod.contains("usb relay") || mfg.contains("dcttech")) {
+            return true
+        }
+        // Check if any interface is a custom non-boot USB HID interface with "relay" in product name
+        for (i in 0 until device.interfaceCount) {
+            val intf = device.getInterface(i)
+            val isCustomHid = intf.interfaceClass == UsbConstants.USB_CLASS_HID &&
+                intf.interfaceSubclass == 0 &&
+                intf.interfaceProtocol == 0
+            if (isCustomHid && prod.contains("relay")) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * Checks if a supported USB Relay module — either USB HID (`USB-Relay-2` / DCTTECH / WCH / LCUS)
+     * or USB Serial (`CH340 / CP210x / FTDI / PL2303`) — is attached, and requests Android USB Host permission.
      */
     fun requestUsbRelayPermission(preferredPort: String = ""): Result<String> = runCatching {
         val appContext = context ?: throw IllegalStateException("Android Context tidak tersedia")
         val usbManager = appContext.getSystemService(Context.USB_SERVICE) as? UsbManager
             ?: throw IllegalStateException("UsbManager tidak tersedia pada perangkat ini")
 
+        val hidDevice = findUsbHidRelayDevice(usbManager, preferredPort)
         val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
-        if (drivers.isEmpty()) {
-            throw IllegalStateException("Tidak ada modul USB Serial (CH340/CP210x/FTDI/PL2303) yang terdeteksi di port USB OTG")
+
+        val device: UsbDevice = when {
+            hidDevice != null -> hidDevice
+            drivers.isNotEmpty() -> selectUsbDriver(drivers, preferredPort).device
+            else -> throw IllegalStateException(
+                "Tidak ada modul USB Relay (USB HID Relay 2-Channel / CH340 / CP210x / FTDI) yang terdeteksi di port USB TV/STB"
+            )
         }
 
-        val device = selectUsbDriver(drivers, preferredPort).device
-        val deviceLabel = "${device.productName ?: "USB Serial"} (${device.deviceName})"
+        val kindLabel = if (hidDevice != null) "USB HID Relay" else "USB Serial"
+        val deviceLabel = "${device.productName ?: kindLabel} (${device.deviceName})"
         if (usbManager.hasPermission(device)) {
             lastDispatchFailureAtMs = 0L
             return@runCatching "Izin USB OTG sudah aktif untuk $deviceLabel"
@@ -344,7 +401,7 @@ class SwitchController(
         val intent = Intent(ACTION_USB_PERMISSION).setPackage(appContext.packageName)
         val pendingIntent = PendingIntent.getBroadcast(appContext, 0, intent, flags)
         usbManager.requestPermission(device, pendingIntent)
-        "Permintaan izin USB OTG dikirim untuk $deviceLabel. Tekan OK pada dialog izin di layar TV."
+        "Permintaan izin USB dikirim untuk $deviceLabel. Tekan OK pada dialog izin di layar TV."
     }
 
     /**
@@ -379,20 +436,48 @@ class SwitchController(
         }
     }
 
-    private fun sendUsbSerialRelayCommand(
+    /**
+     * Dispatches a relay ON/OFF command over USB, automatically supporting:
+     * 1. Programmable USB HID Relay modules (`USB-Relay-2` DCTTECH VID 0x16C0 / PID 0x05DF, WCH/LCUS HID).
+     * 2. Plug-and-Play USB Serial CH340 Relay modules (LCUS 4-byte hex `A0 pin state checksum`).
+     * 3. ESP32 / Wemos / Arduino USB Serial modules (`{pin}:{1|0}\n`).
+     */
+    private fun sendUsbRelayCommand(
         pin: Int,
         turnOn: Boolean,
         baudRate: Int,
-        preferredPort: String = ""
+        preferredPort: String = "",
+        boardProfile: String = "esp32_8"
     ): Result<Unit> = runCatching {
-        val appContext = context ?: throw IllegalStateException("Android Context required for USB OTG Serial")
+        val appContext = context ?: throw IllegalStateException("Android Context required for USB OTG")
         val usbManager = appContext.getSystemService(Context.USB_SERVICE) as? UsbManager
             ?: throw IllegalStateException("UsbManager unavailable")
 
+        // 1. Prioritize USB HID Relay if attached (e.g. 2-Channel USB Programmable Relay `USB-Relay-2`)
+        val hidDevice = findUsbHidRelayDevice(usbManager, preferredPort)
+        if (hidDevice != null) {
+            if (!usbManager.hasPermission(hidDevice)) {
+                val nowMs = System.currentTimeMillis()
+                if (nowMs - lastAutoPermissionRequestAtMs >= AUTO_PERMISSION_COOLDOWN_MS) {
+                    lastAutoPermissionRequestAtMs = nowMs
+                    requestUsbRelayPermission(preferredPort)
+                }
+                throw SecurityException(
+                    "Izin USB belum diberikan untuk ${hidDevice.productName ?: hidDevice.deviceName}. " +
+                        "Setujui dialog izin di layar TV lalu coba lagi."
+                )
+            }
+            sendUsbHidRelayBytes(usbManager, hidDevice, pin, turnOn)
+            return@runCatching
+        }
+
+        // 2. Otherwise dispatch via USB Serial (CH340 / CP210x / FTDI)
         val availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
         if (availableDrivers.isEmpty()) {
             closeUsbSerial()
-            throw IllegalStateException("Tidak ada modul USB Serial (CH340/CP210x/FTDI) yang terdeteksi")
+            throw IllegalStateException(
+                "Tidak ada modul USB Relay (USB HID 2-Channel / CH340 / CP210x / FTDI) yang terdeteksi"
+            )
         }
 
         val driver = selectUsbDriver(availableDrivers, preferredPort)
@@ -410,9 +495,112 @@ class SwitchController(
         }
 
         val targetBaud = baudRate.coerceIn(1200, 115200)
-        val deviceName = driver.device.deviceName
-        val payload = formatSerialRelayPayload(pin, turnOn).toByteArray(Charsets.US_ASCII)
+        val isPlugAndPlayProfile = boardProfile.equals("usb_relay_2", ignoreCase = true) ||
+            boardProfile.equals("usb_relay_1", ignoreCase = true)
 
+        if (isPlugAndPlayProfile) {
+            // Send LCUS 4-byte binary hex frame first (for CH340 LCUS-1/LCUS-2 boards), followed by ASCII newline
+            val lcusBytes = formatLcusRelayPayload(pin, turnOn)
+            writeUsbSerialBytes(usbManager, driver, targetBaud, lcusBytes)
+        } else {
+            val payload = formatSerialRelayPayload(pin, turnOn).toByteArray(Charsets.US_ASCII)
+            writeUsbSerialBytes(usbManager, driver, targetBaud, payload)
+        }
+    }
+
+    /**
+     * Sends the USB HID command to a `USB-Relay-2` / DCTTECH / WCH / LCUS HID Relay board.
+     * - DCTTECH `USB-Relay-1/2/4/8` (`usb_relay_device.dll`): HID Class `SET_REPORT` (0x09),
+     *   Report Type = Feature (0x0300), 8-byte payload `[0xFF (ON) / 0xFD (OFF), pin, 0, 0, 0, 0, 0, 0]`.
+     * - WCH / QinHeng HID Relay fallback: Interrupt OUT / Output Report with LCUS 4-byte frame `[0xA0, pin, state, checksum]`.
+     */
+    private fun sendUsbHidRelayBytes(
+        usbManager: UsbManager,
+        device: UsbDevice,
+        pin: Int,
+        turnOn: Boolean
+    ) {
+        synchronized(usbLock) {
+            val connection = usbManager.openDevice(device)
+                ?: throw SecurityException("Gagal membuka koneksi USB HID untuk ${device.deviceName}")
+
+            var hidInterface: UsbInterface? = null
+            for (i in 0 until device.interfaceCount) {
+                val intf = device.getInterface(i)
+                if (intf.interfaceClass == UsbConstants.USB_CLASS_HID) {
+                    hidInterface = intf
+                    break
+                }
+            }
+            if (hidInterface == null && device.interfaceCount > 0) {
+                hidInterface = device.getInterface(0)
+            }
+
+            try {
+                if (hidInterface != null) {
+                    connection.claimInterface(hidInterface, true)
+                }
+                val intfId = hidInterface?.id ?: 0
+                val dctPayload = formatUsbHidRelayPayload(pin, turnOn)
+
+                // 1. Standard DCTTECH USB-Relay-2 Feature Report (SET_REPORT = 0x09, Feature = 0x0300)
+                val featureTransferred = connection.controlTransfer(
+                    USB_HID_REQ_TYPE_CLASS_INTERFACE_OUT,
+                    USB_HID_SET_REPORT,
+                    USB_HID_REPORT_TYPE_FEATURE_ID0,
+                    intfId,
+                    dctPayload,
+                    dctPayload.size,
+                    500
+                )
+
+                // 2. Fallback for WCH / QinHeng HID variants using Output Report or Interrupt OUT endpoint
+                if (featureTransferred < 0 || device.vendorId == VID_QINHENG_HID || device.vendorId == VID_WCH) {
+                    val lcusPayload = formatLcusRelayPayload(pin, turnOn)
+                    val outTransferred = connection.controlTransfer(
+                        USB_HID_REQ_TYPE_CLASS_INTERFACE_OUT,
+                        USB_HID_SET_REPORT,
+                        USB_HID_REPORT_TYPE_OUTPUT_ID0,
+                        intfId,
+                        dctPayload,
+                        dctPayload.size,
+                        500
+                    )
+                    var epTransferred = -1
+                    if (hidInterface != null) {
+                        for (e in 0 until hidInterface.endpointCount) {
+                            val ep = hidInterface.getEndpoint(e)
+                            if (ep.direction == UsbConstants.USB_DIR_OUT) {
+                                val buf = if (device.vendorId == VID_QINHENG_HID || device.vendorId == VID_WCH) {
+                                    lcusPayload
+                                } else {
+                                    dctPayload
+                                }
+                                epTransferred = connection.bulkTransfer(ep, buf, buf.size, 500)
+                                break
+                            }
+                        }
+                    }
+                    if (featureTransferred < 0 && outTransferred < 0 && epTransferred < 0) {
+                        throw IllegalStateException("Gagal mengirim paket USB HID Relay ke ${device.deviceName}")
+                    }
+                }
+            } finally {
+                if (hidInterface != null) {
+                    runCatching { connection.releaseInterface(hidInterface) }
+                }
+                runCatching { connection.close() }
+            }
+        }
+    }
+
+    private fun writeUsbSerialBytes(
+        usbManager: UsbManager,
+        driver: com.hoho.android.usbserial.driver.UsbSerialDriver,
+        targetBaud: Int,
+        payload: ByteArray
+    ) {
+        val deviceName = driver.device.deviceName
         synchronized(usbLock) {
             var port = openSerialPort
             val needsReopen = port == null ||
@@ -466,17 +654,185 @@ class SwitchController(
         }
     }
 
+    /**
+     * Dynamically provisions the ESP32 / Wemos D1 Mini WiFi mode & credentials without reflashing Arduino code.
+     * Automatically sends the configuration via USB OTG Serial if attached, or via HTTP `/api/wifi-config` to [settings.wifiIp].
+     */
+    suspend fun provisionRelayWifiConfig(
+        settings: SwitchSettings
+    ): Result<String> = withContext(ioDispatcher) {
+        runCatching {
+            val isOfflineAp = settings.wifiMode.equals("offline_ap", ignoreCase = true) ||
+                settings.wifiMode.equals("offline", ignoreCase = true)
+            val ssid = settings.targetWifiSsid.trim()
+            val pass = settings.targetWifiPassword
+            val octet = settings.staticIpLastOctet.coerceIn(0, 254)
+
+            if (!isOfflineAp && ssid.isEmpty()) {
+                throw IllegalArgumentException("Nama WiFi Masjid (SSID) wajib diisi untuk Mode Online.")
+            }
+
+            // 1. Try USB OTG Serial first if an adapter is plugged in and has permission
+            val appContext = context
+            val usbManager = appContext?.getSystemService(Context.USB_SERVICE) as? UsbManager
+            val availableDrivers = if (usbManager != null) {
+                UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
+            } else {
+                emptyList()
+            }
+
+            if (usbManager != null && availableDrivers.isNotEmpty()) {
+                val driver = selectUsbDriver(availableDrivers, settings.usbPort)
+                if (usbManager.hasPermission(driver.device)) {
+                    val serialCmd = formatSerialWifiProvisionPayload(
+                        onlineMode = !isOfflineAp,
+                        ssid = ssid,
+                        password = pass,
+                        staticOctet = octet
+                    )
+                    writeUsbSerialBytes(
+                        usbManager = usbManager,
+                        driver = driver,
+                        targetBaud = settings.baudRate.coerceIn(1200, 115200),
+                        payload = serialCmd.toByteArray(Charsets.UTF_8)
+                    )
+                    return@runCatching if (isOfflineAp) {
+                        "Konfigurasi Mode OFFLINE (Hotspot AP 192.168.4.1) berhasil dikirim via USB Serial!"
+                    } else {
+                        "Konfigurasi WiFi Online ('$ssid', akhiran IP .$octet) berhasil dikirim via USB Serial!"
+                    }
+                }
+            }
+
+            // 2. Otherwise send via HTTP GET/POST to the current Relay IP (or 192.168.4.1 fallback)
+            val targetIp = settings.wifiIp.trim().ifEmpty { "192.168.4.1" }
+            require(isPrivateOrLocalIp(targetIp)) {
+                "IP Relay harus merupakan IP lokal/privat (misal 192.168.4.1 atau 192.168.1.250). Diterima: $targetIp"
+            }
+
+            val url = buildWifiProvisionUrl(
+                ip = targetIp,
+                onlineMode = !isOfflineAp,
+                ssid = ssid,
+                password = pass,
+                staticOctet = octet
+            )
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("Relay HTTP ${response.code} saat menyimpan konfigurasi WiFi")
+                }
+            }
+
+            if (isOfflineAp) {
+                "Relay berhasil diubah ke Mode OFFLINE (Hotspot AP 192.168.4.1) via WiFi!"
+            } else {
+                "Konfigurasi WiFi Masjid ('$ssid', akhiran IP .$octet) berhasil disimpan ke Relay!"
+            }
+        }
+    }
+
     companion object {
         const val ACTION_USB_PERMISSION = "id.algaffar.jwstv.USB_RELAY_PERMISSION"
         private const val DISPATCH_RETRY_BACKOFF_MS = 5_000L
         private const val AUTO_PERMISSION_COOLDOWN_MS = 30_000L
+
+        // USB HID Control Transfer constants (DCTTECH USB-Relay-1/2/4/8 & WCH/QinHeng HID Relay)
+        private const val USB_HID_REQ_TYPE_CLASS_INTERFACE_OUT = 0x21
+        private const val USB_HID_SET_REPORT = 0x09
+        private const val USB_HID_REPORT_TYPE_FEATURE_ID0 = 0x0300
+        private const val USB_HID_REPORT_TYPE_OUTPUT_ID0 = 0x0200
+
+        const val VID_DCTTECH_VUSB = 0x16C0 // 5824
+        const val PID_DCTTECH_HID_RELAY = 0x05DF // 1503
+        const val VID_WCH = 0x1A86 // 6790
+        const val PID_WCH_HID_RELAY_1 = 0xE026 // 57382
+        const val PID_WCH_HID_RELAY_2 = 0x5537 // 21815
+        const val VID_QINHENG_HID = 0x5131 // 20785
+        const val PID_QINHENG_HID_RELAY = 0x2007 // 8207
+
+        fun isKnownUsbHidRelayVidPid(vendorId: Int, productId: Int): Boolean {
+            return (vendorId == VID_DCTTECH_VUSB && productId == PID_DCTTECH_HID_RELAY) ||
+                (vendorId == VID_WCH && (productId == PID_WCH_HID_RELAY_1 || productId == PID_WCH_HID_RELAY_2)) ||
+                (vendorId == VID_QINHENG_HID && productId == PID_QINHENG_HID_RELAY)
+        }
+
         fun buildWifiRelayUrl(ip: String, pin: Int, turnOn: Boolean): String {
             val stateSegment = if (turnOn) "on" else "off"
             return "http://${ip.trim()}/relay/$pin/$stateSegment"
         }
 
+        fun buildWifiProvisionUrl(
+            ip: String,
+            onlineMode: Boolean,
+            ssid: String,
+            password: String,
+            staticOctet: Int = 250
+        ): String {
+            val modeVal = if (onlineMode) "online" else "offline"
+            val encSsid = java.net.URLEncoder.encode(ssid.trim(), "UTF-8")
+            val encPass = java.net.URLEncoder.encode(password, "UTF-8")
+            val cleanOctet = staticOctet.coerceIn(0, 254)
+            return "http://${ip.trim()}/api/wifi-config?json=1&mode=$modeVal&ssid=$encSsid&pass=$encPass&octet=$cleanOctet"
+        }
+
         fun formatSerialRelayPayload(pin: Int, turnOn: Boolean): String {
             return "$pin:${if (turnOn) 1 else 0}\n"
+        }
+
+        /**
+         * Formats the 8-byte USB HID Feature Report for DCTTECH `USB-Relay-1/2/4/8` (`usb_relay_device.dll`):
+         * - Byte 0: `0xFF` (ON single relay) or `0xFD` (OFF single relay)
+         * - Byte 1: Relay channel index (`1..8`)
+         * - Bytes 2..7: `0x00`
+         */
+        fun formatUsbHidRelayPayload(pin: Int, turnOn: Boolean): ByteArray {
+            val cmdByte = if (turnOn) 0xFF.toByte() else 0xFD.toByte()
+            return byteArrayOf(
+                cmdByte,
+                pin.coerceIn(1, 8).toByte(),
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+                0x00
+            )
+        }
+
+        /**
+         * Formats the 4-byte binary hex frame for LCUS / WCH Plug-and-Play USB Relay modules:
+         * `[0xA0, pin, state (0x01=ON / 0x00=OFF), checksum ((0xA0 + pin + state) & 0xFF)]`.
+         */
+        fun formatLcusRelayPayload(pin: Int, turnOn: Boolean): ByteArray {
+            val cleanPin = pin.coerceIn(1, 8)
+            val stateByte = if (turnOn) 1 else 0
+            val checksum = (0xA0 + cleanPin + stateByte) and 0xFF
+            return byteArrayOf(
+                0xA0.toByte(),
+                cleanPin.toByte(),
+                stateByte.toByte(),
+                checksum.toByte()
+            )
+        }
+
+        fun formatSerialWifiProvisionPayload(
+            onlineMode: Boolean,
+            ssid: String,
+            password: String,
+            staticOctet: Int = 250
+        ): String {
+            return if (!onlineMode) {
+                "WIFI:OFFLINE\n"
+            } else {
+                val cleanSsid = ssid.trim().replace(":", "")
+                val cleanOctet = staticOctet.coerceIn(0, 254)
+                "WIFI:ONLINE:$cleanSsid:$password:$cleanOctet\n"
+            }
         }
 
         /**
