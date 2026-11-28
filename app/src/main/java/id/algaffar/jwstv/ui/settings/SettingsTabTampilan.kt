@@ -19,13 +19,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.ViewQuilt
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,6 +56,7 @@ import id.algaffar.jwstv.domain.model.InfoCardItem
 import id.algaffar.jwstv.domain.model.InfoDisplaySettings
 import id.algaffar.jwstv.domain.model.LayoutPosition
 import id.algaffar.jwstv.domain.model.ScaleMode
+import id.algaffar.jwstv.domain.model.ScreenTextsSettings
 import id.algaffar.jwstv.domain.model.SlideItem
 import id.algaffar.jwstv.ui.components.clock.ArtisticClock
 import id.algaffar.jwstv.ui.components.clock.ClockVariant
@@ -112,7 +121,7 @@ fun ThemeSettingsTab(
                             .background(theme.bgPrimary)
                             .border(
                                 width = if (isFocused) 3.dp else if (isSelected) 2.5.dp else 1.dp,
-                                color = if (isFocused) TvFocusAmber else if (isSelected) theme.accent else theme.border,
+                                color = if (isFocused) TvFocusCyan else if (isSelected) theme.accent else theme.border,
                                 shape = RoundedCornerShape(16.dp)
                             )
                             .onFocusChanged { isFocused = it.isFocused }
@@ -246,7 +255,7 @@ fun LayoutSettingsTab(
                             .background(if (isSelected) palette.accent.copy(alpha = 0.16f) else palette.bgPrimary.copy(alpha = 0.8f))
                             .border(
                                 width = if (isFocused) 3.dp else if (isSelected) 2.5.dp else 1.dp,
-                                color = if (isFocused) TvFocusAmber else if (isSelected) palette.accent else palette.border,
+                                color = if (isFocused) TvFocusCyan else if (isSelected) palette.accent else palette.border,
                                 shape = RoundedCornerShape(18.dp)
                             )
                             .onFocusChanged { isFocused = it.isFocused }
@@ -316,7 +325,7 @@ fun ClockStyleSettingsTab(
                                 .background(if (isSelected) palette.accent.copy(alpha = 0.14f) else palette.bgPrimary.copy(alpha = 0.85f))
                                 .border(
                                     width = if (isFocused) 3.dp else if (isSelected) 2.5.dp else 1.dp,
-                                    color = if (isFocused) TvFocusAmber else if (isSelected) palette.accent else palette.border,
+                                    color = if (isFocused) TvFocusCyan else if (isSelected) palette.accent else palette.border,
                                     shape = RoundedCornerShape(18.dp)
                                 )
                                 .onFocusChanged { isFocused = it.isFocused }
@@ -910,6 +919,412 @@ fun StandbyModeSettingsTab(
                     actions.onUpdateSettings { it.copy(standbySlideshow = it.standbySlideshow.copy(nextPrayerThresholdMinutes = v)) }
                 }
             )
+        }
+    }
+}
+
+/**
+ * Modular Sub-Tab 3.1: Tema, Layout & Jam (`visualStyle`).
+ * Combines inline steppers for Layout/Scale + toggles + Level-3 Side Drawers for 17 Themes & 8 Clocks.
+ */
+@Composable
+fun VisualStyleSettingsTab(
+    settings: AppStateSettings,
+    actions: SettingsActions
+) {
+    var activeDrawer by remember { mutableStateOf<String?>(null) } // "themes" | "clocks"
+    val activeThemeName = remember(settings.themeSettings.currentThemeId) {
+        ThemeEngine.BuiltInThemes.firstOrNull { it.id == settings.themeSettings.currentThemeId }?.name
+            ?: settings.themeSettings.currentThemeId
+    }
+    val layout = settings.layoutSettings
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        HybridSectionCard(
+            title = "Tema Visual & Gaya Jam Digital",
+            subtitle = "Pilih baris di bawah (OK / ▶) untuk membuka galeri pratinjau langsung"
+        ) {
+            HybridNavigationRow(
+                label = "Tema Warna Display (17 Tema)",
+                description = "Palet islami kontras tinggi dengan pratinjau warna langsung",
+                valueSummary = activeThemeName,
+                icon = Icons.Default.Palette,
+                accentBadgeColor = Color(0xFFC084FC),
+                onClick = { activeDrawer = "themes" }
+            )
+            HybridNavigationRow(
+                label = "Gaya Jam Header & Fullscreen (8 Gaya)",
+                description = "Header: ${settings.brand.clockStyle.uppercase()}  •  Fullscreen: ${settings.brand.fullscreenClockStyle.uppercase()}",
+                valueSummary = settings.brand.clockStyle.uppercase(),
+                icon = Icons.Default.AccessTime,
+                accentBadgeColor = Color(0xFFC084FC),
+                onClick = { activeDrawer = "clocks" }
+            )
+            HybridToggleRow(
+                label = "Rotasi Tema Otomatis 24 Jam",
+                description = "Berganti tema secara berkala tanpa pengulangan",
+                checked = settings.themeSettings.autoThemeEnabled,
+                onCheckedChange = { v ->
+                    actions.onUpdateSettings { it.copy(themeSettings = it.themeSettings.copy(autoThemeEnabled = v)) }
+                }
+            )
+            HybridToggleRow(
+                label = "Mode Performa Ringan (STB / Android TV)",
+                description = "Mengurangi efek blur berat untuk stabilitas operasi 24/7",
+                checked = settings.performanceMode,
+                onCheckedChange = { v ->
+                    actions.onUpdateSettings { it.copy(performanceMode = v) }
+                }
+            )
+        }
+
+        HybridSectionCard(
+            title = "Tata Letak, Skala 1080p & Carousel Jadwal",
+            subtitle = "Tekan ◀ ▶ pada baris stepper untuk mengubah tata letak atau skala seketika"
+        ) {
+            HybridInlineOptionStepper(
+                label = "Posisi Tata Letak Jadwal Sholat",
+                description = "Pilih letak panel jadwal sholat pada layar utama",
+                options = listOf(
+                    LayoutPosition.HORIZONTAL.serialName to "Horizontal (Bawah)",
+                    LayoutPosition.VERTICAL_LEFT.serialName to "Vertikal Kiri",
+                    LayoutPosition.VERTICAL_RIGHT.serialName to "Vertikal Kanan"
+                ),
+                selectedId = layout.position.serialName,
+                icon = Icons.Default.ViewQuilt,
+                onSelect = { sel ->
+                    LayoutPosition.entries.firstOrNull { it.serialName == sel }?.let { pos ->
+                        actions.onUpdateSettings {
+                            it.copy(layoutSettings = it.layoutSettings.copy(position = pos, autoRotateLayout = false))
+                        }
+                    }
+                }
+            )
+            HybridInlineOptionStepper(
+                label = "Mode Skala Kanvas 1080p",
+                description = "Menyesuaikan rasio gambar terhadap layar TV / monitor",
+                options = ScaleMode.entries.map { it.serialName to it.serialName.uppercase() },
+                selectedId = layout.scaleMode.serialName,
+                icon = Icons.Default.AspectRatio,
+                onSelect = { sel ->
+                    ScaleMode.entries.firstOrNull { it.serialName == sel }?.let { mode ->
+                        actions.onUpdateSettings { it.copy(layoutSettings = it.layoutSettings.copy(scaleMode = mode)) }
+                    }
+                }
+            )
+            HybridToggleRow(
+                label = "Rotasi Layout Otomatis Setiap 4 Jam (Anti Burn-in)",
+                description = "Berganti otomatis antara Horizontal, Vertikal Kiri & Vertikal Kanan",
+                checked = layout.autoRotateLayout,
+                onCheckedChange = { v ->
+                    actions.onUpdateSettings { it.copy(layoutSettings = it.layoutSettings.copy(autoRotateLayout = v)) }
+                }
+            )
+            HybridNumberStepper(
+                label = "Interval Geser Carousel Jadwal Sholat",
+                value = settings.prayerSettings.prayerTimeScrollInterval,
+                min = 2,
+                max = 30,
+                unit = "detik",
+                onValueChange = { v ->
+                    actions.onUpdateSettings { it.copy(prayerSettings = it.prayerSettings.copy(prayerTimeScrollInterval = v)) }
+                }
+            )
+        }
+    }
+
+    when (activeDrawer) {
+        "themes" -> {
+            HybridSideDrawer(
+                title = "Galeri 17 Tema Warna",
+                subtitle = "Klik atau tekan OK pada kartu tema untuk menerapkan langsung",
+                accentColor = Color(0xFFC084FC),
+                onDismiss = { activeDrawer = null }
+            ) {
+                ThemeSettingsTab(settings, actions)
+            }
+        }
+        "clocks" -> {
+            HybridSideDrawer(
+                title = "Galeri 8 Gaya Jam Digital",
+                subtitle = "Pratinjau langsung jam header & jam layar penuh",
+                accentColor = Color(0xFFC084FC),
+                onDismiss = { activeDrawer = null }
+            ) {
+                ClockStyleSettingsTab(settings, actions)
+            }
+        }
+    }
+}
+
+/**
+ * Modular Sub-Tab 3.2: Overlay & Info/PHBI (`overlayInfo`).
+ * Replaces nested sub-tabs with clean navigation rows that open Level-3 Side Drawers.
+ */
+@Composable
+fun OverlayAndInfoSettingsTab(
+    settings: AppStateSettings,
+    actions: SettingsActions
+) {
+    var activeDrawer by remember { mutableStateOf<String?>(null) } // "overlay" | "info" | "phbi"
+    val infoCfg = settings.infoSettings
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        HybridSectionCard(
+            title = "Pengaturan Cepat Puasa Sunnah & Agenda PHBI",
+            subtitle = "Pengingat puasa sunnah dan rentang hitung mundur Hari Besar Islam"
+        ) {
+            HybridToggleRow(
+                label = "Info Puasa Sunnah Otomatis",
+                description = "Senin-Kamis, Ayyamul Bidh, Syawal, Arafah, Tasu'a & Asyura",
+                checked = infoCfg.enableSunnahFasting,
+                onCheckedChange = { v ->
+                    actions.onUpdateSettings { it.copy(infoSettings = it.infoSettings.copy(enableSunnahFasting = v)) }
+                }
+            )
+            HybridNumberStepper(
+                label = "Rentang Deteksi Agenda PHBI",
+                value = infoCfg.lookaheadDays,
+                min = 7,
+                max = 365,
+                step = 5,
+                unit = "hari",
+                onValueChange = { v ->
+                    actions.onUpdateSettings { it.copy(infoSettings = it.infoSettings.copy(lookaheadDays = v)) }
+                }
+            )
+        }
+
+        HybridSectionCard(
+            title = "Kelola Konten Overlay, Kartu Info & Agenda PHBI",
+            subtitle = "Pilih baris di bawah (OK / ▶) untuk menambah, mengubah, atau menghapus item"
+        ) {
+            HybridNavigationRow(
+                label = "Floating Overlay Statis",
+                description = "Pesan singkat statis yang dipanggil oleh masing-masing Group Slideshow",
+                valueSummary = "${settings.floatingOverlays.size} Overlay",
+                icon = Icons.Default.TextFields,
+                accentBadgeColor = Color(0xFFC084FC),
+                onClick = { activeDrawer = "overlay" }
+            )
+            HybridNavigationRow(
+                label = "Kartu Informasi & Kegiatan Masjid",
+                description = "Tampil bergantian pada kartu INFO & KEGIATAN MASJID di layar utama",
+                valueSummary = "${settings.mosqueInfoList.size} Kartu",
+                icon = Icons.Default.Info,
+                accentBadgeColor = Color(0xFFC084FC),
+                onClick = { activeDrawer = "info" }
+            )
+            HybridNavigationRow(
+                label = "Daftar Agenda Islami & PHBI",
+                description = "Hitung mundur otomatis kalender Hijriyah, Masehi & agenda manual",
+                valueSummary = "${infoCfg.islamicEvents.size} Agenda",
+                icon = Icons.Default.CalendarMonth,
+                accentBadgeColor = Color(0xFFC084FC),
+                onClick = { activeDrawer = "phbi" }
+            )
+            HybridNavigationRow(
+                label = "Teks Hadits & Pesan Layar",
+                description = "Ubah atau kosongkan teks Hadits (Adzan & Iqomah) serta kalimat pengingat layar Jum'at, Tarawih, Hari Raya, Qurban, dan QR",
+                valueSummary = "11 Slot Teks",
+                icon = Icons.Default.TextFields,
+                accentBadgeColor = Color(0xFFC084FC),
+                onClick = { activeDrawer = "screenTexts" }
+            )
+        }
+    }
+
+    when (activeDrawer) {
+        "overlay" -> {
+            HybridSideDrawer(
+                title = "Kelola Floating Overlay Statis",
+                subtitle = "${settings.floatingOverlays.size} item tersimpan",
+                accentColor = Color(0xFFC084FC),
+                onDismiss = { activeDrawer = null }
+            ) {
+                OverlayTextSettingsTab(settings, actions)
+            }
+        }
+        "info", "phbi" -> {
+            HybridSideDrawer(
+                title = if (activeDrawer == "info") "Kartu Informasi Masjid" else "Agenda Islami & PHBI",
+                subtitle = "Kelola daftar informasi & hitung mundur Hari Besar Islam",
+                accentColor = Color(0xFFC084FC),
+                onDismiss = { activeDrawer = null }
+            ) {
+                InfoAndPhbiSettingsTab(settings, actions)
+            }
+        }
+        "screenTexts" -> {
+            HybridSideDrawer(
+                title = "Teks Hadits & Pesan Layar",
+                subtitle = "Kosongkan kotak bila ingin menyembunyikan teks/hadits pada layar terkait",
+                accentColor = Color(0xFFC084FC),
+                onDismiss = { activeDrawer = null },
+                headerAction = {
+                    HybridButton(
+                        label = "Reset Default",
+                        icon = Icons.Default.Refresh,
+                        onClick = {
+                            actions.onUpdateSettings { it.copy(screenTexts = ScreenTextsSettings()) }
+                        }
+                    )
+                }
+            ) {
+                ScreenTextsSettingsEditor(settings, actions)
+            }
+        }
+    }
+}
+
+@Composable
+fun ScreenTextsSettingsEditor(
+    settings: AppStateSettings,
+    actions: SettingsActions
+) {
+    val st = settings.screenTexts
+    fun update(transform: (ScreenTextsSettings) -> ScreenTextsSettings) {
+        actions.onUpdateSettings { prev -> prev.copy(screenTexts = transform(prev.screenTexts)) }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        HybridInfoBanner(
+            text = "Seluruh 11 teks Hadits dan kalimat himbauan layar di bawah dapat diubah bebas (atau dikosongkan untuk menyembunyikan). Dapat diedit juga melalui Remote PWA di HP/Laptop.",
+            accentColor = TvFocusCyan
+        )
+
+        HybridSectionCard(
+            title = "1. Layar Adzan & Menunggu Iqomah",
+            subtitle = "Menggantikan teks Hadits (Bukhari, Abu Dawud, Tirmidzi) & peringatan larangan sholat sunnah"
+        ) {
+            HybridTextInput(
+                label = "Teks Hadits / Pesan Layar Adzan",
+                value = st.adzanHadith,
+                singleLine = false,
+                placeholder = "Kosongkan untuk menyembunyikan kotak hadits pada layar Adzan",
+                onValueChange = { v -> update { it.copy(adzanHadith = v) } }
+            )
+            HybridTextInput(
+                label = "Teks Hadits Layar Menunggu Iqomah (> 2 Menit)",
+                value = st.iqomahHadith,
+                singleLine = false,
+                placeholder = "Kosongkan untuk menyembunyikan kotak hadits Iqomah",
+                onValueChange = { v -> update { it.copy(iqomahHadith = v) } }
+            )
+            HybridTextInput(
+                label = "Peringatan Merah Menjelang Iqomah (≤ 2 Menit)",
+                value = st.iqomahWarning,
+                singleLine = false,
+                placeholder = "Iqomah segera tiba... HARAP TIDAK MEMULAI SHOLAT SUNNAT.",
+                onValueChange = { v -> update { it.copy(iqomahWarning = v) } }
+            )
+        }
+
+        HybridSectionCard(
+            title = "2. Layar Waktu Jum'at & Tarawih Ramadhan",
+            subtitle = "Kalimat pengingat di bagian bawah layar Waktu Jum'at dan layar Tarawih"
+        ) {
+            HybridTextInput(
+                label = "Kalimat Pengingat Layar Waktu Jum'at",
+                value = st.waktuJumatReminder,
+                singleLine = false,
+                onValueChange = { v -> update { it.copy(waktuJumatReminder = v) } }
+            )
+            HybridTextInput(
+                label = "Kalimat Pengingat Layar Tarawih",
+                value = st.tarawihReminder,
+                singleLine = false,
+                onValueChange = { v -> update { it.copy(tarawihReminder = v) } }
+            )
+        }
+
+        HybridSectionCard(
+            title = "3. Layar Hari Raya & Info Qurban",
+            subtitle = "Kalimat pengingat di bagian bawah layar Idul Fitri, Idul Adha, dan Info Qurban"
+        ) {
+            HybridTextInput(
+                label = "Kalimat Pengingat Layar Idul Fitri",
+                value = st.idulFitriReminder,
+                singleLine = false,
+                onValueChange = { v -> update { it.copy(idulFitriReminder = v) } }
+            )
+            HybridTextInput(
+                label = "Kalimat Pengingat Layar Idul Adha",
+                value = st.idulAdhaReminder,
+                singleLine = false,
+                onValueChange = { v -> update { it.copy(idulAdhaReminder = v) } }
+            )
+            HybridTextInput(
+                label = "Kalimat Pengingat Layar Info Qurban",
+                value = st.infoQurbanReminder,
+                singleLine = false,
+                onValueChange = { v -> update { it.copy(infoQurbanReminder = v) } }
+            )
+        }
+
+        HybridSectionCard(
+            title = "4. Layar QR Infaq & Keuangan Online",
+            subtitle = "Himbauan scan QR & kutipan transparansi kas (mendukung {{Nama Masjid}})"
+        ) {
+            HybridTextInput(
+                label = "Himbauan Layar QR Infaq Masjid",
+                value = st.masjidQrGuidance,
+                singleLine = false,
+                onValueChange = { v -> update { it.copy(masjidQrGuidance = v) } }
+            )
+            HybridTextInput(
+                label = "Himbauan Layar QR Keuangan Online",
+                value = st.financeQrGuidance,
+                singleLine = false,
+                onValueChange = { v -> update { it.copy(financeQrGuidance = v) } }
+            )
+            HybridTextInput(
+                label = "Kutipan Footer Layar Keuangan Online",
+                value = st.onlineFinanceFooterQuote,
+                singleLine = false,
+                onValueChange = { v -> update { it.copy(onlineFinanceFooterQuote = v) } }
+            )
+        }
+    }
+}
+
+/**
+ * Modular Sub-Tab 3.4: Media & Standby (`mediaStandby`).
+ * Shows Fullscreen Standby Mode controls inline + Level-3 Side Drawer for full Media & Ibadah Backgrounds.
+ */
+@Composable
+fun MediaAndStandbySettingsTab(
+    settings: AppStateSettings,
+    actions: SettingsActions
+) {
+    var showMediaDrawer by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        HybridSectionCard(
+            title = "Galeri Media Ibadah, Tartil/Tarhim & Paket Gambar",
+            subtitle = "Kelola slide Tartil/Tarhim, Do'a Adzan, 4 latar Khutbah, dan 5 latar Pelaksanaan Sholat"
+        ) {
+            HybridNavigationRow(
+                label = "Buka Galeri Media & Latar Ibadah",
+                description = "Unggah gambar/video 1080p per layar ibadah atau unduh paket gambar 1-klik",
+                valueSummary = "Kelola Slot Media",
+                icon = Icons.Default.Image,
+                accentBadgeColor = Color(0xFFC084FC),
+                onClick = { showMediaDrawer = true }
+            )
+        }
+
+        StandbyModeSettingsTab(settings, actions)
+    }
+
+    if (showMediaDrawer) {
+        HybridSideDrawer(
+            title = "Galeri Media & Latar Ibadah",
+            subtitle = "Paket gambar 1-klik, slide Tartil/Tarhim, dan latar layar ibadah",
+            accentColor = Color(0xFFC084FC),
+            onDismiss = { showMediaDrawer = false }
+        ) {
+            MediaGallerySettingsTab(settings, actions)
         }
     }
 }

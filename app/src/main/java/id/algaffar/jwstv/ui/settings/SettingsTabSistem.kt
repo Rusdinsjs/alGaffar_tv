@@ -16,11 +16,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Icon
@@ -893,17 +898,17 @@ fun KeyboardInputSettingsTab(
 fun RemoteHelpSettingsTab() {
     val palette = LocalJwsTheme.current
     val shortcuts = listOf(
-        "⬆ ⬇ ⬅ ➡ D-Pad" to "Navigasi antar Kategori, Sub-Menu & Form Pengaturan",
-        "OK / Enter" to "Pilih / Aktifkan Tombol, Toggle, atau Stepper Angka",
-        "Back / ESC" to "Kembali atau Tutup Modal Pengaturan",
-        "Bar Kategori Bawah" to "5 Kategori Utama: Masjid, Sholat, Tampilan, Acara, Sistem",
-        "Bar Sub-Menu" to "Sub-menu horizontal untuk setiap kategori dengan highlight fokus kuning",
-        "Panel Simulasi" to "Uji langsung seluruh 30 State (Adzan, Doa Adzan, Jum'at, Tarawih, Hari Raya, Qurban, Live, QR)"
+        "Panel Kiri (▲ ▼)" to "Ganti kategori utama (pratinjau panel kanan langsung berubah tanpa OK)",
+        "Masuk / Kembali" to "Tekan ▶ atau OK untuk masuk Panel Kanan • Tekan ◀ atau BACK untuk kembali ke Kategori",
+        "Stepper & Slider" to "Fokus 1 baris lalu tekan ◀ ▶ untuk ubah angka/opsi/volume langsung di tempat",
+        "Laci Samping (Level 3)" to "Opsi lanjutan (Tahapan Sholat, Qurban, Saklar) terbuka di laci kanan dengan focus trap",
+        "Mouse + Keyboard" to "Hover mouse otomatis memindahkan fokus D-Pad agar transisi mouse ↔ remote mulus",
+        "Remote PWA (Port 1421)" to "Struktur menu 100% sama dengan TV; layar lebar memakai Two-Pane, HP memakai Bottom Nav"
     )
 
     HybridSectionCard(
-        title = "Panduan Navigasi Remote Android TV & Touchscreen",
-        subtitle = "Dirancang khusus agar nyaman dioperasikan dengan Remote TV D-Pad maupun layar sentuh tablet/monitor"
+        title = "Panduan Navigasi Two-Pane (D-Pad, Mouse+Keyboard & Remote PWA)",
+        subtitle = "Dirancang khusus agar nyaman dioperasikan dengan Remote TV, Mouse+Keyboard, maupun Smartphone"
     ) {
         shortcuts.chunked(2).forEach { pair ->
             Row(
@@ -915,8 +920,8 @@ fun RemoteHelpSettingsTab() {
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF141E33))
-                            .border(1.dp, Color(0xFF334155), RoundedCornerShape(16.dp))
+                            .background(TvSurfaceRow)
+                            .border(1.dp, TvSurfaceBorder, RoundedCornerShape(16.dp))
                             .padding(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -924,16 +929,189 @@ fun RemoteHelpSettingsTab() {
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFF0F172A))
-                                .border(1.dp, TvFocusAmber.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                .background(TvSurfaceCanvas)
+                                .border(1.dp, TvFocusCyan.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
-                            Text(key, color = TvFocusAmber, fontSize = 13.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black)
+                            Text(key, color = TvFocusCyan, fontSize = 12.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black)
                         }
-                        Text(desc, color = palette.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text(desc, color = Color(0xFFF8FAFC), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Modular Sub-Tab 5.2: Akses & Input (`accessInput`).
+ * Combines Keyboard Policy inline stepper + Level-3 Side Drawer for Admin PIN Management (Superadmin only).
+ */
+@Composable
+fun AccessAndInputSettingsTab(
+    settings: AppStateSettings,
+    actions: SettingsActions,
+    activeRole: UserRole
+) {
+    val vkPolicy = LocalVirtualKeyboardPolicy.current
+    var activeDrawer by remember { mutableStateOf<String?>(null) } // "keyboard" | "users"
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        HybridSectionCard(
+            title = "Pengaturan Keyboard Virtual & Perangkat Input",
+            subtitle = if (vkPolicy.hasPhysicalKeyboard) {
+                "Keyboard fisik terdeteksi: ${vkPolicy.detectedKeyboardNames.joinToString(", ")}"
+            } else {
+                "Tidak ada keyboard fisik terdeteksi — menggunakan Remote D-Pad / Touchscreen"
+            }
+        ) {
+            HybridInlineOptionStepper(
+                label = "Mode Keyboard Virtual (On-Screen Keyboard)",
+                description = "Tekan ◀ ▶ untuk beralih antara Otomatis, Nonaktif, atau Selalu Aktif",
+                options = listOf(
+                    VirtualKeyboardPolicy.MODE_AUTO to "Otomatis (Ikuti Keyboard PC)",
+                    VirtualKeyboardPolicy.MODE_DISABLED to "Nonaktif (Keyboard PC Saja)",
+                    VirtualKeyboardPolicy.MODE_ENABLED to "Aktif (Selalu Muncul)"
+                ),
+                selectedId = vkPolicy.normalizedMode,
+                icon = Icons.Default.Keyboard,
+                onSelect = { selected ->
+                    actions.onUpdateSettings { it.copy(virtualKeyboardMode = selected) }
+                }
+            )
+            HybridNavigationRow(
+                label = "Detail Status Hardware & Uji Ketik",
+                description = "Periksa daftar perangkat keyboard terdeteksi dan uji kotak pengetikan",
+                valueSummary = if (vkPolicy.allowVirtualKeyboard) "OSK Aktif" else "OSK Tersembunyi",
+                icon = Icons.Default.Keyboard,
+                accentBadgeColor = Color(0xFF2DD4BF),
+                onClick = { activeDrawer = "keyboard" }
+            )
+        }
+
+        if (activeRole == UserRole.SUPERADMIN) {
+            HybridSectionCard(
+                title = "Manajemen Akun Admin & Keamanan PIN (Khusus Superadmin)",
+                subtitle = "Kelola akun pengurus DKM (Superadmin, Admin, Operator) beserta PIN PBKDF2"
+            ) {
+                HybridNavigationRow(
+                    label = "Kelola Akun Pengurus & PIN Akses",
+                    description = "Tambah, ubah PIN, atau hapus akun pengurus masjid dengan proteksi brute-force",
+                    valueSummary = "${settings.users.size.coerceAtLeast(1)} Akun",
+                    icon = Icons.Default.AdminPanelSettings,
+                    accentBadgeColor = Color(0xFF2DD4BF),
+                    onClick = { activeDrawer = "users" }
+                )
+            }
+        }
+    }
+
+    when (activeDrawer) {
+        "keyboard" -> {
+            HybridSideDrawer(
+                title = "Detail Keyboard & Uji Ketik",
+                subtitle = "Konfigurasi lengkap perangkat input TV/STB",
+                accentColor = Color(0xFF2DD4BF),
+                onDismiss = { activeDrawer = null }
+            ) {
+                KeyboardInputSettingsTab(settings, actions)
+            }
+        }
+        "users" -> {
+            HybridSideDrawer(
+                title = "Kelola Admin & PIN Akses",
+                subtitle = "Autentikasi multi-role (Superadmin / Admin / Operator)",
+                accentColor = Color(0xFF2DD4BF),
+                onDismiss = { activeDrawer = null }
+            ) {
+                UserManagementSettingsTab(settings, actions)
+            }
+        }
+    }
+}
+
+/**
+ * Modular Sub-Tab 5.3: Backup & Update (`backupUpdate`).
+ */
+@Composable
+fun BackupAndUpdateSettingsTab(
+    settings: AppStateSettings,
+    actions: SettingsActions
+) {
+    BackupRestoreSettingsTab(settings, actions)
+}
+
+/**
+ * Modular Sub-Tab 5.4: Log & Perangkat (`logsDevice`).
+ * Houses the Superadmin-only State Simulation & Audio Test launcher alongside device controls and logs.
+ */
+@Composable
+fun LogsAndDeviceSettingsTab(
+    settings: AppStateSettings,
+    actions: SettingsActions,
+    activeRole: UserRole = UserRole.ADMIN
+) {
+    var showHelpDrawer by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (activeRole == UserRole.SUPERADMIN) {
+            HybridSectionCard(
+                title = "Panel Simulasi State & Uji Audio (Khusus Superadmin)",
+                subtitle = "Uji coba lompat ke 31 state layar ibadah (Adzan, Iqomah, Khutbah, Hari Raya, Qurban) serta uji bunyi Beep & Sirine"
+            ) {
+                HybridNavigationRow(
+                    label = "Buka Panel Simulasi 31-State & Uji Audio",
+                    description = "Menutup jendela pengaturan dan menampilkan kontrol simulasi langsung di atas layar TV",
+                    valueSummary = "Simulasi TV",
+                    icon = Icons.Default.PlayArrow,
+                    accentBadgeColor = Color(0xFF2DD4BF),
+                    onClick = actions.onOpenDebugSimulator
+                )
+            }
+        }
+
+        HybridSectionCard(
+            title = "Panduan Navigasi & Kendali Perangkat STB",
+            subtitle = "Pintasan tombol Remote TV / Keyboard serta tombol muat ulang aplikasi"
+        ) {
+            HybridNavigationRow(
+                label = "Panduan Navigasi Remote TV, Mouse & Remote PWA",
+                description = "Pelajari alur navigasi Two-Pane, Stepper, Slider, dan Laci Samping",
+                valueSummary = "Buka Panduan",
+                icon = Icons.Default.Tv,
+                accentBadgeColor = Color(0xFF2DD4BF),
+                onClick = { showHelpDrawer = true }
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HybridButton(
+                    label = "Restart Aplikasi Sekarang",
+                    icon = Icons.Default.Refresh,
+                    onClick = actions.onTriggerAppRestartNow,
+                    modifier = Modifier.weight(1f)
+                )
+                if (actions.isDeviceOwner) {
+                    HybridButton(
+                        label = "Reboot STB Android",
+                        icon = Icons.Default.PowerSettingsNew,
+                        isDanger = true,
+                        onClick = actions.onTriggerDeviceRebootNow,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        LogViewerSettingsTab()
+    }
+
+    if (showHelpDrawer) {
+        HybridSideDrawer(
+            title = "Panduan Navigasi Pengaturan",
+            subtitle = "Remote TV D-Pad, Mouse+Keyboard, dan Remote PWA",
+            accentColor = Color(0xFF2DD4BF),
+            onDismiss = { showHelpDrawer = false }
+        ) {
+            RemoteHelpSettingsTab()
         }
     }
 }

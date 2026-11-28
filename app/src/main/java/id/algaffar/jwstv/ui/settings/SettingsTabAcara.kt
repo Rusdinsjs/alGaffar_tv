@@ -17,11 +17,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Stop
+import id.algaffar.jwstv.data.auth.UserRole
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -2147,6 +2153,288 @@ fun SwitchHardwareSettingsTab(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Modular Sub-Tab 4.1: Jum'at & Ramadhan (`jumatRamadhan`).
+ * Keeps quick toggles & durations right on the detail pane, opening Level-3 Slide-Over Drawers
+ * for detailed Jum'at Kas/Petugas & Ramadhan Schedules/Ta'jil/Sirine.
+ */
+@Composable
+fun JumatAndRamadhanSettingsTab(
+    settings: AppStateSettings,
+    actions: SettingsActions
+) {
+    var activeDrawer by remember { mutableStateOf<String?>(null) } // "jumat" | "ramadhan"
+    val jumat = settings.jumat
+    val ram = settings.ramadhan
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        HybridSectionCard(
+            title = "Mode Sholat Jum'at",
+            subtitle = "Pengaturan cepat mode Jum'at + laci lengkap petugas & jurnal buku kas"
+        ) {
+            HybridToggleRow(
+                label = "Aktifkan Mode Khusus Hari Jum'at (Menggantikan Dzuhur)",
+                checked = jumat.enabled,
+                onCheckedChange = { v -> actions.onUpdateSettings { it.copy(jumat = it.jumat.copy(enabled = v)) } }
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HybridNumberStepper(
+                    label = "Waktu Jum'at",
+                    value = jumat.waktuJumatDuration,
+                    min = 5,
+                    max = 45,
+                    unit = "mnt",
+                    onValueChange = { v -> actions.onUpdateSettings { it.copy(jumat = it.jumat.copy(waktuJumatDuration = v)) } },
+                    modifier = Modifier.weight(1f)
+                )
+                HybridNumberStepper(
+                    label = "Khutbah Jum'at",
+                    value = jumat.khutbahDuration,
+                    min = 10,
+                    max = 60,
+                    unit = "mnt",
+                    onValueChange = { v -> actions.onUpdateSettings { it.copy(jumat = it.jumat.copy(khutbahDuration = v)) } },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            HybridNavigationRow(
+                label = "Petugas Khotib/Imam & Buku Kas Jum'at",
+                description = "Kelola jadwal petugas Jum'at, saldo kas pekan lalu, dan jurnal transaksi masuk/keluar",
+                valueSummary = "Buka Editor Jum'at",
+                icon = Icons.Default.CalendarMonth,
+                accentBadgeColor = Color(0xFFFBBF24),
+                onClick = { activeDrawer = "jumat" }
+            )
+        }
+
+        HybridSectionCard(
+            title = "Mode Bulan Suci Ramadhan",
+            subtitle = "Jadwal Tarawih, Penceramah, Kas Infaq, Ta'jil Excel 30 Hari & Sirine Imsak/Maghrib"
+        ) {
+            HybridToggleRow(
+                label = "Aktifkan Mode Khusus Ramadhan",
+                description = "Malam aktif: Malam ke-${ram.currentNight} • Tahun ${ram.hijriYear} H",
+                checked = ram.isRamadhan,
+                onCheckedChange = { v -> actions.onUpdateSettings { it.copy(ramadhan = it.ramadhan.copy(isRamadhan = v)) } }
+            )
+            HybridToggleRow(
+                label = "Aktifkan Sirine Ramadhan (Sahur / Imsak / Maghrib)",
+                checked = ram.sirine.enabled,
+                onCheckedChange = { v -> actions.onUpdateSettings { it.copy(ramadhan = it.ramadhan.copy(sirine = it.ramadhan.sirine.copy(enabled = v))) } }
+            )
+            HybridNavigationRow(
+                label = "Petugas, Kas, Ta'jil Excel & Sirine Ramadhan",
+                description = "Import/export Excel Ta'jil 30 hari, petugas tarawih/witir, keuangan & jadwal sirine",
+                valueSummary = "Malam ke-${ram.currentNight}",
+                icon = Icons.Default.NightsStay,
+                accentBadgeColor = Color(0xFFFBBF24),
+                onClick = { activeDrawer = "ramadhan" }
+            )
+        }
+    }
+
+    when (activeDrawer) {
+        "jumat" -> {
+            HybridSideDrawer(
+                title = "Pengaturan Lengkap Hari Jum'at",
+                subtitle = "Petugas, durasi, pesan layar khutbah & jurnal buku kas Jum'at",
+                accentColor = Color(0xFFFBBF24),
+                onDismiss = { activeDrawer = null }
+            ) {
+                JumatSettingsTab(settings, actions)
+            }
+        }
+        "ramadhan" -> {
+            HybridSideDrawer(
+                title = "Pengaturan Lengkap Ramadhan",
+                subtitle = "Jadwal Tarawih, Kas, Import/Export Ta'jil Excel & Sirine Ramadhan",
+                accentColor = Color(0xFFFBBF24),
+                onDismiss = { activeDrawer = null }
+            ) {
+                RamadhanSettingsTab(settings, actions)
+            }
+        }
+    }
+}
+
+/**
+ * Modular Sub-Tab 4.2: Idul Fitri & Adha (`hariRayaQurban`).
+ */
+@Composable
+fun HariRayaAndQurbanSettingsTab(
+    settings: AppStateSettings,
+    actions: SettingsActions
+) {
+    var activeDrawer by remember { mutableStateOf<String?>(null) } // "fitri" | "adha"
+    val fitri = settings.idulFitri
+    val adha = settings.idulAdha
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        HybridSectionCard(
+            title = "Mode Hari Raya Idul Fitri",
+            subtitle = "Slot jam tayang, petugas sholat Ied & pesan khutbah"
+        ) {
+            HybridToggleRow(
+                label = "Aktifkan Mode Hari Raya Idul Fitri",
+                checked = fitri.enabled,
+                onCheckedChange = { v -> actions.onUpdateSettings { it.copy(idulFitri = it.idulFitri.copy(enabled = v)) } }
+            )
+            HybridNavigationRow(
+                label = "Petugas, Durasi & Slot Jam Idul Fitri",
+                description = "Khotib: ${fitri.petugas.khotib.ifBlank { "-" }}  •  ${fitri.timeSlots.size} Slot Jam",
+                valueSummary = "Kelola Idul Fitri",
+                icon = Icons.Default.Event,
+                accentBadgeColor = Color(0xFFFBBF24),
+                onClick = { activeDrawer = "fitri" }
+            )
+        }
+
+        HybridSectionCard(
+            title = "Mode Hari Raya Idul Adha & Peserta Qurban",
+            subtitle = "Kelola petugas Idul Adha & kelompok peserta Qurban (maksimal 7 anggota per kelompok)"
+        ) {
+            HybridToggleRow(
+                label = "Aktifkan Mode Hari Raya Idul Adha",
+                checked = adha.enabled,
+                onCheckedChange = { v -> actions.onUpdateSettings { it.copy(idulAdha = it.idulAdha.copy(enabled = v)) } }
+            )
+            HybridToggleRow(
+                label = "Aktifkan Mode Sosialisasi Info Qurban",
+                checked = settings.infoQurban.enabled,
+                onCheckedChange = { v -> actions.onUpdateSettings { it.copy(infoQurban = it.infoQurban.copy(enabled = v)) } }
+            )
+            HybridNavigationRow(
+                label = "Petugas Idul Adha & Kelompok Qurban",
+                description = "CRUD kelompok peserta qurban (Sapi/Kambing), maksimal ${QurbanGroup.MAX_MEMBERS} anggota per kelompok",
+                valueSummary = "${adha.qurbanGroups.size} Kelompok",
+                icon = Icons.Default.Event,
+                accentBadgeColor = Color(0xFFFBBF24),
+                onClick = { activeDrawer = "adha" }
+            )
+        }
+    }
+
+    when (activeDrawer) {
+        "fitri" -> {
+            HybridSideDrawer(
+                title = "Pengaturan Idul Fitri",
+                subtitle = "Petugas, durasi Sholat/Khutbah Ied, pesan layar & slot jam",
+                accentColor = Color(0xFFFBBF24),
+                onDismiss = { activeDrawer = null }
+            ) {
+                IdulFitriSettingsTab(settings, actions)
+            }
+        }
+        "adha" -> {
+            HybridSideDrawer(
+                title = "Idul Adha & Kelompok Qurban",
+                subtitle = "Petugas Idul Adha & CRUD Kelompok Peserta Qurban (${adha.qurbanGroups.size} Kelompok)",
+                accentColor = Color(0xFFFBBF24),
+                onDismiss = { activeDrawer = null }
+            ) {
+                IdulAdhaQurbanSettingsTab(settings, actions)
+            }
+        }
+    }
+}
+
+/**
+ * Modular Sub-Tab 4.3: Live & Screensaver (`liveScreensaver`).
+ */
+@Composable
+fun LiveAndScreensaverSettingsTab(
+    settings: AppStateSettings,
+    actions: SettingsActions,
+    activeRole: UserRole
+) {
+    var activeDrawer by remember { mutableStateOf<String?>(null) } // "live" | "screensaver"
+    val ss = settings.screensaver
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        HybridSectionCard(
+            title = "Siaran Live Makkah / Madinah / Kustom & CCTV",
+            subtitle = if (actions.isLiveActiveNow) "STATUS: SIARAN LANGSUNG SEDANG TAYANG" else "Putar siaran langsung seketika atau atur preset HLS & kamera CCTV RTSP"
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                HybridButton(
+                    label = "Putar Makkah Live",
+                    icon = Icons.Default.PlayArrow,
+                    isPrimary = true,
+                    onClick = { actions.onStartDirectLive("makkah", "", 60) },
+                    modifier = Modifier.weight(1f)
+                )
+                HybridButton(
+                    label = "Putar Madinah Live",
+                    icon = Icons.Default.PlayArrow,
+                    onClick = { actions.onStartDirectLive("madinah", "", 60) },
+                    modifier = Modifier.weight(1f)
+                )
+                if (actions.isLiveActiveNow) {
+                    HybridButton(
+                        label = "Hentikan Live",
+                        icon = Icons.Default.Stop,
+                        isDanger = true,
+                        onClick = actions.onStopDirectLive
+                    )
+                }
+            }
+            HybridNavigationRow(
+                label = "Pengaturan Lengkap Live YouTube, HLS & CCTV",
+                description = "Ubah ID YouTube, URL HLS .m3u8 prioritas native, dan daftar kamera CCTV ONVIF/RTSP",
+                valueSummary = "Sumber: ${settings.live.source.uppercase()}",
+                icon = Icons.Default.LiveTv,
+                accentBadgeColor = Color(0xFFFBBF24),
+                onClick = { activeDrawer = "live" }
+            )
+        }
+
+        if (activeRole != UserRole.USER) {
+            HybridSectionCard(
+                title = "Mode Malam / Screensaver Anti Burn-In",
+                subtitle = "Layar hitam hemat daya dengan jam melayang pada jam istirahat malam"
+            ) {
+                HybridToggleRow(
+                    label = "Aktifkan Mode Malam (Screensaver Otomatis)",
+                    description = "${ss.schedules.size} jadwal aktif",
+                    checked = ss.enabled,
+                    onCheckedChange = { v -> actions.onUpdateSettings { it.copy(screensaver = it.screensaver.copy(enabled = v)) } }
+                )
+                HybridNavigationRow(
+                    label = "Kelola Jadwal Screensaver & Simulasi State",
+                    description = "Atur jam mulai/selesai mode malam, pesan screensaver & akses simulator 30-State",
+                    valueSummary = "${ss.schedules.size} Jadwal",
+                    icon = Icons.Default.AutoAwesome,
+                    accentBadgeColor = Color(0xFFFBBF24),
+                    onClick = { activeDrawer = "screensaver" }
+                )
+            }
+        }
+    }
+
+    when (activeDrawer) {
+        "live" -> {
+            HybridSideDrawer(
+                title = "Pengaturan Siaran Live & CCTV",
+                subtitle = "YouTube Live, HLS Native (.m3u8) & kamera CCTV RTSP/ONVIF",
+                accentColor = Color(0xFFFBBF24),
+                onDismiss = { activeDrawer = null }
+            ) {
+                LiveAndCctvSettingsTab(settings, actions)
+            }
+        }
+        "screensaver" -> {
+            HybridSideDrawer(
+                title = "Screensaver & Simulasi State",
+                subtitle = "Jadwal mode malam anti burn-in & panel pengujian",
+                accentColor = Color(0xFFFBBF24),
+                onDismiss = { activeDrawer = null }
+            ) {
+                ScreensaverStateSettingsTab(settings, actions)
             }
         }
     }

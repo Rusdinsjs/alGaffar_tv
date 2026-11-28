@@ -1155,6 +1155,31 @@ data class KioskMaintenanceSettings(
     val autoRestartDayOfWeek: Int = 1 // 1 = Senin .. 7 = Minggu (ISO-8601)
 )
 
+/**
+ * Editable Hadith quotes, Do'a texts, and fullscreen reminder sentences.
+ * Eliminates hardcoded religious quotes / screen messages so DKM admins can customize or hide them
+ * from both Android TV Settings and Remote PWA.
+ */
+@Serializable
+data class ScreenTextsSettings(
+    // 1. Layar Adzan (AppState.ADZAN)
+    val adzanHadith: String = "Barangsiapa ketika mendengar adzan mengucapkan doa setelah adzan, maka ia berhak mendapatkan syafa'atku pada hari kiamat. (HR. Bukhari)",
+    // 2. Layar Menunggu Iqomah (AppState.MENUNGGU_IQOMAH)
+    val iqomahHadith: String = "Doa di antara adzan dan iqomah tidak tertolak. (HR. Abu Dawud & Tirmidzi)",
+    val iqomahWarning: String = "Iqomah segera tiba... HARAP TIDAK MEMULAI SHOLAT SUNNAT.",
+    // 3. Layar Waktu Jum'at & Tarawih
+    val waktuJumatReminder: String = "Mohon tenang dan dengarkan pengumuman serta laporan kas masjid sebelum Khotib naik mimbar.",
+    val tarawihReminder: String = "Mohon tenang dan bersiap melaksanakan ibadah Sholat Tarawih & Witir berjamaah.",
+    // 4. Layar Hari Raya & Info Qurban
+    val idulFitriReminder: String = "Taqabbalallahu Minna Wa Minkum • Mohon tenang dan bersiap melaksanakan Sholat Idul Fitri.",
+    val idulAdhaReminder: String = "Allahu Akbar, Allahu Akbar • Mari bersiap melaksanakan Sholat Idul Adha & Ibadah Qurban.",
+    val infoQurbanReminder: String = "Semoga Allah menerima amal ibadah Qurban kita semua dan melimpahkan keberkahan.",
+    // 5. Layar QR & Keuangan Online
+    val masjidQrGuidance: String = "Pindai QR Code di samping menggunakan aplikasi Mobile Banking atau E-Wallet (QRIS) Anda untuk menyalurkan infaq & sedekah terbaik.",
+    val financeQrGuidance: String = "Pindai QR Code di samping menggunakan kamera smartphone untuk melihat rincian mutasi pemasukan, pengeluaran, dan saldo kas masjid secara real-time.",
+    val onlineFinanceFooterQuote: String = "Transparansi & akuntabilitas pengelolaan infaq jamaah {{Nama Masjid}}. Semoga Allah membalas kebaikan para muhsinin."
+)
+
 // ==================== ROOT SETTINGS OBJECT ====================
 
 @Serializable
@@ -1184,6 +1209,7 @@ data class AppStateSettings(
     val themeSettings: ThemeSettings = ThemeSettings(),
     val infoSettings: InfoDisplaySettings = InfoDisplaySettings(),
     val media: MediaDisplaySettings = MediaDisplaySettings(),
+    val screenTexts: ScreenTextsSettings = ScreenTextsSettings(),
     val kioskMaintenance: KioskMaintenanceSettings = KioskMaintenanceSettings(),
     val globalVolume: Float = 1.0f,
     val performanceMode: Boolean = true,

@@ -246,9 +246,9 @@ class KtorRemoteServer(
 
                     get("/api/status") {
                         if (!checkRateLimit(call)) return@get
-                        if (checkAuthorizedRole(call) == null) return@get
+                        val callerRole = checkAuthorizedRole(call) ?: return@get
 
-                        val statusJson = buildStatusJson()
+                        val statusJson = buildStatusJson(callerRole)
                         call.respondText(
                             text = statusJson.toString(),
                             contentType = ContentType.Application.Json,
@@ -524,7 +524,7 @@ class KtorRemoteServer(
         return role
     }
 
-    internal fun buildStatusJson(): JsonObject {
+    internal fun buildStatusJson(callerRole: UserRole = UserRole.SUPERADMIN): JsonObject {
         val settings = settingsProvider()
         val runtime = runtimeStatusProvider()
         val audioInv = runCatching { audioInventoryProvider() }.getOrDefault(emptyMap())
@@ -564,6 +564,7 @@ class KtorRemoteServer(
         val effJumatRec = settings.jumat.petugas.records[effJumatKey]
 
         return buildJsonObject {
+            put("callerRole", callerRole.id)
             put("state", runtime.currentState.serialName)
             put("stateLabel", runtime.currentState.displayLabel)
             put("audio", runtime.isAudioPlaying)
@@ -740,6 +741,21 @@ class KtorRemoteServer(
                         }
                     }
                 }
+            }
+
+            putJsonObject("screenTexts") {
+                val st = settings.screenTexts
+                put("adzanHadith", st.adzanHadith)
+                put("iqomahHadith", st.iqomahHadith)
+                put("iqomahWarning", st.iqomahWarning)
+                put("waktuJumatReminder", st.waktuJumatReminder)
+                put("tarawihReminder", st.tarawihReminder)
+                put("idulFitriReminder", st.idulFitriReminder)
+                put("idulAdhaReminder", st.idulAdhaReminder)
+                put("infoQurbanReminder", st.infoQurbanReminder)
+                put("masjidQrGuidance", st.masjidQrGuidance)
+                put("financeQrGuidance", st.financeQrGuidance)
+                put("onlineFinanceFooterQuote", st.onlineFinanceFooterQuote)
             }
 
             val todayStr = java.time.LocalDate.now().toString()
@@ -1066,7 +1082,10 @@ class KtorRemoteServer(
             "clear_logs",
             "factory_reset",
             "ota_install",
-            "check_ota_update"
+            "check_ota_update",
+            "simulate_state",
+            "test_adzan",
+            "test_beep"
         )
 
         fun maxUploadBytesForCategory(category: String): Long = when (category.lowercase()) {

@@ -15,17 +15,26 @@
 
     <style>
         :root {
-            --bg: #0a0c10;
-            --card: #141820;
-            --card-2: #1c222d;
-            --border: rgba(255, 255, 255, 0.08);
+            --bg: #0b0f17;
+            --pane: #0f1521;
+            --card: #151e2e;
+            --card-2: #1b2940;
+            --border: rgba(148, 163, 184, 0.16);
             --text-primary: #f8fafc;
             --text-secondary: #94a3b8;
+            --focus-cyan: #38bdf8;
+            --cat-accent: #38bdf8;
             --accent: #10b981;
             --accent-2: #3b82f6;
-            --accent-glow: rgba(16, 185, 129, 0.35);
+            --accent-glow: rgba(56, 189, 248, 0.28);
             --danger: #ef4444;
             --warning: #f59e0b;
+        }
+
+        *:focus-visible {
+            outline: 2.5px solid var(--focus-cyan);
+            outline-offset: 2px;
+            box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.22);
         }
 
         * {
@@ -119,42 +128,195 @@
             cursor: pointer;
         }
 
-        .container { padding: 14px; width: 100%; max-width: 580px; margin: 0 auto; }
+        .app-shell {
+            display: block;
+            width: 100%;
+        }
 
-        .tab-content { display: none; animation: fadeUp 0.22s ease-out; }
+        .desktop-sidebar {
+            display: none;
+        }
+
+        .container { padding: 14px; width: 100%; max-width: 620px; margin: 0 auto; }
+
+        .mobile-search-wrap {
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .quick-search-input {
+            width: 100%;
+            background: var(--pane);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px 14px;
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+
+        .quick-search-results {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            background: var(--pane);
+            border: 1.5px solid var(--focus-cyan);
+            border-radius: 14px;
+            padding: 6px;
+            z-index: 1200;
+            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.65);
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        .quick-search-results.show { display: flex; flex-direction: column; gap: 4px; }
+        .quick-search-hit {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-primary);
+            border-radius: 10px;
+            padding: 9px 11px;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+        .quick-search-hit:hover, .quick-search-hit:focus {
+            background: var(--card-2);
+            border-color: var(--focus-cyan);
+        }
+        .quick-search-hit small { color: var(--text-secondary); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+
+        .tab-content { display: none; animation: fadeUp 0.2s ease-out; }
         .tab-content.active { display: flex; flex-direction: column; gap: 14px; }
 
         .sub-tabs {
             display: flex;
             gap: 8px;
             overflow-x: auto;
-            padding: 2px 2px 6px 2px;
+            padding: 4px 2px 8px 2px;
             margin-bottom: 2px;
             scrollbar-width: none;
             -webkit-overflow-scrolling: touch;
+            position: sticky;
+            top: 68px;
+            z-index: 40;
+            background: linear-gradient(180deg, var(--bg) 82%, transparent);
         }
         .sub-tabs::-webkit-scrollbar { display: none; }
         .sub-tab-btn {
             flex: 0 0 auto;
-            background: var(--card-2);
+            background: var(--card);
             border: 1px solid var(--border);
             color: var(--text-secondary);
-            padding: 8px 14px;
-            border-radius: 99px;
-            font-size: 11px;
-            font-weight: 700;
+            padding: 9px 14px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 800;
             white-space: nowrap;
             cursor: pointer;
             transition: all 0.15s ease;
         }
+        .sub-tab-btn:hover:not(.active) { background: var(--card-2); color: #fff; }
         .sub-tab-btn.active {
-            background: linear-gradient(135deg, #10b981, #059669);
+            background: color-mix(in srgb, var(--cat-accent) 22%, #0f172a);
             color: #ffffff;
-            border-color: rgba(255, 255, 255, 0.25);
-            box-shadow: 0 2px 10px var(--accent-glow);
+            border-color: var(--cat-accent);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
         }
         .sub-panel { display: none; flex-direction: column; gap: 14px; animation: fadeUp 0.18s ease-out; }
         .sub-panel.active { display: flex; }
+
+        .nav-row {
+            width: 100%;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 13px 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            cursor: pointer;
+            color: var(--text-primary);
+            text-align: left;
+            transition: all 0.15s ease;
+        }
+        .nav-row:hover {
+            background: var(--card-2);
+            border-color: var(--focus-cyan);
+        }
+        .nav-row-left { flex: 1; min-width: 0; }
+        .nav-row-title { font-size: 14px; font-weight: 800; color: var(--text-primary); }
+        .nav-row-sub { font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
+        .nav-row-pill {
+            flex-shrink: 0;
+            background: var(--pane);
+            border: 1px solid var(--border);
+            color: var(--focus-cyan);
+            border-radius: 99px;
+            padding: 5px 11px;
+            font-size: 11px;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Level-3 Slide-Over Side Drawer (Desktop) / Bottom Sheet (Mobile) */
+        .drawer-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 14, 0.72);
+            backdrop-filter: blur(6px);
+            z-index: 2200;
+            display: none;
+            justify-content: flex-end;
+            align-items: flex-end;
+        }
+        .drawer-backdrop.open { display: flex; }
+        .side-drawer {
+            width: 100%;
+            max-height: 88vh;
+            background: var(--bg);
+            border-top: 2px solid var(--focus-cyan);
+            border-radius: 22px 22px 0 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.65);
+            animation: fadeUp 0.18s ease-out;
+        }
+        .drawer-header {
+            background: var(--pane);
+            border-bottom: 1px solid var(--border);
+            padding: 15px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .drawer-title { font-size: 16px; font-weight: 900; color: #fff; margin: 0; }
+        .drawer-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+        .drawer-close-btn {
+            background: var(--focus-cyan);
+            color: #04111e;
+            border: none;
+            border-radius: 10px;
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: 900;
+            cursor: pointer;
+        }
+        .drawer-body {
+            padding: 16px 18px 28px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
 
         @keyframes fadeUp {
             from { opacity: 0; transform: translateY(8px); }
@@ -163,29 +325,98 @@
 
         .card {
             background: var(--card);
-            border-radius: 20px;
+            border-radius: 18px;
             padding: 18px;
             margin-bottom: 0;
             border: 1px solid var(--border);
             box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
         }
 
-        @media (min-width: 680px) {
-            .container { max-width: 100%; padding: 18px 24px; }
-            .tab-content.active {
+        @media (min-width: 900px) {
+            body { padding-bottom: 24px; }
+            .app-shell {
                 display: grid;
-                grid-template-columns: minmax(0, 1fr);
-                gap: 16px;
-                align-items: start;
+                grid-template-columns: 276px minmax(0, 1fr);
+                min-height: calc(100vh - 69px);
             }
-        }
-
-        @media (min-width: 1120px) {
-            .container { max-width: 100%; padding: 24px 32px; }
-            .tab-content.active {
-                grid-template-columns: minmax(0, 1fr);
-                gap: 20px;
+            .desktop-sidebar {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                background: var(--pane);
+                border-right: 1px solid var(--border);
+                padding: 18px 14px;
+                position: sticky;
+                top: 69px;
+                height: calc(100vh - 69px);
+                overflow-y: auto;
             }
+            .sidebar-section-label {
+                font-size: 10px;
+                font-weight: 900;
+                letter-spacing: 1.3px;
+                color: #64748b;
+                padding: 8px 10px 2px;
+                text-transform: uppercase;
+            }
+            .sidebar-item {
+                width: 100%;
+                background: transparent;
+                border: 1.5px solid transparent;
+                border-radius: 14px;
+                padding: 12px 13px;
+                color: var(--text-secondary);
+                display: flex;
+                align-items: center;
+                gap: 11px;
+                cursor: pointer;
+                text-align: left;
+                transition: all 0.14s ease;
+                position: relative;
+            }
+            .sidebar-item svg { width: 20px; height: 20px; fill: currentColor; flex-shrink: 0; }
+            .sidebar-item-text { flex: 1; min-width: 0; }
+            .sidebar-item-title { font-size: 13px; font-weight: 800; color: #e2e8f0; display: block; }
+            .sidebar-item-sub { font-size: 10px; color: #64748b; display: block; margin-top: 1px; }
+            .sidebar-item:hover {
+                background: rgba(56, 189, 248, 0.1);
+                border-color: var(--focus-cyan);
+                transform: scale(1.015);
+            }
+            .sidebar-item.active {
+                background: color-mix(in srgb, var(--item-accent, #38bdf8) 16%, #131c2e);
+                border-color: var(--item-accent, #38bdf8);
+                color: var(--item-accent, #38bdf8);
+            }
+            .sidebar-item.active .sidebar-item-title { color: #ffffff; }
+            .sidebar-item.active .sidebar-item-sub { color: var(--item-accent, #38bdf8); }
+            .mobile-search-wrap { display: none; }
+            .bottom-nav { display: none !important; }
+            .container { max-width: 980px; margin: 0; padding: 22px 30px; }
+            .sub-tabs { top: 69px; }
+            .sub-tab-btn { flex: 1 1 0; text-align: center; }
+            .drawer-backdrop {
+                top: 69px;
+                left: 276px;
+                right: 0;
+                bottom: 0;
+                align-items: stretch;
+                background: var(--bg);
+                backdrop-filter: none;
+            }
+            .side-drawer {
+                width: 100%;
+                max-height: calc(100vh - 69px);
+                height: calc(100vh - 69px);
+                border-top: none;
+                border-left: 1px solid var(--border);
+                border-radius: 0;
+                box-shadow: none;
+            }
+            .drawer-header { padding: 18px 30px; }
+            .drawer-title { font-size: 20px; }
+            .drawer-sub { font-size: 12px; }
+            .drawer-body { max-width: 980px; width: 100%; padding: 22px 30px 36px; }
         }
 
         @media (max-width: 400px) {
@@ -556,7 +787,71 @@
         </div>
     </header>
 
+    <div class="app-shell">
+        <!-- DESKTOP / TABLET TWO-PANE LEFT MASTER SIDEBAR (>= 900px, mirrors Android TV SettingsModal) -->
+        <aside class="desktop-sidebar" aria-label="Menu Utama Pengaturan">
+            <div style="position:relative;margin-bottom:6px;">
+                <input type="text" id="desktopSearchInput" class="quick-search-input" placeholder="🔍 Cari menu (iqomah, qurban, relay...)" oninput="filterQuickSearch(this.value, 'desktopSearchResults')" onfocus="filterQuickSearch(this.value, 'desktopSearchResults')" autocomplete="off">
+                <div id="desktopSearchResults" class="quick-search-results"></div>
+            </div>
+
+            <div class="sidebar-section-label">Kendali Cepat</div>
+            <button class="sidebar-item active" data-tab="home" style="--item-accent:#38bdf8;" onclick="switchTab('home', event)">
+                <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
+                <span class="sidebar-item-text">
+                    <span class="sidebar-item-title">Kontrol &amp; Monitor</span>
+                    <span class="sidebar-item-sub">D-Pad, Monitor &amp; Aksi Cepat</span>
+                </span>
+            </button>
+
+            <div class="sidebar-section-label">Pengaturan (1:1 TV)</div>
+            <button class="sidebar-item" data-tab="brand" style="--item-accent:#10b981;" onclick="switchTab('brand', event)">
+                <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
+                <span class="sidebar-item-text">
+                    <span class="sidebar-item-title">Masjid</span>
+                    <span class="sidebar-item-sub">3 Sub-Menu</span>
+                </span>
+            </button>
+            <button class="sidebar-item" data-tab="sholat" style="--item-accent:#38bdf8;" onclick="switchTab('sholat', event)">
+                <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                <span class="sidebar-item-text">
+                    <span class="sidebar-item-title">Sholat &amp; Audio</span>
+                    <span class="sidebar-item-sub">4 Sub-Menu</span>
+                </span>
+            </button>
+            <button class="sidebar-item" data-tab="tampilan" style="--item-accent:#c084fc;" onclick="switchTab('tampilan', event)">
+                <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8z"/></svg>
+                <span class="sidebar-item-text">
+                    <span class="sidebar-item-title">Tampilan</span>
+                    <span class="sidebar-item-sub">4 Sub-Menu</span>
+                </span>
+            </button>
+            <button class="sidebar-item" data-tab="acara" style="--item-accent:#fbbf24;" onclick="switchTab('acara', event)">
+                <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
+                <span class="sidebar-item-text">
+                    <span class="sidebar-item-title">Acara &amp; Perangkat</span>
+                    <span class="sidebar-item-sub">4 Sub-Menu</span>
+                </span>
+            </button>
+            <button class="sidebar-item" data-tab="sistem" style="--item-accent:#2dd4bf;" onclick="switchTab('sistem', event)">
+                <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                <span class="sidebar-item-text">
+                    <span class="sidebar-item-title">Sistem</span>
+                    <span class="sidebar-item-sub">4 Sub-Menu</span>
+                </span>
+            </button>
+
+            <div style="margin-top:auto;padding:10px;border-radius:12px;background:var(--bg);border:1px solid var(--border);font-size:10px;color:var(--text-secondary);line-height:1.5;">
+                <b style="color:var(--focus-cyan);">Pintasan Keyboard:</b><br>
+                Alt+1..6 Pindah Kategori • Esc Tutup Laci
+            </div>
+        </aside>
+
     <div class="container">
+        <div class="mobile-search-wrap">
+            <input type="text" id="mobileSearchInput" class="quick-search-input" placeholder="🔍 Cari menu pengaturan (iqomah, qurban, relay, ota...)" oninput="filterQuickSearch(this.value, 'mobileSearchResults')" onfocus="filterQuickSearch(this.value, 'mobileSearchResults')" autocomplete="off">
+            <div id="mobileSearchResults" class="quick-search-results"></div>
+        </div>
         <!-- TAB 1: BERANDA -->
         <div id="tab-home" class="tab-content active">
             <div class="card">
@@ -609,7 +904,7 @@
             </div>
 
             <div class="card">
-                <span class="card-title">Aksi Cepat, Live & Simulasi</span>
+                <span class="card-title">Aksi Cepat &amp; Live</span>
                 <div class="grid-2">
                     <button id="btn-infaq" class="action-btn" onclick="sendCommand('play_infaq')">🪙 QR INFAQ</button>
                     <button id="btn-finance" class="action-btn" onclick="sendCommand('play_online_finance')">📊 KEUANGAN ONLINE</button>
@@ -619,47 +914,18 @@
                     <button id="btn-audio" class="action-btn" onclick="sendCommand('play_custom_audio')">🎵 AUDIO KUSTOM</button>
                     <button id="btn-slideshow" class="action-btn" onclick="sendCommand('play_slideshow')">🎞️ SLIDESHOW</button>
                     <button id="btn-screensaver" class="action-btn" onclick="sendCommand('screensaver')">🌙 SCREENSAVER</button>
-                    <button class="action-btn" onclick="sendCommand('test_beep')">🔔 UJI BEEP 1500Hz</button>
-                    <button id="btn-adzan" class="action-btn" onclick="sendCommand('test_adzan')" style="grid-column: span 2;">📢 UJI LAYAR ADZAN</button>
-                </div>
-                <div style="display:flex; gap:8px; margin-top:12px;">
-                    <select id="simStateSelect" style="flex:1;">
-                        <option value="standby_slideshow">Standby Slideshow</option>
-                        <option value="screensaver">Screensaver</option>
-                        <option value="tartil">Tartil</option>
-                        <option value="tarhim">Tarhim</option>
-                        <option value="adzan">Adzan</option>
-                        <option value="menunggu_iqomah">Menunggu Iqomah</option>
-                        <option value="pelaksanaan_sholat">Pelaksanaan Sholat</option>
-                        <option value="waktu_jumat">Waktu Jum'at</option>
-                        <option value="khutbah">Khutbah Jum'at</option>
-                        <option value="pelaksanaan_jumat">Pelaksanaan Jum'at</option>
-                        <option value="tarawih">Tarawih</option>
-                        <option value="sholat_tarawih">Sholat Tarawih</option>
-                        <option value="idul_fitri">Idul Fitri</option>
-                        <option value="sholat_idul_fitri">Sholat Idul Fitri</option>
-                        <option value="khutbah_idul_fitri">Khutbah Idul Fitri</option>
-                        <option value="idul_adha">Idul Adha</option>
-                        <option value="sholat_idul_adha">Sholat Idul Adha</option>
-                        <option value="khutbah_idul_adha">Khutbah Idul Adha</option>
-                        <option value="info_qurban">Info Qurban</option>
-                        <option value="live">Live YouTube</option>
-                        <option value="masjid_qr">QR Infaq Masjid</option>
-                        <option value="finance_qr">QR Keuangan Online</option>
-                        <option value="online_finance">Keuangan Online</option>
-                    </select>
-                    <button class="action-btn accent" onclick="simulateSelectedState()">▶ SIMULASI</button>
                 </div>
                 <button class="submit-btn danger" style="margin-top:12px;" onclick="sendCommand('stop')">⏹ KEMBALI KE STANDBY OTOMATIS</button>
             </div>
 
         </div>
 
-        <!-- TAB 2: MASJID & TEKS -->
+        <!-- TAB 2: MASJID (3 Sub-Menu Modular — 1:1 TV) -->
         <div id="tab-brand" class="tab-content">
             <div class="sub-tabs">
-                <button class="sub-tab-btn active" onclick="switchSubTab('brand','identitas',event)">Identitas Masjid</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('brand','qr',event)">QR Infaq &amp; Keuangan</button>
+                <button class="sub-tab-btn active" data-sub="identitas" onclick="switchSubTab('brand','identitas',event)">Identitas &amp; Logo</button>
+                <button class="sub-tab-btn" data-sub="qr" onclick="switchSubTab('brand','qr',event)">QR Infaq Digital</button>
+                <button class="sub-tab-btn" data-sub="finance" onclick="switchSubTab('brand','finance',event)">Keuangan Online</button>
             </div>
             <div id="sub-brand-identitas" class="sub-panel active">
             <div class="card">
@@ -690,7 +956,7 @@
 
             <div id="sub-brand-qr" class="sub-panel">
             <div class="card">
-                <span class="card-title">QR Infaq Digital &amp; Keuangan Online</span>
+                <span class="card-title">QR Code Infaq Digital Masjid</span>
                 <div class="grid-2" style="margin-bottom:10px;">
                     <button id="qrEnabledBtn" class="toggle-btn" onclick="toggleRemoteFlag('qrEnabledBtn')">Aktifkan QR Infaq</button>
                     <button id="qrShowFloatingBtn" class="toggle-btn" onclick="toggleRemoteFlag('qrShowFloatingBtn')">Banner Melayang QR Infaq</button>
@@ -720,8 +986,12 @@
                     </div>
                 </div>
                 <button class="submit-btn" onclick="saveMasjidQr()">💾 SIMPAN QR INFAQ DIGITAL</button>
+            </div>
+            </div>
 
-                <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+            <div id="sub-brand-finance" class="sub-panel">
+            <div class="card">
+                <span class="card-title">Keuangan Online (Google Sheets &amp; QR Kas)</span>
                 <div class="grid-2" style="margin-bottom:10px;">
                     <button id="financeEnabledBtn" class="toggle-btn" onclick="toggleRemoteFlag('financeEnabledBtn')">Aktifkan Keuangan Online</button>
                     <button id="financeShowFloatingBtn" class="toggle-btn" onclick="toggleRemoteFlag('financeShowFloatingBtn')">Banner Melayang Kas Online</button>
@@ -756,21 +1026,22 @@
                     <label>Atas Nama Rekening</label>
                     <input type="text" id="financeAn" placeholder="DKM Masjid Al-Gaffar">
                 </div>
-                <button class="submit-btn secondary" onclick="saveOnlineFinance()">💾 SIMPAN QR KEUANGAN ONLINE</button>
+                <button class="submit-btn" onclick="saveOnlineFinance()">💾 SIMPAN KEUANGAN ONLINE</button>
             </div>
             </div>
         </div>
 
-        <!-- TAB 3: SHOLAT & ACARA -->
+        <!-- TAB 3: SHOLAT & AUDIO (4 Sub-Menu Modular — 1:1 TV) -->
         <div id="tab-sholat" class="tab-content">
             <div class="sub-tabs">
-                <button class="sub-tab-btn active" onclick="switchSubTab('sholat','waktu',event)">Waktu &amp; Tahapan</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('sholat','audio',event)">Audio Sholat</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('sholat','custom',event)">Audio Kustom</button>
+                <button class="sub-tab-btn active" data-sub="lokasi" onclick="switchSubTab('sholat','lokasi',event)">Lokasi &amp; Hisab</button>
+                <button class="sub-tab-btn" data-sub="tahapan" onclick="switchSubTab('sholat','tahapan',event)">Tahapan Sholat</button>
+                <button class="sub-tab-btn" data-sub="audio" onclick="switchSubTab('sholat','audio',event)">Audio Sholat</button>
+                <button class="sub-tab-btn" data-sub="custom" onclick="switchSubTab('sholat','custom',event)">Audio Kustom</button>
             </div>
-            <div id="sub-sholat-waktu" class="sub-panel active">
+            <div id="sub-sholat-lokasi" class="sub-panel active">
             <div class="card">
-                <span class="card-title">Lokasi, Koreksi & Kalender Hijriah</span>
+                <span class="card-title">Lokasi, Metode Hisab &amp; Kalender Hijriah</span>
                 <div class="grid-2">
                     <div class="form-group">
                         <label>Latitude</label>
@@ -816,8 +1087,16 @@
                     <button id="btn-fasting" class="action-btn" style="margin-top:6px;" onclick="sendCommand('toggle_sunnah_fasting')">🌙 PUASA SUNNAH</button>
                 </div>
             </div>
+            </div>
 
-            <div id="prayerStagesContainer" style="display:contents;"></div>
+            <div id="sub-sholat-tahapan" class="sub-panel">
+            <div class="card">
+                <span class="card-title">Tahapan Sholat 5 Waktu &amp; Jum'at</span>
+                <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">
+                    Pilih waktu sholat di bawah untuk membuka laci pengaturan Tartil, Tarhim, Adzan, Iqomah, Sholat &amp; Petugas.
+                </div>
+                <div id="prayerStagesContainer" style="display:flex;flex-direction:column;gap:8px;"></div>
+            </div>
             </div>
 
             <div id="sub-sholat-audio" class="sub-panel">
@@ -877,13 +1156,27 @@
             </div>
 
             <div id="sub-sholat-custom" class="sub-panel">
-                <div class="sub-tabs" style="margin-bottom:0;">
-                    <button class="sub-tab-btn active" onclick="switchCustomAudioTab('library',event)">1. Perpustakaan</button>
-                    <button class="sub-tab-btn" onclick="switchCustomAudioTab('live',event)">2. Siaran Langsung</button>
-                    <button class="sub-tab-btn" onclick="switchCustomAudioTab('schedule',event)">3. Jadwal Otomatis</button>
+                <div class="card">
+                    <span class="card-title">Siaran Langsung &amp; Jadwal Audio Otomatis</span>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <button class="nav-row" onclick="openRemoteDrawer('Siaran Audio Langsung (On-Air)', 'Putar satu file audio seketika ke speaker masjid', 'custom-sub-live')">
+                            <div class="nav-row-left">
+                                <div class="nav-row-title">🎙️ Siaran Audio Langsung (On-Demand)</div>
+                                <div class="nav-row-sub">Putar file murattal/pengumuman langsung ke TV</div>
+                            </div>
+                            <span class="nav-row-pill"><span id="customLiveStatusBadge">STANDBY</span> ❯</span>
+                        </button>
+                        <button class="nav-row" onclick="openRemoteDrawer('Jadwal Audio Kustom Otomatis', 'Pemutaran rutin mingguan atau satu kali', 'custom-sub-schedule')">
+                            <div class="nav-row-left">
+                                <div class="nav-row-title">⏰ Jadwal Audio Otomatis</div>
+                                <div class="nav-row-sub">Kelola jadwal rutin mingguan &amp; tanggal khusus</div>
+                            </div>
+                            <span class="nav-row-pill">Kelola ❯</span>
+                        </button>
+                    </div>
                 </div>
 
-                <div id="custom-sub-library" class="sub-panel active">
+                <div id="custom-sub-library">
                     <div class="card">
                         <span class="card-title">Perpustakaan Audio Kustom</span>
                         <div class="form-group">
@@ -895,12 +1188,10 @@
                     </div>
                 </div>
 
-                <div id="custom-sub-live" class="sub-panel">
-                    <div class="card">
-                        <span class="card-title">
-                            <span>Siaran Audio Langsung (On-Demand)</span>
-                            <span id="customLiveStatusBadge" style="font-size:10px;color:var(--text-secondary);font-weight:800;">STANDBY</span>
-                        </span>
+                <!-- Level-3 Staging Panels for Side Drawer / Bottom Sheet -->
+                <div style="display:none;">
+                <div id="custom-sub-live">
+                    <div class="card" style="border:none;padding:0;background:transparent;box-shadow:none;">
                         <div class="form-group">
                             <label>File Audio Aktif</label>
                             <input type="text" id="customLiveFile" placeholder="audio/custom/nama_file.mp3 (pilih dari Perpustakaan)">
@@ -913,9 +1204,8 @@
                     </div>
                 </div>
 
-                <div id="custom-sub-schedule" class="sub-panel">
-                    <div class="card">
-                        <span class="card-title">Jadwal Audio Kustom Otomatis</span>
+                <div id="custom-sub-schedule">
+                    <div class="card" style="border:none;padding:0;background:transparent;box-shadow:none;">
                         <div id="customAudioScheduleBox" class="list-box"></div>
                         <hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">
                         <div class="form-group">
@@ -964,19 +1254,18 @@
                         <button class="submit-btn" onclick="addCustomAudioSchedule()">+ TAMBAH JADWAL OTOMATIS</button>
                     </div>
                 </div>
+                </div>
             </div>
 
         </div>
 
-        <!-- TAB 3B: TAMPILAN -->
+        <!-- TAB 3B: TAMPILAN (4 Sub-Menu Modular — 1:1 TV) -->
         <div id="tab-tampilan" class="tab-content">
             <div class="sub-tabs">
-                <button class="sub-tab-btn active" onclick="switchSubTab('tampilan','tema',event)">Tema, Layout &amp; Jam</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('tampilan','overlay',event)">Overlay Text</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('tampilan','info',event)">Kartu Info</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('tampilan','slides',event)">Slideshow Info</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('tampilan','media',event)">Tartil &amp; Media</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('tampilan','standby',event)">Mode Standby</button>
+                <button class="sub-tab-btn active" data-sub="tema" onclick="switchSubTab('tampilan','tema',event)">Tema, Layout &amp; Jam</button>
+                <button class="sub-tab-btn" data-sub="overlayinfo" onclick="switchSubTab('tampilan','overlayinfo',event)">Overlay &amp; Info/PHBI</button>
+                <button class="sub-tab-btn" data-sub="slides" onclick="switchSubTab('tampilan','slides',event)">Slideshow Info</button>
+                <button class="sub-tab-btn" data-sub="mediastandby" onclick="switchSubTab('tampilan','mediastandby',event)">Media &amp; Standby</button>
             </div>
             <div id="sub-tampilan-tema" class="sub-panel active">
             <div class="card">
@@ -1030,9 +1319,44 @@
             </div>
 
 
-            <div id="sub-tampilan-overlay" class="sub-panel">
+            <div id="sub-tampilan-overlayinfo" class="sub-panel">
             <div class="card">
-                <span class="card-title">Floating Overlay (Statis)</span>
+                <span class="card-title">Floating Overlay, Kartu Info &amp; Agenda PHBI</span>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <button class="nav-row" onclick="openRemoteDrawer('Floating Overlay Statis', 'Atur judul & isi pesan overlay yang dipanggil Group Slideshow', 'overlay-drawer-panel')">
+                        <div class="nav-row-left">
+                            <div class="nav-row-title">💬 Floating Overlay Statis</div>
+                            <div class="nav-row-sub">Kelola daftar pesan singkat statis layar utama</div>
+                        </div>
+                        <span class="nav-row-pill">Kelola ❯</span>
+                    </button>
+                    <button class="nav-row" onclick="openRemoteDrawer('Kartu Info Masjid', 'Pengumuman kajian & kegiatan pada Card 1', 'info-sub-kartu')">
+                        <div class="nav-row-left">
+                            <div class="nav-row-title">📌 Kartu Informasi Masjid (Card 1)</div>
+                            <div class="nav-row-sub">Tambah atau hapus kartu pengumuman masjid</div>
+                        </div>
+                        <span class="nav-row-pill">Kelola ❯</span>
+                    </button>
+                    <button class="nav-row" onclick="openRemoteDrawer('Agenda Islami & PHBI', 'Info puasa sunnah & hitung mundur Hari Besar Islam', 'info-sub-phbi')">
+                        <div class="nav-row-left">
+                            <div class="nav-row-title">🌙 Agenda Islami &amp; PHBI</div>
+                            <div class="nav-row-sub">Pengingat puasa sunnah &amp; agenda Hijriah/Masehi</div>
+                        </div>
+                        <span class="nav-row-pill">Kelola ❯</span>
+                    </button>
+                    <button class="nav-row" onclick="openRemoteDrawer('Teks Hadits & Pesan Layar', 'Ubah atau kosongkan teks Hadits (Adzan & Iqomah) serta kalimat himbauan layar TV', 'screen-texts-panel')">
+                        <div class="nav-row-left">
+                            <div class="nav-row-title">📜 Teks Hadits &amp; Pesan Layar</div>
+                            <div class="nav-row-sub">Adzan, Iqomah, Jum'at, Tarawih, Hari Raya, Qurban &amp; QR</div>
+                        </div>
+                        <span class="nav-row-pill">11 Slot ❯</span>
+                    </button>
+                </div>
+            </div>
+
+            <div style="display:none;">
+            <div id="overlay-drawer-panel">
+            <div class="card" style="border:none;padding:0;background:transparent;box-shadow:none;">
                 <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">
                     Atur Judul &amp; Isi Floating Overlay. Posisi sudut, durasi tampil (Total Durasi Slide ÷ Jumlah Overlay), dan pemanggilan diatur di masing-masing Group Slideshow.
                 </div>
@@ -1052,14 +1376,8 @@
             </div>
             </div>
 
-
-            <div id="sub-tampilan-info" class="sub-panel">
-            <div class="sub-tabs" style="margin-bottom:0;">
-                <button class="sub-tab-btn active" onclick="switchInfoSubTab('kartu',event)">1. Kartu Info Masjid</button>
-                <button class="sub-tab-btn" onclick="switchInfoSubTab('phbi',event)">2. Agenda Islami &amp; PHBI</button>
-            </div>
-            <div id="info-sub-kartu" class="sub-panel active">
-            <div class="card">
+            <div id="info-sub-kartu">
+            <div class="card" style="border:none;padding:0;background:transparent;box-shadow:none;">
                 <span class="card-title">Kartu Info Masjid (Card 1)</span>
                 <div id="infoListBox" class="list-box"></div>
                 <div class="grid-2">
@@ -1083,8 +1401,8 @@
             </div>
             </div>
 
-            <div id="info-sub-phbi" class="sub-panel">
-                <div class="card">
+            <div id="info-sub-phbi">
+                <div class="card" style="border:none;padding:0;background:transparent;box-shadow:none;">
                     <span class="card-title">
                         <span>Agenda Islami &amp; PHBI</span>
                         <button class="mini-btn" onclick="if(confirm('Reset daftar agenda PHBI ke default?')) sendCommand('reset_islamic_events', {}, '🔄 Agenda PHBI direset!')">Reset Default</button>
@@ -1140,6 +1458,63 @@
                     </div>
                     <button class="submit-btn" onclick="addPhbiEvent()">+ TAMBAH AGENDA PHBI</button>
                 </div>
+            </div>
+
+            <div id="screen-texts-panel">
+                <div class="card" style="border:none;padding:0;background:transparent;box-shadow:none;">
+                    <div style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;line-height:1.5;">
+                        Ubah atau kosongkan kotak teks di bawah bila ingin menyembunyikan teks Hadits / kalimat pengingat pada layar terkait.
+                    </div>
+                    <div class="form-group">
+                        <label>1. Hadits / Kutipan Layar Adzan</label>
+                        <textarea id="st-adzanHadith" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>2. Hadits Layar Menunggu Iqomah (&gt; 2 Mnt)</label>
+                        <textarea id="st-iqomahHadith" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>3. Peringatan Merah Menjelang Iqomah (≤ 2 Mnt)</label>
+                        <textarea id="st-iqomahWarning" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>4. Pengingat Layar Waktu Jum'at</label>
+                        <textarea id="st-waktuJumatReminder" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>5. Pengingat Layar Tarawih</label>
+                        <textarea id="st-tarawihReminder" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>6. Pengingat Layar Idul Fitri</label>
+                        <textarea id="st-idulFitriReminder" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>7. Pengingat Layar Idul Adha</label>
+                        <textarea id="st-idulAdhaReminder" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>8. Pengingat Layar Info Qurban</label>
+                        <textarea id="st-infoQurbanReminder" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>9. Himbauan Layar QR Infaq Masjid</label>
+                        <textarea id="st-masjidQrGuidance" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>10. Himbauan Layar QR Keuangan Online</label>
+                        <textarea id="st-financeQrGuidance" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>11. Kutipan Footer Layar Keuangan Online (Gunakan {{Nama Masjid}})</label>
+                        <textarea id="st-onlineFinanceFooterQuote" rows="2"></textarea>
+                    </div>
+                    <div class="grid-2" style="margin-top:8px;">
+                        <button class="submit-btn" onclick="saveScreenTexts()">💾 SIMPAN TEKS LAYAR</button>
+                        <button class="submit-btn danger" onclick="resetScreenTexts()">🔄 RESET DEFAULT</button>
+                    </div>
+                </div>
+            </div>
             </div>
             </div>
 
@@ -1225,7 +1600,7 @@
 
             </div>
 
-            <div id="sub-tampilan-media" class="sub-panel">
+            <div id="sub-tampilan-mediastandby" class="sub-panel">
             <div class="card">
                 <span class="card-title">Unduh Paket Gambar Lengkap (1-Klik HTTPS)</span>
                 <p style="font-size:12px;color:var(--text-secondary);margin:0 0 10px 0;line-height:1.45;">
@@ -1304,9 +1679,7 @@
                 </div>
                 <button class="submit-btn secondary" onclick="uploadMediaBgFile()">🖼️ UNGGAH LATAR IBADAH</button>
             </div>
-            </div>
 
-            <div id="sub-tampilan-standby" class="sub-panel">
                 <div class="card">
                     <span class="card-title">Mode Fullscreen Standby Slideshow</span>
                     <button id="standbyEnabledBtn" class="toggle-btn" style="width:100%;margin-bottom:12px;" onclick="toggleRemoteFlag('standbyEnabledBtn')">Aktifkan Fullscreen Standby Slideshow</button>
@@ -1334,17 +1707,15 @@
             </div>
         </div>
 
-        <!-- TAB 4: ACARA & SAKLAR -->
+        <!-- TAB 4: ACARA & PERANGKAT (4 Sub-Menu Modular — 1:1 TV) -->
         <div id="tab-acara" class="tab-content">
             <div class="sub-tabs">
-                <button class="sub-tab-btn active" onclick="switchSubTab('acara','jumat',event)">Jum'at</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('acara','ramadhan',event)">Ramadhan</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('acara','fitri',event)">Idul Fitri</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('acara','adha',event)">Idul Adha &amp; Qurban</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('acara','saklar',event)">Screensaver &amp; Saklar</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('acara','live',event)">Siaran Live</button>
+                <button class="sub-tab-btn active" data-sub="jumatramadhan" onclick="switchSubTab('acara','jumatramadhan',event)">Jum'at &amp; Ramadhan</button>
+                <button class="sub-tab-btn" data-sub="hariraya" onclick="switchSubTab('acara','hariraya',event)">Idul Fitri &amp; Adha</button>
+                <button class="sub-tab-btn" data-sub="livescreensaver" onclick="switchSubTab('acara','livescreensaver',event)">Live &amp; Screensaver</button>
+                <button class="sub-tab-btn" data-sub="saklar" onclick="switchSubTab('acara','saklar',event)">Hardware Saklar</button>
             </div>
-            <div id="sub-acara-jumat" class="sub-panel active">
+            <div id="sub-acara-jumatramadhan" class="sub-panel active">
             <div class="card">
                 <span class="card-title">
                     <span>Buku Kas &amp; Jurnal Transaksi Jum'at</span>
@@ -1395,9 +1766,7 @@
                 </div>
                 <button class="submit-btn" onclick="addJumatJournal()">+ TAMBAH TRANSAKSI JURNAL</button>
             </div>
-            </div>
 
-            <div id="sub-acara-ramadhan" class="sub-panel">
             <div class="card">
                 <span class="card-title">Ramadhan (Petugas, Kas, Ta'jil &amp; Sirine)</span>
                 <div class="grid-2">
@@ -1473,7 +1842,7 @@
 
             </div>
 
-            <div id="sub-acara-fitri" class="sub-panel">
+            <div id="sub-acara-hariraya" class="sub-panel">
             <div class="card">
                 <span class="card-title">Hari Raya Idul Fitri</span>
                 <div class="grid-3">
@@ -1511,9 +1880,6 @@
                 <button class="submit-btn" onclick="saveIdulFitri()">💾 SIMPAN IDUL FITRI</button>
             </div>
 
-            </div>
-
-            <div id="sub-acara-adha" class="sub-panel">
             <div class="card">
                 <span class="card-title">Idul Adha &amp; Kelompok Qurban</span>
                 <div class="grid-3">
@@ -1547,22 +1913,7 @@
 
             <div id="sub-acara-saklar" class="sub-panel">
             <div class="card">
-                <span class="card-title">Screensaver &amp; Hardware Saklar (Relay)</span>
-                <div style="margin-bottom:10px;">
-                    <button id="screensaverEnabledBtn" class="toggle-btn" style="width:100%;" onclick="toggleRemoteFlag('screensaverEnabledBtn')">🌙 Aktifkan Screensaver Otomatis</button>
-                </div>
-                <div class="grid-2">
-                    <div class="form-group">
-                        <label>Jam Mulai (HH:mm)</label>
-                        <input type="text" id="ssStartTime" placeholder="22:00">
-                    </div>
-                    <div class="form-group">
-                        <label>Jam Selesai (HH:mm)</label>
-                        <input type="text" id="ssEndTime" placeholder="03:30">
-                    </div>
-                </div>
-                <button class="submit-btn secondary" onclick="saveScreensaver()">💾 SIMPAN SCREENSAVER</button>
-                <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">
+                <span class="card-title">Hardware Saklar Otomatis (Relay WiFi &amp; USB)</span>
                 <div class="grid-2" style="margin-bottom:10px;">
                     <button id="switchMasterBtn" class="toggle-btn" onclick="toggleSwitchMaster()">⚡ Saklar Otomatis</button>
                     <select id="switchConnType">
@@ -1593,10 +1944,26 @@
                 </div>
                 <div id="switchChannelEditor"></div>
             </div>
-
             </div>
 
-            <div id="sub-acara-live" class="sub-panel">
+            <div id="sub-acara-livescreensaver" class="sub-panel">
+            <div class="card">
+                <span class="card-title">Mode Malam / Screensaver Anti Burn-In</span>
+                <div style="margin-bottom:10px;">
+                    <button id="screensaverEnabledBtn" class="toggle-btn" style="width:100%;" onclick="toggleRemoteFlag('screensaverEnabledBtn')">🌙 Aktifkan Screensaver Otomatis</button>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Jam Mulai (HH:mm)</label>
+                        <input type="text" id="ssStartTime" placeholder="22:00">
+                    </div>
+                    <div class="form-group">
+                        <label>Jam Selesai (HH:mm)</label>
+                        <input type="text" id="ssEndTime" placeholder="03:30">
+                    </div>
+                </div>
+                <button class="submit-btn secondary" onclick="saveScreensaver()">💾 SIMPAN SCREENSAVER</button>
+            </div>
             <div class="card">
                 <span class="card-title">Preset Live Streaming (YouTube &amp; HLS .m3u8)</span>
                 <div class="form-group">
@@ -1641,52 +2008,26 @@
             </div>
         </div>
 
-        <!-- TAB 5: SISTEM -->
+        <!-- TAB 5: SISTEM (4 Sub-Menu Modular — 1:1 TV) -->
         <div id="tab-sistem" class="tab-content">
             <div class="sub-tabs">
-                <button class="sub-tab-btn active" onclick="switchSubTab('sistem','backup',event)">Data &amp; Backup</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('sistem','ota',event)">Update OTA</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('sistem','admin',event)">Kelola Admin</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('sistem','koneksi',event)">Remote &amp; Jaringan</button>
-                <button class="sub-tab-btn" onclick="switchSubTab('sistem','logs',event)">Log Aktivitas</button>
+                <button class="sub-tab-btn active" data-sub="koneksi" onclick="switchSubTab('sistem','koneksi',event)">Remote &amp; Jaringan</button>
+                <button class="sub-tab-btn" data-sub="admin" onclick="switchSubTab('sistem','admin',event)">Akses &amp; Input</button>
+                <button class="sub-tab-btn" data-sub="backup" onclick="switchSubTab('sistem','backup',event)">Backup &amp; Update</button>
+                <button class="sub-tab-btn" data-sub="logs" onclick="switchSubTab('sistem','logs',event)">Log &amp; Perangkat</button>
             </div>
-            <div id="sub-sistem-backup" class="sub-panel active">
+
+            <div id="sub-sistem-koneksi" class="sub-panel active">
             <div class="card">
-                <span class="card-title">
-                    <span>Memori TV &amp; Backup Pengaturan</span>
-                    <span id="mediaStorageBadge" style="font-size:11px;color:var(--accent);font-weight:800;">AMAN</span>
-                </span>
-                <div id="mediaStorageSummary" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
-                    Memuat status penyimpanan internal TV...
+                <span class="card-title">Remote Server &amp; Koneksi</span>
+                <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:12px;">
+                    Server Remote Lokal berjalan pada port <b>1421</b> dengan proteksi Bearer Token &amp; Rate Limiter (120 req/menit).
                 </div>
                 <div class="grid-2">
-                    <button class="submit-btn secondary" id="btnCleanOrphan" onclick="sendCommand('cleanup_orphan_media', {}, 'Membersihkan file media tidak terpakai...')">
-                        🧹 BERSIHKAN MEDIA
-                    </button>
-                    <button class="submit-btn" onclick="downloadBackupJson()">
-                        📥 BACKUP JSON
-                    </button>
+                    <button class="action-btn accent" onclick="pollStatus().then(() => showToast('✅ Status TV diperbarui!'))">🔄 REFRESH STATUS</button>
+                    <button class="action-btn danger" onclick="logoutAuth()">🚪 KELUAR SESI</button>
                 </div>
             </div>
-
-            </div>
-
-            <div id="sub-sistem-ota" class="sub-panel">
-            <div class="card">
-                <span class="card-title">OTA Self-Updater (Pembaruan Aplikasi)</span>
-                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">
-                    Perbarui aplikasi Al-Gaffar TV secara online (HTTPS + SHA-256) atau unggah file <b>.apk</b> langsung dari HP/PC (khusus Superadmin).
-                </div>
-                <button class="action-btn accent" style="width:100%;margin-bottom:12px;" onclick="sendCommand('check_ota_update', {}, '🔄 Memeriksa pembaruan online di TV...')">
-                    🔄 CEK PEMBARUAN ONLINE (OTA)
-                </button>
-                <div class="form-group">
-                    <label>Unggah APK Pembaruan Offline (.apk, Maks 180 MB)</label>
-                    <input type="file" id="otaApkInput" accept=".apk,application/vnd.android.package-archive">
-                </div>
-                <button class="submit-btn" onclick="uploadOtaApk()">📲 UNGGAH &amp; INSTALL APK KE TV</button>
-            </div>
-
             </div>
 
             <div id="sub-sistem-admin" class="sub-panel">
@@ -1709,24 +2050,85 @@
                 </div>
                 <button class="submit-btn" onclick="saveAdminPin()">🔐 PERBARUI PIN AKUN</button>
             </div>
-
             </div>
 
-            <div id="sub-sistem-koneksi" class="sub-panel">
+            <div id="sub-sistem-backup" class="sub-panel">
             <div class="card">
-                <span class="card-title">Remote Server &amp; Koneksi</span>
-                <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:12px;">
-                    Server Remote Lokal berjalan pada port <b>1421</b> dengan proteksi Bearer Token &amp; Rate Limiter (120 req/menit).
+                <span class="card-title">
+                    <span>Memori TV &amp; Backup Pengaturan</span>
+                    <span id="mediaStorageBadge" style="font-size:11px;color:var(--accent);font-weight:800;">AMAN</span>
+                </span>
+                <div id="mediaStorageSummary" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+                    Memuat status penyimpanan internal TV...
                 </div>
                 <div class="grid-2">
-                    <button class="action-btn accent" onclick="pollStatus().then(() => showToast('✅ Status TV diperbarui!'))">🔄 REFRESH STATUS</button>
-                    <button class="action-btn danger" onclick="logoutAuth()">🚪 KELUAR SESI</button>
+                    <button class="submit-btn secondary" id="btnCleanOrphan" onclick="sendCommand('cleanup_orphan_media', {}, 'Membersihkan file media tidak terpakai...')">
+                        🧹 BERSIHKAN MEDIA
+                    </button>
+                    <button class="submit-btn" onclick="downloadBackupJson()">
+                        📥 BACKUP JSON
+                    </button>
                 </div>
             </div>
 
+            <div class="card">
+                <span class="card-title">OTA Self-Updater (Pembaruan Aplikasi)</span>
+                <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-bottom:10px;">
+                    Perbarui aplikasi Al-Gaffar TV secara online (HTTPS + SHA-256) atau unggah file <b>.apk</b> langsung dari HP/PC (khusus Superadmin).
+                </div>
+                <button class="action-btn accent" style="width:100%;margin-bottom:12px;" onclick="sendCommand('check_ota_update', {}, '🔄 Memeriksa pembaruan online di TV...')">
+                    🔄 CEK PEMBARUAN ONLINE (OTA)
+                </button>
+                <div class="form-group">
+                    <label>Unggah APK Pembaruan Offline (.apk, Maks 180 MB)</label>
+                    <input type="file" id="otaApkInput" accept=".apk,application/vnd.android.package-archive">
+                </div>
+                <button class="submit-btn" onclick="uploadOtaApk()">📲 UNGGAH &amp; INSTALL APK KE TV</button>
+            </div>
             </div>
 
             <div id="sub-sistem-logs" class="sub-panel">
+            <div id="superadminSimCard" class="card" style="display:none;">
+                <span class="card-title">
+                    <span>Panel Simulasi State &amp; Uji Audio</span>
+                    <span style="font-size:10px;color:#2dd4bf;font-weight:800;">KHUSUS SUPERADMIN</span>
+                </span>
+                <div class="grid-2" style="margin-bottom:10px;">
+                    <button class="action-btn" onclick="sendCommand('test_beep')">🔔 UJI BEEP 1500Hz</button>
+                    <button id="btn-adzan" class="action-btn" onclick="sendCommand('test_adzan')">📢 UJI LAYAR ADZAN</button>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <select id="simStateSelect" style="flex:1;">
+                        <option value="standby_slideshow">Standby Slideshow</option>
+                        <option value="screensaver">Screensaver</option>
+                        <option value="tartil">Tartil</option>
+                        <option value="tarhim">Tarhim</option>
+                        <option value="adzan">Adzan</option>
+                        <option value="doa_adzan">Do'a Setelah Adzan</option>
+                        <option value="menunggu_iqomah">Menunggu Iqomah</option>
+                        <option value="pelaksanaan_sholat">Pelaksanaan Sholat</option>
+                        <option value="waktu_jumat">Waktu Jum'at</option>
+                        <option value="khutbah">Khutbah Jum'at</option>
+                        <option value="pelaksanaan_jumat">Pelaksanaan Jum'at</option>
+                        <option value="tarawih">Tarawih</option>
+                        <option value="sholat_tarawih">Sholat Tarawih</option>
+                        <option value="idul_fitri">Idul Fitri</option>
+                        <option value="sholat_idul_fitri">Sholat Idul Fitri</option>
+                        <option value="khutbah_idul_fitri">Khutbah Idul Fitri</option>
+                        <option value="idul_adha">Idul Adha</option>
+                        <option value="sholat_idul_adha">Sholat Idul Adha</option>
+                        <option value="khutbah_idul_adha">Khutbah Idul Adha</option>
+                        <option value="info_qurban">Info Qurban</option>
+                        <option value="live">Live YouTube</option>
+                        <option value="masjid_qr">QR Infaq Masjid</option>
+                        <option value="finance_qr">QR Keuangan Online</option>
+                        <option value="online_finance">Keuangan Online</option>
+                    </select>
+                    <button class="action-btn accent" onclick="simulateSelectedState()">▶ SIMULASI</button>
+                </div>
+                <button class="submit-btn danger" style="margin-top:12px;" onclick="sendCommand('stop')">⏹ KEMBALI KE STANDBY OTOMATIS</button>
+            </div>
+
             <div class="card">
                 <span class="card-title">
                     <span>Log Aktivitas TV (25 Terbaru)</span>
@@ -1737,29 +2139,44 @@
             </div>
         </div>
     </div>
+    </div> <!-- /app-shell -->
+
+    <!-- LEVEL-3 SLIDE-OVER SIDE DRAWER (DESKTOP) / BOTTOM SHEET (MOBILE) -->
+    <div id="remoteDrawerBackdrop" class="drawer-backdrop" onclick="if(event.target===this) closeRemoteDrawer()">
+        <div class="side-drawer" role="dialog" aria-modal="true" aria-labelledby="remoteDrawerTitle">
+            <div class="drawer-header">
+                <div>
+                    <h2 id="remoteDrawerTitle" class="drawer-title">Detail Pengaturan</h2>
+                    <div id="remoteDrawerSub" class="drawer-sub"></div>
+                </div>
+                <button class="drawer-close-btn" onclick="closeRemoteDrawer()">Selesai ✕</button>
+            </div>
+            <div id="remoteDrawerBody" class="drawer-body"></div>
+        </div>
+    </div>
 
     <nav class="bottom-nav">
-        <button class="nav-item active" onclick="switchTab('home', event)">
+        <button class="nav-item active" data-tab="home" style="--item-accent:#38bdf8;" onclick="switchTab('home', event)">
             <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
-            <span>Beranda</span>
+            <span>Kontrol</span>
         </button>
-        <button class="nav-item" onclick="switchTab('brand', event)">
+        <button class="nav-item" data-tab="brand" style="--item-accent:#10b981;" onclick="switchTab('brand', event)">
             <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></svg>
             <span>Masjid</span>
         </button>
-        <button class="nav-item" onclick="switchTab('sholat', event)">
+        <button class="nav-item" data-tab="sholat" style="--item-accent:#38bdf8;" onclick="switchTab('sholat', event)">
             <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
             <span>Sholat</span>
         </button>
-        <button class="nav-item" onclick="switchTab('tampilan', event)">
+        <button class="nav-item" data-tab="tampilan" style="--item-accent:#c084fc;" onclick="switchTab('tampilan', event)">
             <svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
             <span>Tampilan</span>
         </button>
-        <button class="nav-item" onclick="switchTab('acara', event)">
+        <button class="nav-item" data-tab="acara" style="--item-accent:#fbbf24;" onclick="switchTab('acara', event)">
             <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
             <span>Acara</span>
         </button>
-        <button class="nav-item" onclick="switchTab('sistem', event)">
+        <button class="nav-item" data-tab="sistem" style="--item-accent:#2dd4bf;" onclick="switchTab('sistem', event)">
             <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
             <span>Sistem</span>
         </button>
@@ -1787,28 +2204,38 @@
             { id: 'isha', label: 'ISYA' }
         ];
 
-        function switchPrayerStageTab(stageId, evt) {
-            vibe();
-            const box = document.getElementById('prayerStagesContainer');
-            if (!box) return;
-            box.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
-            box.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
-            const target = document.getElementById('prayer-tab-' + stageId);
-            if (target) target.classList.add('active');
-            if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+        function switchPrayerStageTab(stageId) {
+            const p = PRAYERS_META.find(item => item.id === stageId);
+            const title = stageId === 'jumat' ? "Pengaturan Sholat Jum'at" : `Pengaturan Sholat ${p ? p.label : stageId.toUpperCase()}`;
+            openRemoteDrawer(title, 'Toggle Tartil/Tarhim/Adzan, durasi, Imam/Muadzin & pesan layar', 'prayer-tab-' + stageId);
         }
 
         function buildPrayerStageCards() {
             const box = document.getElementById('prayerStagesContainer');
             if (!box) return;
-            const tabsHtml = `
-                <div class="sub-tabs" style="margin-bottom:10px;">
-                    ${PRAYERS_META.map((p, idx) => `<button class="sub-tab-btn ${idx === 0 ? 'active' : ''}" onclick="switchPrayerStageTab('${p.id}', event)">${p.label}</button>`).join('')}
-                    <button class="sub-tab-btn" onclick="switchPrayerStageTab('jumat', event)">JUM'AT</button>
-                </div>
-            `;
-            const prayersHtml = PRAYERS_META.map((p, idx) => `
-                <div id="prayer-tab-${p.id}" class="sub-panel ${idx === 0 ? 'active' : ''}">
+            const rowsHtml = [
+                ...PRAYERS_META.map(p => `
+                    <button class="nav-row" onclick="switchPrayerStageTab('${p.id}')">
+                        <div class="nav-row-left">
+                            <div class="nav-row-title">🕌 Sholat ${p.label}</div>
+                            <div class="nav-row-sub">Tartil, Tarhim, Adzan, Iqomah, Sholat, Imam &amp; Muadzin</div>
+                        </div>
+                        <span class="nav-row-pill">Atur ❯</span>
+                    </button>
+                `),
+                `
+                    <button class="nav-row" onclick="switchPrayerStageTab('jumat')">
+                        <div class="nav-row-left">
+                            <div class="nav-row-title">📅 Mode Sholat Jum'at</div>
+                            <div class="nav-row-sub">Durasi Waktu Jum'at, Khutbah, Sholat, Khotib, Imam &amp; Muadzin</div>
+                        </div>
+                        <span class="nav-row-pill">Atur ❯</span>
+                    </button>
+                `
+            ].join('');
+
+            const prayersHtml = PRAYERS_META.map(p => `
+                <div id="prayer-tab-${p.id}">
                     <div class="grid-3" style="margin-bottom:10px;">
                         <button id="${p.id}-isTartil" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: '${p.id}', setting: 'isTartil' })">📖 TARTIL</button>
                         <button id="${p.id}-isTarhim" class="action-btn" onclick="sendCommand('toggle_prayer_setting', { prayer: '${p.id}', setting: 'isTarhim' })">🕯️ TARHIM</button>
@@ -1865,7 +2292,7 @@
             `).join('');
 
             const jumatHtml = `
-                <div id="prayer-tab-jumat" class="sub-panel">
+                <div id="prayer-tab-jumat">
                     <button id="jumat-stage-enabled" class="toggle-btn" style="width:100%;margin-bottom:10px;" onclick="toggleRemoteFlag('jumat-stage-enabled')">Aktifkan Mode Sholat Jum'at</button>
                     <div class="grid-3">
                         <div class="form-group">
@@ -1907,7 +2334,7 @@
                 </div>
             `;
 
-            box.innerHTML = `<div class="card"><span class="card-title">Tahapan 5 Waktu Sholat &amp; Jum'at</span>${tabsHtml}${prayersHtml}${jumatHtml}</div>`;
+            box.innerHTML = `${rowsHtml}<div style="display:none;">${prayersHtml}${jumatHtml}</div>`;
         }
         buildPrayerStageCards();
 
@@ -2079,24 +2506,171 @@
             uploadBinaryFile(cat, cat === 'custom' ? '' : slot, inp.files[0]).then(() => { inp.value = ''; });
         }
 
+        const CATEGORY_ACCENTS = {
+            home: '#38bdf8',
+            brand: '#10b981',
+            sholat: '#38bdf8',
+            tampilan: '#c084fc',
+            acara: '#fbbf24',
+            sistem: '#2dd4bf'
+        };
+
+        // Level-3 Drawer DOM reparenting (preserves all element IDs & form states seamlessly)
+        let activeDrawerPanel = null;
+        let activeDrawerPlaceholder = null;
+
+        function openRemoteDrawer(title, subtitle, panelId) {
+            vibe();
+            closeRemoteDrawer();
+            const panel = document.getElementById(panelId);
+            const backdrop = document.getElementById('remoteDrawerBackdrop');
+            const body = document.getElementById('remoteDrawerBody');
+            if (!panel || !backdrop || !body) return;
+
+            activeDrawerPlaceholder = document.createComment('drawer-placeholder-' + panelId);
+            panel.parentNode.insertBefore(activeDrawerPlaceholder, panel);
+            activeDrawerPanel = panel;
+            body.innerHTML = '';
+            body.appendChild(panel);
+
+            document.getElementById('remoteDrawerTitle').textContent = title || 'Pengaturan Detail';
+            document.getElementById('remoteDrawerSub').textContent = subtitle || '';
+            backdrop.classList.add('open');
+            setTimeout(() => backdrop.querySelector('.drawer-close-btn')?.focus(), 50);
+        }
+
+        function closeRemoteDrawer() {
+            const backdrop = document.getElementById('remoteDrawerBackdrop');
+            if (activeDrawerPanel && activeDrawerPlaceholder && activeDrawerPlaceholder.parentNode) {
+                activeDrawerPlaceholder.parentNode.insertBefore(activeDrawerPanel, activeDrawerPlaceholder);
+                activeDrawerPlaceholder.remove();
+            }
+            activeDrawerPanel = null;
+            activeDrawerPlaceholder = null;
+            if (backdrop) backdrop.classList.remove('open');
+        }
+
         function switchTab(tabId, evt) {
             vibe();
+            closeRemoteDrawer();
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            document.getElementById('tab-' + tabId).classList.add('active');
-            if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+            document.querySelectorAll('.nav-item, .sidebar-item').forEach(n => {
+                n.classList.toggle('active', n.dataset.tab === tabId);
+            });
+            const target = document.getElementById('tab-' + tabId);
+            if (target) target.classList.add('active');
+            document.documentElement.style.setProperty('--cat-accent', CATEGORY_ACCENTS[tabId] || '#38bdf8');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function switchSubTab(parentTab, subId, evt) {
             vibe();
+            closeRemoteDrawer();
             const parent = document.getElementById('tab-' + parentTab);
             if (!parent) return;
-            parent.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active'));
-            parent.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+            parent.querySelectorAll(':scope > .sub-panel').forEach(p => p.classList.remove('active'));
+            parent.querySelectorAll(':scope > .sub-tabs > .sub-tab-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.sub === subId);
+            });
             const target = document.getElementById('sub-' + parentTab + '-' + subId);
             if (target) target.classList.add('active');
             if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
         }
+
+        let currentCallerRole = 'admin';
+
+        // Quick Search index matching 1:1 with TV & Remote PWA unified menu tree
+        const QUICK_SEARCH_INDEX = [
+            { title: 'Monitor TV, D-Pad & Aksi Cepat', cat: 'Kontrol', tab: 'home', sub: '', kw: 'remote dpad cpu ram live infaq slideshow' },
+            { title: 'Identitas Masjid & Logo', cat: 'Masjid', tab: 'brand', sub: 'identitas', kw: 'nama alamat telepon logo masjid' },
+            { title: 'QR Infaq Digital', cat: 'Masjid', tab: 'brand', sub: 'qr', kw: 'qr qris infaq sedekah rekening bank' },
+            { title: 'Keuangan Online (Google Sheets)', cat: 'Masjid', tab: 'brand', sub: 'finance', kw: 'keuangan kas online sheets laporan csv' },
+            { title: 'Lokasi, Koordinat & Metode Hisab', cat: 'Sholat & Audio', tab: 'sholat', sub: 'lokasi', kw: 'lokasi koordinat lat lng hisab madzhab ihtiyati hijriah puasa' },
+            { title: 'Tahapan Sholat 5 Waktu & Jum\'at', cat: 'Sholat & Audio', tab: 'sholat', sub: 'tahapan', kw: 'tartil tarhim adzan iqomah sholat imam muadzin subuh dzuhur ashar maghrib isya' },
+            { title: 'Audio Sholat & Volume Master', cat: 'Sholat & Audio', tab: 'sholat', sub: 'audio', kw: 'volume audio mp3 adzan tarhim tartil paket makkah madinah' },
+            { title: 'Audio Kustom, On-Air & Jadwal', cat: 'Sholat & Audio', tab: 'sholat', sub: 'custom', kw: 'audio kustom murattal siaran langsung jadwal otomatis' },
+            { title: 'Tema Visual, Tata Letak & Gaya Jam', cat: 'Tampilan', tab: 'tampilan', sub: 'tema', kw: 'tema warna layout posisi jam digital classic golden neon' },
+            { title: 'Floating Overlay, Kartu Info & PHBI', cat: 'Tampilan', tab: 'tampilan', sub: 'overlayinfo', kw: 'overlay text pengumuman kartu info phbi agenda islami puasa' },
+            { title: 'Teks Hadits & Pesan Layar (11 Slot)', cat: 'Tampilan', tab: 'tampilan', sub: 'overlayinfo', kw: 'hadits bukhari muslim abu dawud tirmidzi adzan iqomah pengingat teks kalimat' },
+            { title: 'Slideshow Info, Poster & Video', cat: 'Tampilan', tab: 'tampilan', sub: 'slides', kw: 'slideshow poster gambar video grup slide teks sistem' },
+            { title: 'Galeri Media Ibadah & Mode Standby', cat: 'Tampilan', tab: 'tampilan', sub: 'mediastandby', kw: 'media latar khutbah doa adzan standby fullscreen paket gambar' },
+            { title: 'Jum\'at & Ramadhan (Kas, Ta\'jil, Sirine)', cat: 'Acara & Perangkat', tab: 'acara', sub: 'jumatramadhan', kw: 'jumat kas jurnal ramadhan tarawih takjil sirine imsak sahur' },
+            { title: 'Idul Fitri, Idul Adha & Kelompok Qurban', cat: 'Acara & Perangkat', tab: 'acara', sub: 'hariraya', kw: 'idul fitri adha qurban sapi kambing kelompok peserta' },
+            { title: 'Siaran Live YouTube/HLS & Screensaver', cat: 'Acara & Perangkat', tab: 'acara', sub: 'livescreensaver', kw: 'live youtube hls m3u8 makkah madinah screensaver mode malam' },
+            { title: 'Hardware Saklar Otomatis (Relay PIN 1-8)', cat: 'Acara & Perangkat', tab: 'acara', sub: 'saklar', kw: 'saklar relay wifi usb pin channel otomatis lampu speaker' },
+            { title: 'Remote Server & Koneksi (Port 1421)', cat: 'Sistem', tab: 'sistem', sub: 'koneksi', kw: 'remote jaringan koneksi port 1421 refresh keluar' },
+            { title: 'Kelola Admin & PIN Akses TV', cat: 'Sistem', tab: 'sistem', sub: 'admin', kw: 'admin user operator superadmin pin password akses' },
+            { title: 'Backup Data, Memori TV & Update OTA', cat: 'Sistem', tab: 'sistem', sub: 'backup', kw: 'backup json memori penyimpanan bersihkan media ota update apk' },
+            { title: 'Panel Simulasi State & Uji Audio (Superadmin)', cat: 'Sistem', tab: 'sistem', sub: 'logs', kw: 'simulasi state uji beep adzan debug superadmin', superadminOnly: true },
+            { title: 'Log Aktivitas TV', cat: 'Sistem', tab: 'sistem', sub: 'logs', kw: 'log aktivitas debug riwayat error' }
+        ];
+
+        function filterQuickSearch(query, resultBoxId) {
+            const box = document.getElementById(resultBoxId);
+            if (!box) return;
+            const q = (query || '').trim().toLowerCase();
+            if (!q) {
+                box.classList.remove('show');
+                box.innerHTML = '';
+                return;
+            }
+            const hits = QUICK_SEARCH_INDEX.filter(item =>
+                (!item.superadminOnly || currentCallerRole === 'superadmin') && (
+                    item.title.toLowerCase().includes(q) ||
+                    item.cat.toLowerCase().includes(q) ||
+                    item.kw.includes(q)
+                )
+            ).slice(0, 7);
+
+            if (!hits.length) {
+                box.innerHTML = '<div style="padding:10px;font-size:12px;color:var(--text-secondary);">Tidak ada menu yang cocok.</div>';
+            } else {
+                box.innerHTML = hits.map(h => `
+                    <button class="quick-search-hit" onclick="jumpToMenu('${h.tab}','${h.sub}')">
+                        <span style="font-size:12px;font-weight:800;">${escapeHtml(h.title)}</span>
+                        <small>${escapeHtml(h.cat)}</small>
+                    </button>
+                `).join('');
+            }
+            box.classList.add('show');
+        }
+
+        function jumpToMenu(tabId, subId) {
+            ['desktopSearchResults', 'mobileSearchResults'].forEach(id => document.getElementById(id)?.classList.remove('show'));
+            ['desktopSearchInput', 'mobileSearchInput'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+            switchTab(tabId);
+            if (subId) switchSubTab(tabId, subId);
+        }
+
+        // Global keyboard shortcuts (Desktop Mouse+Keyboard ergonomic support)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeRemoteDrawer();
+                ['desktopSearchResults', 'mobileSearchResults'].forEach(id => document.getElementById(id)?.classList.remove('show'));
+            }
+            if (e.altKey && !e.ctrlKey && !e.metaKey) {
+                const map = { '1': 'home', '2': 'brand', '3': 'sholat', '4': 'tampilan', '5': 'acara', '6': 'sistem' };
+                if (map[e.key]) {
+                    e.preventDefault();
+                    switchTab(map[e.key]);
+                }
+            }
+        });
+
+        // Close search dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.quick-search-input') && !e.target.closest('.quick-search-results')) {
+                ['desktopSearchResults', 'mobileSearchResults'].forEach(id => document.getElementById(id)?.classList.remove('show'));
+            }
+        });
+
+        // Sync desktop sidebar hover -> keyboard focus (consistent with TV rule #2)
+        document.querySelectorAll('.sidebar-item').forEach(btn => {
+            btn.addEventListener('mouseenter', () => {
+                if (document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+                btn.focus({ preventScroll: true });
+            });
+        });
 
         function updateIdentity() {
             const name = document.getElementById('mosqueName').value.trim();
@@ -2300,21 +2874,39 @@
             }, '✅ Pengaturan Sholat Jum\'at disimpan!');
         }
 
-        function switchInfoSubTab(subId, evt) {
-            vibe();
-            const parent = document.getElementById('sub-tampilan-info');
-            if (!parent) return;
-            parent.querySelectorAll(':scope > .sub-panel').forEach(p => p.classList.remove('active'));
-            parent.querySelectorAll(':scope > .sub-tabs .sub-tab-btn').forEach(b => b.classList.remove('active'));
-            const target = document.getElementById('info-sub-' + subId);
-            if (target) target.classList.add('active');
-            if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+        function switchInfoSubTab(subId) {
+            if (subId === 'phbi') {
+                openRemoteDrawer('Agenda Islami & PHBI', 'Info puasa sunnah & hitung mundur Hari Besar Islam', 'info-sub-phbi');
+            } else {
+                openRemoteDrawer('Kartu Info Masjid', 'Pengumuman kajian & kegiatan pada Card 1', 'info-sub-kartu');
+            }
         }
 
         function togglePhbiTypeFields() {
             const t = document.getElementById('phbiNewType')?.value || 'hijri';
             document.getElementById('phbiHijriWrap').style.display = t === 'hijri' ? 'grid' : 'none';
             document.getElementById('phbiGregWrap').style.display = t === 'gregorian' ? 'block' : 'none';
+        }
+
+        const SCREEN_TEXT_KEYS = [
+            'adzanHadith', 'iqomahHadith', 'iqomahWarning', 'waktuJumatReminder', 'tarawihReminder',
+            'idulFitriReminder', 'idulAdhaReminder', 'infoQurbanReminder',
+            'masjidQrGuidance', 'financeQrGuidance', 'onlineFinanceFooterQuote'
+        ];
+
+        function saveScreenTexts() {
+            const payload = {};
+            SCREEN_TEXT_KEYS.forEach(k => {
+                const el = document.getElementById('st-' + k);
+                if (el) payload[k] = el.value;
+            });
+            sendCommand('update_screen_texts', payload, '✅ Teks Hadits & Pesan Layar disimpan!');
+        }
+
+        function resetScreenTexts() {
+            if (confirm('Kembalikan seluruh 11 Teks Hadits & Pesan Layar ke teks bawaan?')) {
+                sendCommand('reset_screen_texts', {}, '🔄 Teks Hadits & Pesan Layar direset ke default!');
+            }
         }
 
         function savePhbiSettings() {
@@ -2336,15 +2928,14 @@
             document.getElementById('phbiNewName').value = '';
         }
 
-        function switchCustomAudioTab(subId, evt) {
-            vibe();
-            const parent = document.getElementById('sub-sholat-custom');
-            if (!parent) return;
-            parent.querySelectorAll(':scope > .sub-panel').forEach(p => p.classList.remove('active'));
-            parent.querySelectorAll(':scope > .sub-tabs .sub-tab-btn').forEach(b => b.classList.remove('active'));
-            const target = document.getElementById('custom-sub-' + subId);
-            if (target) target.classList.add('active');
-            if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+        function switchCustomAudioTab(subId) {
+            if (subId === 'live') {
+                openRemoteDrawer('Siaran Audio Langsung (On-Air)', 'Putar satu file audio seketika ke speaker masjid', 'custom-sub-live');
+            } else if (subId === 'schedule') {
+                openRemoteDrawer('Jadwal Audio Kustom Otomatis', 'Pemutaran rutin mingguan atau satu kali', 'custom-sub-schedule');
+            } else {
+                closeRemoteDrawer();
+            }
         }
 
         function toggleSchedTypeFields() {
@@ -2363,8 +2954,7 @@
             const path = 'audio/custom/' + fileName;
             setInputSafely('customLiveFile', path);
             sendCommand('update_custom_audio_live', { liveAudioFile: path }, '✅ Audio dipilih untuk Siaran Langsung');
-            const liveBtn = document.querySelector('#sub-sholat-custom > .sub-tabs .sub-tab-btn:nth-child(2)');
-            switchCustomAudioTab('live', liveBtn ? { currentTarget: liveBtn } : null);
+            switchCustomAudioTab('live');
         }
 
         function toggleCustomAudioLive() {
@@ -2802,6 +3392,12 @@
                     }
                 }
 
+                currentCallerRole = (status.callerRole || 'admin').toLowerCase();
+                const simCard = document.getElementById('superadminSimCard');
+                if (simCard) {
+                    simCard.style.display = (currentCallerRole === 'superadmin') ? 'block' : 'none';
+                }
+
                 document.getElementById('btn-audio')?.classList.toggle('active', !!status.customAudio);
                 document.getElementById('btn-infaq')?.classList.toggle('active', status.state === 'masjid_qr');
                 document.getElementById('btn-finance')?.classList.toggle('active', status.state === 'online_finance');
@@ -2837,6 +3433,14 @@
                     syncToggleFlag('liveHlsToggleBtn', isHlsOn);
                     const hlsLab = document.getElementById('liveHlsToggleBtn');
                     if (hlsLab) hlsLab.textContent = isHlsOn ? '📡 HLS NATIVE: AKTIF' : '📡 HLS NATIVE: NONAKTIF';
+                }
+
+                if (status.screenTexts) {
+                    SCREEN_TEXT_KEYS.forEach(k => {
+                        if (status.screenTexts[k] !== undefined) {
+                            setInputSafely('st-' + k, status.screenTexts[k]);
+                        }
+                    });
                 }
 
                 if (status.prayerSettings) {

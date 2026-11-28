@@ -14,12 +14,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,57 +49,36 @@ import id.algaffar.jwstv.ui.theme.LocalJwsTheme
 import kotlin.math.roundToInt
 
 /**
- * Category 2: SHOLAT (`prayer`, `audio`, `customAudio`).
- * Mirrors `PrayerSettingsForm.tsx`, `AudioSettingsForm.tsx`, and `CustomAudioSettingsForm.tsx`.
+ * Category 2: SHOLAT & AUDIO (`prayerLocation`, `prayerStages`, `audio`, `customAudio`).
  */
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun PrayerAndStagesSettingsTab(
+fun PrayerLocationSettingsTab(
     settings: AppStateSettings,
     actions: SettingsActions
 ) {
-    val palette = LocalJwsTheme.current
     val p = settings.prayerSettings
-    var selectedPrayer by remember { mutableStateOf(PrayerId.FAJR) }
-    val currentCfg = settings.prayers.forPrayer(selectedPrayer)
-
     val methods = listOf(
-        "Singapore" to "Kemenag RI / MABIMS",
-        "MuslimWorldLeague" to "MWL",
-        "Egyptian" to "Egyptian",
-        "Karachi" to "Karachi",
-        "UmmAlQura" to "Umm al-Qura",
-        "Dubai" to "Dubai",
-        "MoonsightingCommittee" to "Moonsighting",
-        "NorthAmerica" to "ISNA",
-        "Kuwait" to "Kuwait",
-        "Qatar" to "Qatar",
-        "Tehran" to "Tehran",
-        "Turkey" to "Turkey"
+        HybridSelectOption("Singapore", "Kemenag RI / MABIMS", "Standar resmi Indonesia & Asia Tenggara"),
+        HybridSelectOption("MuslimWorldLeague", "Muslim World League (MWL)", "Fajr 18° / Isha 17°"),
+        HybridSelectOption("Egyptian", "Egyptian General Authority", "Fajr 19.5° / Isha 17.5°"),
+        HybridSelectOption("Karachi", "University of Islamic Sciences, Karachi", "Fajr 18° / Isha 18°"),
+        HybridSelectOption("UmmAlQura", "Umm al-Qura (Makkah)", "Fajr 18.5° / Isha +90 mnt"),
+        HybridSelectOption("Dubai", "Dubai", "Fajr 18.2° / Isha 18.2°"),
+        HybridSelectOption("MoonsightingCommittee", "Moonsighting Committee", "Fajr 18° / Isha 18°"),
+        HybridSelectOption("NorthAmerica", "ISNA (North America)", "Fajr 15° / Isha 15°"),
+        HybridSelectOption("Kuwait", "Kuwait", "Fajr 18° / Isha 17.5°"),
+        HybridSelectOption("Qatar", "Qatar", "Fajr 18° / Isha +90 mnt"),
+        HybridSelectOption("Tehran", "Tehran", "Fajr 17.7° / Isha 14°"),
+        HybridSelectOption("Turkey", "Turkey (Diyanet)", "Fajr 18° / Isha 17°")
     )
     val timezones = listOf(
-        "Asia/Jakarta" to "WIB (Jakarta)",
-        "Asia/Makassar" to "WITA (Makassar/Kaltim)",
-        "Asia/Jayapura" to "WIT (Jayapura)",
-        "Asia/Singapore" to "Singapore",
-        "Asia/Kuala_Lumpur" to "Malaysia"
+        HybridSelectOption("Asia/Jakarta", "WIB (Asia/Jakarta)", "UTC+7"),
+        HybridSelectOption("Asia/Makassar", "WITA (Asia/Makassar)", "UTC+8"),
+        HybridSelectOption("Asia/Jayapura", "WIT (Asia/Jayapura)", "UTC+9"),
+        HybridSelectOption("Asia/Singapore", "Singapore", "UTC+8"),
+        HybridSelectOption("Asia/Kuala_Lumpur", "Malaysia", "UTC+8")
     )
-
-    fun updateStage(pid: PrayerId, transform: (PrayerStageConfig) -> PrayerStageConfig) {
-        actions.onUpdateSettings { prev ->
-            val updated = transform(prev.prayers.forPrayer(pid))
-            val next = when (pid) {
-                PrayerId.FAJR -> prev.prayers.copy(fajr = updated)
-                PrayerId.DHUHR -> prev.prayers.copy(dhuhr = updated)
-                PrayerId.ASR -> prev.prayers.copy(asr = updated)
-                PrayerId.MAGHRIB -> prev.prayers.copy(maghrib = updated)
-                PrayerId.ISHA -> prev.prayers.copy(isha = updated)
-                else -> prev.prayers
-            }
-            prev.copy(prayers = next)
-        }
-    }
 
     val context = LocalContext.current
     val allCities = remember(context) { IndonesiaCityRepository.loadCities(context) }
@@ -106,8 +90,7 @@ fun PrayerAndStagesSettingsTab(
         IndonesiaCityRepository.getCitiesInProvince(allCities, selectedProvince)
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        // 0. Pemilih Cepat 38 Provinsi & Kota/Kabupaten Indonesia (Offline)
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         val provinceOptions = remember(provinces) {
             provinces.map { HybridSelectOption(id = it, label = it) }
         }
@@ -127,7 +110,7 @@ fun PrayerAndStagesSettingsTab(
             subtitle = if (p.cityName.isNotBlank()) {
                 "Kota aktif: ${p.cityName}, ${p.provinceName} (${p.timezone})"
             } else {
-                "Pilih provinsi & kota untuk mengisi otomatis Latitude, Longitude, dan Zona Waktu tanpa mengetik manual"
+                "Pilih provinsi & kota untuk mengisi otomatis Latitude, Longitude, dan Zona Waktu"
             }
         ) {
             Row(
@@ -168,10 +151,9 @@ fun PrayerAndStagesSettingsTab(
             }
         }
 
-        // 1. Lokasi, Metode, Mazhab, Zona Waktu
         HybridSectionCard(
-            title = "Lokasi, Metode Hisab, Mazhab & Koreksi Global",
-            subtitle = "Koordinat geografis masjid menentukan presisi jadwal sholat harian"
+            title = "Metode Hisab, Mazhab, Zona Waktu & Koreksi Global",
+            subtitle = "Gunakan ◀ ▶ pada stepper atau OK untuk memilih metode & zona waktu"
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HybridCoordinateStepper(
@@ -192,25 +174,32 @@ fun PrayerAndStagesSettingsTab(
                 )
             }
 
-            Text("ZONA WAKTU", color = palette.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            HybridSegmentedRow(
-                options = timezones,
-                selectedId = p.timezone,
-                onSelect = { tz -> actions.onUpdateSettings { it.copy(prayerSettings = it.prayerSettings.copy(timezone = tz)) } }
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HybridSelectDropdown(
+                    label = "Metode Kalkulasi Hisab",
+                    selectedId = p.calculationMethod,
+                    options = methods,
+                    onSelect = { m -> actions.onUpdateSettings { it.copy(prayerSettings = it.prayerSettings.copy(calculationMethod = m)) } },
+                    dialogTitle = "Pilih Metode Kalkulasi Jadwal Sholat",
+                    modifier = Modifier.weight(1f)
+                )
+                HybridSelectDropdown(
+                    label = "Zona Waktu",
+                    selectedId = p.timezone,
+                    options = timezones,
+                    onSelect = { tz -> actions.onUpdateSettings { it.copy(prayerSettings = it.prayerSettings.copy(timezone = tz)) } },
+                    dialogTitle = "Pilih Zona Waktu",
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
-            Text("MAZHAB (PERHITUNGAN ASHAR)", color = palette.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            HybridSegmentedRow(
+            HybridInlineOptionStepper(
+                label = "Mazhab Perhitungan Ashar",
+                description = "Tekan ◀ ▶ pada D-Pad atau klik panah untuk mengganti mazhab",
                 options = listOf("Shafi" to "Syafi'i / Maliki / Hambali", "Hanafi" to "Hanafi"),
                 selectedId = p.madhab,
-                onSelect = { m -> actions.onUpdateSettings { it.copy(prayerSettings = it.prayerSettings.copy(madhab = m)) } }
-            )
-
-            Text("METODE KALKULASI (${p.calculationMethod})", color = palette.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            HybridSegmentedRow(
-                options = methods,
-                selectedId = p.calculationMethod,
-                onSelect = { m -> actions.onUpdateSettings { it.copy(prayerSettings = it.prayerSettings.copy(calculationMethod = m)) } }
+                onSelect = { m -> actions.onUpdateSettings { it.copy(prayerSettings = it.prayerSettings.copy(madhab = m)) } },
+                icon = Icons.Default.AccessTime
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -219,7 +208,7 @@ fun PrayerAndStagesSettingsTab(
                     value = p.ihtiyati,
                     min = -5,
                     max = 5,
-                    unit = "menit",
+                    unit = "mnt",
                     onValueChange = { v -> actions.onUpdateSettings { it.copy(prayerSettings = it.prayerSettings.copy(ihtiyati = v)) } },
                     modifier = Modifier.weight(1f)
                 )
@@ -235,10 +224,9 @@ fun PrayerAndStagesSettingsTab(
             }
         }
 
-        // 2. Koreksi Per-Waktu Sholat (8 waktu)
         HybridSectionCard(
             title = "Koreksi Manual Per Waktu Sholat (-15 s/d +15 Menit)",
-            subtitle = "Fine-tuning masing-masing jadwal bila ada selisih dengan jadwal lokal Kemenag"
+            subtitle = "Fokuskan baris lalu tekan ◀ ▶ untuk fine-tuning selisih jadwal Kemenag lokal"
         ) {
             val c = p.corrections
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -258,11 +246,40 @@ fun PrayerAndStagesSettingsTab(
                 HybridNumberStepper("Isya", c.isha, { v -> actions.onUpdateSettings { it.copy(prayerSettings = it.prayerSettings.copy(corrections = c.copy(isha = v))) } }, -15, 15, unit = "mnt", modifier = Modifier.weight(1f))
             }
         }
+    }
+}
 
-        // 3. Pengaturan Tahapan 5 Waktu Sholat
+/**
+ * Clean 5-row overview for Prayer Stages (`Subuh`..`Isya`).
+ * Clicking/pressing OK or ▶ on any prayer opens a Level-3 Slide-Over Side Drawer (`HybridSideDrawer`)
+ * without nested sub-tabs or long scrolling forms.
+ */
+@Composable
+fun PrayerStagesSettingsTab(
+    settings: AppStateSettings,
+    actions: SettingsActions
+) {
+    var editingPrayer by remember { mutableStateOf<PrayerId?>(null) }
+
+    fun updateStage(pid: PrayerId, transform: (PrayerStageConfig) -> PrayerStageConfig) {
+        actions.onUpdateSettings { prev ->
+            val updated = transform(prev.prayers.forPrayer(pid))
+            val next = when (pid) {
+                PrayerId.FAJR -> prev.prayers.copy(fajr = updated)
+                PrayerId.DHUHR -> prev.prayers.copy(dhuhr = updated)
+                PrayerId.ASR -> prev.prayers.copy(asr = updated)
+                PrayerId.MAGHRIB -> prev.prayers.copy(maghrib = updated)
+                PrayerId.ISHA -> prev.prayers.copy(isha = updated)
+                else -> prev.prayers
+            }
+            prev.copy(prayers = next)
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         HybridSectionCard(
-            title = "Pengaturan Tahapan Sholat 5 Waktu (Tartil, Tarhim, Adzan, Iqomah, Sholat)",
-            subtitle = "Kelola toggle, durasi, petugas Imam/Muadzin, serta pesan khusus per waktu sholat",
+            title = "Tahapan Sholat 5 Waktu",
+            subtitle = "Pilih salah satu waktu sholat di bawah (tekan OK / ▶) untuk membuka laci pengaturan lengkap",
             headerAction = {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     HybridButton(
@@ -286,120 +303,136 @@ fun PrayerAndStagesSettingsTab(
                 }
             }
         ) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrayerId.FIVE_FARDHU.forEach { pid ->
-                    HybridButton(
-                        label = pid.defaultIndonesianName.uppercase(),
-                        isPrimary = (pid == selectedPrayer),
-                        onClick = { selectedPrayer = pid }
-                    )
-                }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HybridToggleRow(
-                    label = "Aktifkan Tartil",
-                    checked = currentCfg.isTartil,
-                    onCheckedChange = { v -> updateStage(selectedPrayer) { it.copy(isTartil = v) } },
-                    modifier = Modifier.weight(1f)
-                )
-                HybridToggleRow(
-                    label = "Aktifkan Tarhim",
-                    checked = currentCfg.isTarhim,
-                    onCheckedChange = { v -> updateStage(selectedPrayer) { it.copy(isTarhim = v) } },
-                    modifier = Modifier.weight(1f)
-                )
-                HybridToggleRow(
-                    label = "Putar Audio Adzan",
-                    checked = currentCfg.isAdzan,
-                    onCheckedChange = { v -> updateStage(selectedPrayer) { it.copy(isAdzan = v) } },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
             HybridInfoBanner(
-                text = "Aturan jws-android-algaffar: Durasi Tartil dihitung mundur dari waktu Adzan (tidak ditambah durasi Tarhim). Durasi Tarhim (default 5 mnt) & Adzan otomatis mengikuti panjang file MP3/Video jika aktif.",
-                accentColor = Color(0xFF10B981)
+                text = "Durasi Tartil dihitung mundur dari waktu Adzan. Durasi Tarhim (default 5 mnt) & Adzan otomatis menyesuaikan panjang file MP3/Video jika audio aktif.",
+                accentColor = TvFocusCyan
             )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HybridNumberStepper(
-                    label = "Durasi Tartil (Sebelum Adzan)",
-                    value = currentCfg.tartilDuration,
-                    min = 5,
-                    max = 60,
-                    enabled = currentCfg.isTartil,
-                    onValueChange = { v -> updateStage(selectedPrayer) { it.copy(tartilDuration = v) } },
-                    modifier = Modifier.weight(1f)
-                )
-                HybridNumberStepper(
-                    label = "Durasi Menunggu Iqomah",
-                    value = currentCfg.iqomahDuration,
-                    min = 3,
-                    max = 15,
-                    onValueChange = { v -> updateStage(selectedPrayer) { it.copy(iqomahDuration = v) } },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HybridNumberStepper(
-                    label = "Durasi Pelaksanaan Sholat",
-                    value = currentCfg.sholatDuration,
-                    min = 5,
-                    max = 30,
-                    onValueChange = { v -> updateStage(selectedPrayer) { it.copy(sholatDuration = v) } },
-                    modifier = Modifier.weight(1f)
-                )
-                HybridNumberStepper(
-                    label = "Durasi Adzan (Manual)",
-                    value = currentCfg.adzanDuration,
-                    min = 1,
-                    max = 15,
-                    enabled = !currentCfg.isAdzan,
-                    onValueChange = { v -> updateStage(selectedPrayer) { it.copy(adzanDuration = v) } },
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            PrayerId.FIVE_FARDHU.forEach { pid ->
+                val cfg = settings.prayers.forPrayer(pid)
+                val activeFlags = buildList {
+                    if (cfg.isTartil) add("Tartil ${cfg.tartilDuration}m")
+                    if (cfg.isTarhim) add("Tarhim")
+                    if (cfg.isAdzan) add("Adzan MP3") else add("Adzan ${cfg.adzanDuration}m")
+                }.joinToString(" • ")
+                val officers = buildList {
+                    if (cfg.imam.isNotBlank()) add("Imam: ${cfg.imam}")
+                    if (cfg.muadzin.isNotBlank()) add("Muadzin: ${cfg.muadzin}")
+                }.joinToString(" | ")
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HybridTextInput(
-                    label = "Nama Imam (${selectedPrayer.defaultIndonesianName})",
-                    value = currentCfg.imam,
-                    placeholder = "Ust. Fulan",
-                    onValueChange = { v -> updateStage(selectedPrayer) { it.copy(imam = v) } },
-                    modifier = Modifier.weight(1f)
-                )
-                HybridTextInput(
-                    label = "Nama Muadzin (${selectedPrayer.defaultIndonesianName})",
-                    value = currentCfg.muadzin,
-                    placeholder = "Sdr. Fulan",
-                    onValueChange = { v -> updateStage(selectedPrayer) { it.copy(muadzin = v) } },
-                    modifier = Modifier.weight(1f)
+                HybridNavigationRow(
+                    label = "Sholat ${pid.defaultIndonesianName}",
+                    description = if (officers.isNotBlank()) "$activeFlags  •  $officers" else activeFlags,
+                    valueSummary = "Iqomah ${cfg.iqomahDuration}m • Sholat ${cfg.sholatDuration}m",
+                    icon = Icons.Default.Schedule,
+                    accentBadgeColor = TvFocusCyan,
+                    onClick = { editingPrayer = pid }
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HybridTextInput(
-                    label = "Tagline Layar Adzan",
-                    value = currentCfg.adzanTagline,
-                    placeholder = "Panggilan Suci",
-                    onValueChange = { v -> updateStage(selectedPrayer) { it.copy(adzanTagline = v) } },
-                    modifier = Modifier.weight(1f)
-                )
-                HybridTextInput(
-                    label = "Pesan / Kutipan Adzan",
-                    value = currentCfg.adzanMessage,
-                    placeholder = "Fajar Menyingsing, Saatnya Bersujud",
-                    onValueChange = { v -> updateStage(selectedPrayer) { it.copy(adzanMessage = v) } },
-                    modifier = Modifier.weight(1f)
-                )
-            }
+        }
+    }
+
+    val targetPid = editingPrayer
+    if (targetPid != null) {
+        val currentCfg = settings.prayers.forPrayer(targetPid)
+        HybridSideDrawer(
+            title = "Pengaturan Sholat ${targetPid.defaultIndonesianName}",
+            subtitle = "Toggle tahapan, durasi, nama Imam/Muadzin, dan pesan layar ibadah",
+            accentColor = TvFocusCyan,
+            onDismiss = { editingPrayer = null }
+        ) {
+            HybridToggleRow(
+                label = "Aktifkan Tartil (Pra-Sholat)",
+                description = "Putar murattal sebelum masuk waktu Adzan",
+                checked = currentCfg.isTartil,
+                onCheckedChange = { v -> updateStage(targetPid) { it.copy(isTartil = v) } }
+            )
+            HybridToggleRow(
+                label = "Aktifkan Tarhim (Menjelang Adzan)",
+                description = "Shalawat tarhim sebelum kumandang Adzan",
+                checked = currentCfg.isTarhim,
+                onCheckedChange = { v -> updateStage(targetPid) { it.copy(isTarhim = v) } }
+            )
+            HybridToggleRow(
+                label = "Putar Audio Adzan Otomatis",
+                description = "Jika nonaktif, durasi layar Adzan mengikuti pengaturan manual",
+                checked = currentCfg.isAdzan,
+                onCheckedChange = { v -> updateStage(targetPid) { it.copy(isAdzan = v) } }
+            )
+
+            HybridNumberStepper(
+                label = "Durasi Tartil (Sebelum Adzan)",
+                value = currentCfg.tartilDuration,
+                min = 5,
+                max = 60,
+                enabled = currentCfg.isTartil,
+                onValueChange = { v -> updateStage(targetPid) { it.copy(tartilDuration = v) } }
+            )
+            HybridNumberStepper(
+                label = "Durasi Adzan Manual",
+                value = currentCfg.adzanDuration,
+                min = 1,
+                max = 15,
+                enabled = !currentCfg.isAdzan,
+                onValueChange = { v -> updateStage(targetPid) { it.copy(adzanDuration = v) } }
+            )
+            HybridNumberStepper(
+                label = "Durasi Menunggu Iqomah",
+                value = currentCfg.iqomahDuration,
+                min = 3,
+                max = 20,
+                onValueChange = { v -> updateStage(targetPid) { it.copy(iqomahDuration = v) } }
+            )
+            HybridNumberStepper(
+                label = "Durasi Pelaksanaan Sholat",
+                value = currentCfg.sholatDuration,
+                min = 5,
+                max = 30,
+                onValueChange = { v -> updateStage(targetPid) { it.copy(sholatDuration = v) } }
+            )
+
+            HybridTextInput(
+                label = "Nama Imam (${targetPid.defaultIndonesianName})",
+                value = currentCfg.imam,
+                placeholder = "Ust. Fulan",
+                onValueChange = { v -> updateStage(targetPid) { it.copy(imam = v) } }
+            )
+            HybridTextInput(
+                label = "Nama Muadzin (${targetPid.defaultIndonesianName})",
+                value = currentCfg.muadzin,
+                placeholder = "Sdr. Fulan",
+                onValueChange = { v -> updateStage(targetPid) { it.copy(muadzin = v) } }
+            )
+            HybridTextInput(
+                label = "Tagline Layar Adzan",
+                value = currentCfg.adzanTagline,
+                placeholder = "Panggilan Suci",
+                onValueChange = { v -> updateStage(targetPid) { it.copy(adzanTagline = v) } }
+            )
+            HybridTextInput(
+                label = "Pesan / Kutipan Adzan",
+                value = currentCfg.adzanMessage,
+                placeholder = "Saatnya Menunaikan Sholat Berjamaah",
+                onValueChange = { v -> updateStage(targetPid) { it.copy(adzanMessage = v) } }
+            )
             HybridTextInput(
                 label = "Pesan Layar Pelaksanaan Sholat",
                 value = currentCfg.sholatMessage,
                 placeholder = "Rapatkan Shaf dan Matikan Gadget",
-                onValueChange = { v -> updateStage(selectedPrayer) { it.copy(sholatMessage = v) } }
+                onValueChange = { v -> updateStage(targetPid) { it.copy(sholatMessage = v) } }
             )
         }
+    }
+}
+
+@Composable
+fun PrayerAndStagesSettingsTab(
+    settings: AppStateSettings,
+    actions: SettingsActions
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        PrayerLocationSettingsTab(settings, actions)
+        PrayerStagesSettingsTab(settings, actions)
     }
 }
 
@@ -429,15 +462,17 @@ fun AudioSholatSettingsTab(
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         HybridSectionCard(
             title = "Volume Global & Engine Audio Media3",
-            subtitle = "Mengatur tingkat volume pemutaran Tartil, Tarhim, Adzan, Sirine, dan Audio Kustom"
+            subtitle = "Tekan ◀ ▶ pada D-Pad atau geser slider untuk mengatur volume master"
         ) {
-            HybridNumberStepper(
+            HybridSliderRow(
                 label = "Volume Global Pemutaran Audio",
+                description = "Berlaku untuk Tartil, Tarhim, Adzan, Sirine & Audio Kustom",
                 value = volumePct,
                 min = 0,
                 max = 100,
                 step = 5,
                 unit = "%",
+                icon = Icons.Default.VolumeUp,
                 onValueChange = { pct ->
                     actions.onUpdateSettings { it.copy(globalVolume = pct / 100f) }
                 }
@@ -563,7 +598,7 @@ fun CustomAudioSettingsTab(
     actions: SettingsActions
 ) {
     val palette = LocalJwsTheme.current
-    var subTab by remember { mutableStateOf("library") }
+    var activeDrawer by remember { mutableStateOf<String?>(null) } // "live" | "schedule"
     val customAudio = settings.customAudio
     val files by androidx.compose.runtime.produceState(
         initialValue = emptyList<Pair<String, String>>(),
@@ -574,247 +609,255 @@ fun CustomAudioSettingsTab(
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         HybridSectionCard(
-            title = "Audio Kustom Terpusat (Library, Siaran Langsung & Jadwal Rutin)",
-            subtitle = "Putar murattal, pengumuman, atau shalawat kustom secara instan atau terjadwal (${files.size} file tersimpan)"
+            title = "Siaran Langsung & Jadwal Otomatis",
+            subtitle = "Pilih baris di bawah untuk membuka laci kendali siaran atau jadwal rutin"
         ) {
-            HybridSegmentedRow(
-                options = listOf(
-                    "library" to "1. PERPUSTAKAAN (${files.size})",
-                    "live" to "2. SIARAN LANGSUNG (ON-AIR)",
-                    "schedule" to "3. JADWAL OTOMATIS (${customAudio.schedules.size})"
-                ),
-                selectedId = subTab,
-                onSelect = { subTab = it }
+            HybridNavigationRow(
+                label = "Siaran Audio Langsung (On-Air)",
+                description = if (customAudio.isPlayingLive) "SEDANG DIPUTAR: ${customAudio.liveAudioFile}" else "Putar file audio seketika ke speaker masjid (${customAudio.liveDurationMinutes} menit)",
+                valueSummary = if (customAudio.isPlayingLive) "ON-AIR" else "Standby",
+                icon = Icons.Default.Radio,
+                accentBadgeColor = if (customAudio.isPlayingLive) Color(0xFF10B981) else TvFocusCyan,
+                onClick = { activeDrawer = "live" }
+            )
+            HybridNavigationRow(
+                label = "Jadwal Audio Otomatis",
+                description = "Pemutaran rutin mingguan (mis. pengajian pagi Jum'at) atau satu kali",
+                valueSummary = "${customAudio.schedules.size} Jadwal",
+                icon = Icons.Default.Schedule,
+                accentBadgeColor = TvFocusCyan,
+                onClick = { activeDrawer = "schedule" }
             )
         }
 
-        when (subTab) {
-            "library" -> {
-                HybridSectionCard(
-                    title = "Perpustakaan Audio Kustom",
-                    subtitle = "Impor file audio MP3/WAV/M4A dari Memori Internal TV atau Flashdisk USB",
-                    headerAction = {
-                        HybridButton(
-                            label = "+ Impor Audio (Memori / USB)",
-                            icon = Icons.Default.Upload,
-                            isPrimary = true,
-                            onClick = actions.onPickCustomAudio
-                        )
-                    }
-                ) {
-                    if (files.isEmpty()) {
-                        HybridInfoBanner(
-                            text = "Belum ada file audio kustom di jws-assets/audio/custom/. Klik tombol '+ Impor Audio' di atas untuk menambahkan file.",
-                            accentColor = Color(0xFFF59E0B)
-                        )
-                    } else {
-                        files.forEach { (name, dur) ->
-                            val isPlaying = actions.previewingAudioKey == "custom:$name"
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(palette.bgPrimary.copy(alpha = 0.8f))
-                                    .border(1.dp, palette.border, RoundedCornerShape(14.dp))
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(name, color = palette.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                                    Text("Durasi: $dur", color = palette.textSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+        HybridSectionCard(
+            title = "Perpustakaan Audio Kustom (${files.size} File)",
+            subtitle = "Impor file audio MP3/WAV/M4A dari Memori Internal TV atau Flashdisk USB",
+            headerAction = {
+                HybridButton(
+                    label = "+ Impor Audio (Memori / USB)",
+                    icon = Icons.Default.Upload,
+                    isPrimary = true,
+                    onClick = actions.onPickCustomAudio
+                )
+            }
+        ) {
+            if (files.isEmpty()) {
+                HybridInfoBanner(
+                    text = "Belum ada file audio kustom di jws-assets/audio/custom/. Klik tombol '+ Impor Audio' di atas untuk menambahkan file.",
+                    accentColor = Color(0xFFF59E0B)
+                )
+            } else {
+                files.forEach { (name, dur) ->
+                    val isPlaying = actions.previewingAudioKey == "custom:$name"
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(TvSurfaceRow)
+                            .border(1.dp, TvSurfaceBorder, RoundedCornerShape(14.dp))
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(name, color = Color(0xFFF8FAFC), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text("Durasi: $dur", color = Color(0xFF94A3B8), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            HybridButton(
+                                label = if (isPlaying) "Stop" else "Pratinjau",
+                                icon = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                isPrimary = isPlaying,
+                                onClick = { actions.onTogglePreviewCustomAudio(name) }
+                            )
+                            HybridButton(
+                                label = "Pilih u/ Live",
+                                onClick = {
+                                    actions.onUpdateSettings { prev ->
+                                        prev.copy(customAudio = prev.customAudio.copy(liveAudioFile = "audio/custom/$name"))
+                                    }
+                                    activeDrawer = "live"
                                 }
+                            )
+                            HybridButton(
+                                label = "Hapus",
+                                icon = Icons.Default.Delete,
+                                isDanger = true,
+                                onClick = { actions.onDeleteCustomAudio(name) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    when (activeDrawer) {
+        "live" -> {
+            HybridSideDrawer(
+                title = "Siaran Audio Langsung (On-Air)",
+                subtitle = if (customAudio.isPlayingLive) "SEDANG ON-AIR: ${customAudio.liveAudioFile}" else "Putar satu file audio seketika ke speaker masjid",
+                accentColor = TvFocusCyan,
+                onDismiss = { activeDrawer = null }
+            ) {
+                HybridTextInput(
+                    label = "File Audio Aktif",
+                    value = customAudio.liveAudioFile,
+                    placeholder = "audio/custom/nama_file.mp3 (pilih dari Perpustakaan)",
+                    onValueChange = { v ->
+                        actions.onUpdateSettings { it.copy(customAudio = it.customAudio.copy(liveAudioFile = v)) }
+                    }
+                )
+                HybridNumberStepper(
+                    label = "Durasi Maksimal Siaran",
+                    value = customAudio.liveDurationMinutes,
+                    min = 1,
+                    max = 120,
+                    unit = "menit",
+                    onValueChange = { v ->
+                        actions.onUpdateSettings { it.copy(customAudio = it.customAudio.copy(liveDurationMinutes = v)) }
+                    }
+                )
+                HybridButton(
+                    label = if (customAudio.isPlayingLive) "HENTIKAN SIARAN LANGSUNG" else "MULAI SIARAN LANGSUNG",
+                    icon = if (customAudio.isPlayingLive) Icons.Default.Stop else Icons.Default.PlayArrow,
+                    isPrimary = !customAudio.isPlayingLive,
+                    isDanger = customAudio.isPlayingLive,
+                    enabled = customAudio.liveAudioFile.isNotBlank() || customAudio.isPlayingLive,
+                    onClick = {
+                        actions.onUpdateSettings { prev ->
+                            prev.copy(customAudio = prev.customAudio.copy(isPlayingLive = !prev.customAudio.isPlayingLive))
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        "schedule" -> {
+            val dayNames = listOf("Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab")
+            HybridSideDrawer(
+                title = "Jadwal Audio Kustom Otomatis",
+                subtitle = "Jadwalkan pemutaran rutin mingguan atau satu kali (${customAudio.schedules.size} jadwal)",
+                accentColor = TvFocusCyan,
+                onDismiss = { activeDrawer = null },
+                headerAction = {
+                    HybridButton(
+                        label = "+ Jadwal",
+                        icon = Icons.Default.Add,
+                        isPrimary = true,
+                        onClick = {
+                            val firstFile = files.firstOrNull()?.first?.let { "audio/custom/$it" }.orEmpty()
+                            val item = ScheduledAudioItem(
+                                id = "sched-${System.currentTimeMillis()}",
+                                name = "Jadwal Audio #${customAudio.schedules.size + 1}",
+                                audioFile = firstFile,
+                                scheduleType = "weekly",
+                                dayOfWeek = 5,
+                                time = "11:00",
+                                durationMinutes = 15,
+                                enabled = true
+                            )
+                            actions.onUpdateSettings { prev ->
+                                prev.copy(customAudio = prev.customAudio.copy(schedules = prev.customAudio.schedules + item))
+                            }
+                        }
+                    )
+                }
+            ) {
+                if (customAudio.schedules.isEmpty()) {
+                    HybridInfoBanner(
+                        text = "Belum ada jadwal audio otomatis. Klik '+ Jadwal' di atas untuk membuat jadwal baru.",
+                        accentColor = Color(0xFFF59E0B)
+                    )
+                } else {
+                    customAudio.schedules.forEachIndexed { idx, sched ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(TvSurfaceRow)
+                                .border(1.dp, TvSurfaceBorder, RoundedCornerShape(14.dp))
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${sched.name.ifBlank { "Jadwal #${idx + 1}" }} • ${sched.time} (${dayNames.getOrElse(sched.dayOfWeek) { "Jum" }})",
+                                    color = TvFocusCyan,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     HybridButton(
-                                        label = if (isPlaying) "Stop" else "Pratinjau",
-                                        icon = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                                        isPrimary = isPlaying,
-                                        onClick = { actions.onTogglePreviewCustomAudio(name) }
-                                    )
-                                    HybridButton(
-                                        label = "Pilih u/ Live",
+                                        label = if (sched.enabled) "AKTIF" else "OFF",
+                                        isPrimary = sched.enabled,
                                         onClick = {
                                             actions.onUpdateSettings { prev ->
-                                                prev.copy(customAudio = prev.customAudio.copy(liveAudioFile = "audio/custom/$name"))
+                                                val list = prev.customAudio.schedules.toMutableList()
+                                                list[idx] = sched.copy(enabled = !sched.enabled)
+                                                prev.copy(customAudio = prev.customAudio.copy(schedules = list))
                                             }
-                                            subTab = "live"
                                         }
                                     )
                                     HybridButton(
                                         label = "Hapus",
                                         icon = Icons.Default.Delete,
                                         isDanger = true,
-                                        onClick = { actions.onDeleteCustomAudio(name) }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            "live" -> {
-                HybridSectionCard(
-                    title = "Siaran Audio Langsung (On-Demand)",
-                    subtitle = if (customAudio.isPlayingLive) "SEDANG ON-AIR: ${customAudio.liveAudioFile}" else "Putar satu file audio seketika ke speaker masjid"
-                ) {
-                    HybridTextInput(
-                        label = "File Audio Aktif",
-                        value = customAudio.liveAudioFile,
-                        placeholder = "audio/custom/nama_file.mp3 (pilih dari tab Perpustakaan)",
-                        onValueChange = { v ->
-                            actions.onUpdateSettings { it.copy(customAudio = it.customAudio.copy(liveAudioFile = v)) }
-                        }
-                    )
-                    HybridNumberStepper(
-                        label = "Durasi Maksimal Siaran",
-                        value = customAudio.liveDurationMinutes,
-                        min = 1,
-                        max = 120,
-                        unit = "menit",
-                        onValueChange = { v ->
-                            actions.onUpdateSettings { it.copy(customAudio = it.customAudio.copy(liveDurationMinutes = v)) }
-                        }
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        HybridButton(
-                            label = if (customAudio.isPlayingLive) "HENTIKAN SIARAN LANGSUNG" else "MULAI SIARAN LANGSUNG",
-                            icon = if (customAudio.isPlayingLive) Icons.Default.Stop else Icons.Default.PlayArrow,
-                            isPrimary = !customAudio.isPlayingLive,
-                            isDanger = customAudio.isPlayingLive,
-                            enabled = customAudio.liveAudioFile.isNotBlank() || customAudio.isPlayingLive,
-                            onClick = {
-                                actions.onUpdateSettings { prev ->
-                                    prev.copy(customAudio = prev.customAudio.copy(isPlayingLive = !prev.customAudio.isPlayingLive))
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-
-            "schedule" -> {
-                val dayNames = listOf("Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab")
-                HybridSectionCard(
-                    title = "Penjadwalan Audio Kustom Otomatis",
-                    subtitle = "Jadwalkan pemutaran rutin mingguan (misal pengajian pagi Jum'at) atau satu kali",
-                    headerAction = {
-                        HybridButton(
-                            label = "+ Tambah Jadwal",
-                            icon = Icons.Default.Add,
-                            isPrimary = true,
-                            onClick = {
-                                val firstFile = files.firstOrNull()?.first?.let { "audio/custom/$it" }.orEmpty()
-                                val item = ScheduledAudioItem(
-                                    id = "sched-${System.currentTimeMillis()}",
-                                    name = "Jadwal Audio #${customAudio.schedules.size + 1}",
-                                    audioFile = firstFile,
-                                    scheduleType = "weekly",
-                                    dayOfWeek = 5,
-                                    time = "11:00",
-                                    durationMinutes = 15,
-                                    enabled = true
-                                )
-                                actions.onUpdateSettings { prev ->
-                                    prev.copy(customAudio = prev.customAudio.copy(schedules = prev.customAudio.schedules + item))
-                                }
-                            }
-                        )
-                    }
-                ) {
-                    if (customAudio.schedules.isEmpty()) {
-                        HybridInfoBanner(
-                            text = "Belum ada jadwal audio otomatis. Klik '+ Tambah Jadwal' untuk membuat jadwal baru.",
-                            accentColor = Color(0xFFF59E0B)
-                        )
-                    } else {
-                        customAudio.schedules.forEachIndexed { idx, sched ->
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(palette.bgPrimary.copy(alpha = 0.8f))
-                                    .border(1.dp, palette.border, RoundedCornerShape(14.dp))
-                                    .padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "${sched.name.ifBlank { "Jadwal #${idx + 1}" }} • ${sched.time} (${dayNames.getOrElse(sched.dayOfWeek) { "Jum" }})",
-                                        color = palette.accentSecondary,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        HybridButton(
-                                            label = if (sched.enabled) "AKTIF" else "NONAKTIF",
-                                            isPrimary = sched.enabled,
-                                            onClick = {
-                                                actions.onUpdateSettings { prev ->
-                                                    val list = prev.customAudio.schedules.toMutableList()
-                                                    list[idx] = sched.copy(enabled = !sched.enabled)
-                                                    prev.copy(customAudio = prev.customAudio.copy(schedules = list))
-                                                }
-                                            }
-                                        )
-                                        HybridButton(
-                                            label = "Hapus",
-                                            icon = Icons.Default.Delete,
-                                            isDanger = true,
-                                            onClick = {
-                                                actions.onUpdateSettings { prev ->
-                                                    prev.copy(customAudio = prev.customAudio.copy(schedules = prev.customAudio.schedules.filterIndexed { i, _ -> i != idx }))
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
-                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    HybridTextInput(
-                                        label = "Jam (HH:mm)",
-                                        value = sched.time,
-                                        onValueChange = { v ->
+                                        onClick = {
                                             actions.onUpdateSettings { prev ->
-                                                val list = prev.customAudio.schedules.toMutableList()
-                                                list[idx] = sched.copy(time = v)
-                                                prev.copy(customAudio = prev.customAudio.copy(schedules = list))
-                                            }
-                                        },
-                                        modifier = Modifier.weight(0.6f)
-                                    )
-                                    HybridTextInput(
-                                        label = "File Audio",
-                                        value = sched.audioFile,
-                                        onValueChange = { v ->
-                                            actions.onUpdateSettings { prev ->
-                                                val list = prev.customAudio.schedules.toMutableList()
-                                                list[idx] = sched.copy(audioFile = v)
-                                                prev.copy(customAudio = prev.customAudio.copy(schedules = list))
-                                            }
-                                        },
-                                        modifier = Modifier.weight(1.4f)
-                                    )
-                                }
-                                HybridSegmentedRow(
-                                    options = dayNames.mapIndexed { dIdx, dName -> dIdx.toString() to dName },
-                                    selectedId = sched.dayOfWeek.toString(),
-                                    onSelect = { dStr ->
-                                        dStr.toIntOrNull()?.let { d ->
-                                            actions.onUpdateSettings { prev ->
-                                                val list = prev.customAudio.schedules.toMutableList()
-                                                list[idx] = sched.copy(dayOfWeek = d)
-                                                prev.copy(customAudio = prev.customAudio.copy(schedules = list))
+                                                prev.copy(customAudio = prev.customAudio.copy(schedules = prev.customAudio.schedules.filterIndexed { i, _ -> i != idx }))
                                             }
                                         }
-                                    }
+                                    )
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                HybridTextInput(
+                                    label = "Jam (HH:mm)",
+                                    value = sched.time,
+                                    onValueChange = { v ->
+                                        actions.onUpdateSettings { prev ->
+                                            val list = prev.customAudio.schedules.toMutableList()
+                                            list[idx] = sched.copy(time = v)
+                                            prev.copy(customAudio = prev.customAudio.copy(schedules = list))
+                                        }
+                                    },
+                                    modifier = Modifier.weight(0.6f)
+                                )
+                                HybridTextInput(
+                                    label = "File Audio",
+                                    value = sched.audioFile,
+                                    onValueChange = { v ->
+                                        actions.onUpdateSettings { prev ->
+                                            val list = prev.customAudio.schedules.toMutableList()
+                                            list[idx] = sched.copy(audioFile = v)
+                                            prev.copy(customAudio = prev.customAudio.copy(schedules = list))
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1.4f)
                                 )
                             }
+                            HybridSegmentedRow(
+                                options = dayNames.mapIndexed { dIdx, dName -> dIdx.toString() to dName },
+                                selectedId = sched.dayOfWeek.toString(),
+                                onSelect = { dStr ->
+                                    dStr.toIntOrNull()?.let { d ->
+                                        actions.onUpdateSettings { prev ->
+                                            val list = prev.customAudio.schedules.toMutableList()
+                                            list[idx] = sched.copy(dayOfWeek = d)
+                                            prev.copy(customAudio = prev.customAudio.copy(schedules = list))
+                                        }
+                                    }
+                                }
+                            )
                         }
                     }
                 }

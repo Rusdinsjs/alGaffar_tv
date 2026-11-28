@@ -1926,6 +1926,33 @@ class JwsRuntimeEngine(
                     }
                 }
 
+                "update_screen_texts" -> {
+                    updateSettings { prev ->
+                        val cur = prev.screenTexts
+                        prev.copy(
+                            screenTexts = cur.copy(
+                                adzanHadith = payload.rawStringArg("adzanHadith")?.take(400) ?: cur.adzanHadith,
+                                iqomahHadith = payload.rawStringArg("iqomahHadith")?.take(400) ?: cur.iqomahHadith,
+                                iqomahWarning = payload.rawStringArg("iqomahWarning")?.take(300) ?: cur.iqomahWarning,
+                                waktuJumatReminder = payload.rawStringArg("waktuJumatReminder")?.take(300) ?: cur.waktuJumatReminder,
+                                tarawihReminder = payload.rawStringArg("tarawihReminder")?.take(300) ?: cur.tarawihReminder,
+                                idulFitriReminder = payload.rawStringArg("idulFitriReminder")?.take(300) ?: cur.idulFitriReminder,
+                                idulAdhaReminder = payload.rawStringArg("idulAdhaReminder")?.take(300) ?: cur.idulAdhaReminder,
+                                infoQurbanReminder = payload.rawStringArg("infoQurbanReminder")?.take(300) ?: cur.infoQurbanReminder,
+                                masjidQrGuidance = payload.rawStringArg("masjidQrGuidance")?.take(400) ?: cur.masjidQrGuidance,
+                                financeQrGuidance = payload.rawStringArg("financeQrGuidance")?.take(400) ?: cur.financeQrGuidance,
+                                onlineFinanceFooterQuote = payload.rawStringArg("onlineFinanceFooterQuote")?.take(400) ?: cur.onlineFinanceFooterQuote
+                            )
+                        )
+                    }
+                }
+
+                "reset_screen_texts" -> {
+                    updateSettings { prev ->
+                        prev.copy(screenTexts = id.algaffar.jwstv.domain.model.ScreenTextsSettings())
+                    }
+                }
+
                 "reset_islamic_events" -> {
                     updateSettings { prev ->
                         prev.copy(

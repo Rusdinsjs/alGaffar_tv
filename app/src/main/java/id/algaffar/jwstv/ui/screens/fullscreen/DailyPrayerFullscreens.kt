@@ -957,23 +957,26 @@ fun AdzanFullscreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Preserved Hadith (HR. Bukhari) Card
-            Box(
-                modifier = Modifier
-                    .widthIn(max = 1480.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Color.Black.copy(alpha = 0.48f))
-                    .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(24.dp))
-                    .padding(horizontal = 44.dp, vertical = 24.dp)
-            ) {
-                Text(
-                    text = "“Barangsiapa ketika mendengar adzan mengucapkan doa setelah adzan, maka ia berhak mendapatkan syafa'atku pada hari kiamat.” (HR. Bukhari)",
-                    color = Color.White.copy(alpha = 0.88f),
-                    fontSize = 38.sp,
-                    fontStyle = FontStyle.Italic,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 54.sp
-                )
+            // Editable Hadith / Adzan Quote Card (hidden cleanly if admin leaves it blank)
+            val adzanHadithText = snapshot.settings.screenTexts.adzanHadith.trim()
+            if (adzanHadithText.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .widthIn(max = 1480.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.Black.copy(alpha = 0.48f))
+                        .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(24.dp))
+                        .padding(horizontal = 44.dp, vertical = 24.dp)
+                ) {
+                    Text(
+                        text = adzanHadithText,
+                        color = Color.White.copy(alpha = 0.88f),
+                        fontSize = 38.sp,
+                        fontStyle = FontStyle.Italic,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 54.sp
+                    )
+                }
             }
         }
 
@@ -1742,35 +1745,40 @@ fun IqomahFullscreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Preserved Hadith (HR. Abu Dawud & Tirmidzi) replaced by Sunnah Warning when countdown < 2 minutes
+            // Editable Iqomah Hadith replaced by Editable Sunnah Warning when countdown <= 2 minutes
+            val screenTexts = snapshot.settings.screenTexts
+            val iqomahWarningText = screenTexts.iqomahWarning.trim()
+            val iqomahHadithText = screenTexts.iqomahHadith.trim()
             if (isWarning) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(Color(0xFF450A0A).copy(alpha = 0.88f))
-                        .border(2.dp, Color(0xFFEF4444).copy(alpha = 0.60f), RoundedCornerShape(28.dp))
-                        .padding(horizontal = 40.dp, vertical = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = Color(0xFFEF4444),
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Text(
-                        text = "Iqomah segera tiba... HARAP TIDAK MEMULAI SHOLAT SUNNAT.",
-                        color = Color(0xFFFECACA),
-                        fontSize = 44.sp,
-                        lineHeight = 56.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.weight(1f)
-                    )
+                if (iqomahWarningText.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(28.dp))
+                            .background(Color(0xFF450A0A).copy(alpha = 0.88f))
+                            .border(2.dp, Color(0xFFEF4444).copy(alpha = 0.60f), RoundedCornerShape(28.dp))
+                            .padding(horizontal = 40.dp, vertical = 24.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = Color(0xFFEF4444),
+                            modifier = Modifier.size(64.dp)
+                        )
+                        Text(
+                            text = iqomahWarningText,
+                            color = Color(0xFFFECACA),
+                            fontSize = 44.sp,
+                            lineHeight = 56.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
-            } else {
+            } else if (iqomahHadithText.isNotEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1781,7 +1789,7 @@ fun IqomahFullscreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "“Doa di antara adzan dan iqomah tidak tertolak.” (HR. Abu Dawud & Tirmidzi)",
+                        text = iqomahHadithText,
                         color = Color.White.copy(alpha = 0.92f),
                         fontSize = 48.sp,
                         lineHeight = 64.sp,

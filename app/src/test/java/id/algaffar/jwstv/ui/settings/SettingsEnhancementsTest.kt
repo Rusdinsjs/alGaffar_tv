@@ -1,12 +1,15 @@
 package id.algaffar.jwstv.ui.settings
 
+import id.algaffar.jwstv.data.auth.UserRole
 import id.algaffar.jwstv.data.media.MediaStorageManager
+import id.algaffar.jwstv.data.server.KtorRemoteServer
 import id.algaffar.jwstv.domain.engine.JwsStateMachine
 import id.algaffar.jwstv.domain.model.AppState
 import id.algaffar.jwstv.domain.model.AppStateSettings
 import id.algaffar.jwstv.domain.model.FloatingOverlayItem
 import id.algaffar.jwstv.domain.model.MediaDisplaySettings
 import id.algaffar.jwstv.domain.model.QurbanGroup
+import id.algaffar.jwstv.domain.model.ScreenTextsSettings
 import id.algaffar.jwstv.domain.model.SlideGlobalConfig
 import id.algaffar.jwstv.domain.model.SlideItem
 import id.algaffar.jwstv.domain.model.SlideTextStyle
@@ -316,5 +319,96 @@ class SettingsEnhancementsTest {
         val encoded = json.encodeToString(updatedQ2)
         val decoded = json.decodeFromString<QurbanGroup>(encoded)
         assertEquals(updatedQ2, decoded)
+    }
+
+    @Test
+    fun `SettingsNavigationModel enforces 5 modular categories with max 4 sub-tabs each and RBAC filtering`() {
+        val tree = SettingsNavigationModel.MENU_TREE
+        assertEquals(5, tree.size)
+        assertEquals(listOf("masjid", "sholat", "tampilan", "acara", "sistem"), tree.map { it.id })
+
+        val allTabIds = tree.flatMap { cat ->
+            assertTrue("Category ${cat.id} should have 3..4 modular tabs", cat.tabs.size in 3..4)
+            cat.tabs.map { it.id }
+        }
+        assertEquals(19, allTabIds.size)
+        assertEquals("Sub-tab IDs must be globally unique", allTabIds.size, allTabIds.toSet().size)
+
+        // Superadmin sees all 5 categories and all 19 sub-tabs
+        val superCats = SettingsNavigationModel.filterForRole(UserRole.SUPERADMIN)
+        assertEquals(5, superCats.size)
+        assertEquals(19, superCats.sumOf { it.tabs.size })
+
+        // Admin sees all 5 categories and all 19 sub-tabs (admin user management inside accessInput is gated by role)
+        val adminCats = SettingsNavigationModel.filterForRole(UserRole.ADMIN)
+        assertEquals(5, adminCats.size)
+
+        // Operator (USER) must not see restricted prayer/audio/hardware/system tabs
+        val userCats = SettingsNavigationModel.filterForRole(UserRole.USER)
+        val userTabIds = userCats.flatMap { it.tabs.map { t -> t.id } }.toSet()
+        assertFalse("prayerLocation" in userTabIds)
+        assertFalse("prayerStages" in userTabIds)
+        assertFalse("audio" in userTabIds)
+        assertFalse("customAudio" in userTabIds)
+        assertFalse("switches" in userTabIds)
+        assertFalse("network" in userTabIds)
+        assertFalse("backupUpdate" in userTabIds)
+        assertFalse("logsDevice" in userTabIds)
+        assertTrue("brand" in userTabIds)
+        assertTrue("visualStyle" in userTabIds)
+        assertTrue("jumatRamadhan" in userTabIds)
+        assertTrue("accessInput" in userTabIds)
+        assertTrue("No empty categories after RBAC filter", userCats.all { it.tabs.isNotEmpty() })
+
+        // Contextual footer hints exist for all zones
+        SettingsFocusZone.entries.forEach { zone ->
+            assertTrue(SettingsNavigationModel.footerHintForZone(zone).isNotBlank())
+        }
+    }
+
+    @Test
+    fun `SettingsNavigationModel inline stepper and cyclic option math clamp and wrap safely`() {
+        assertEquals(15, SettingsNavigationModel.computeSteppedInt(10, +1, min = 0, max = 100, step = 5))
+        assertEquals(5, SettingsNavigationModel.computeSteppedInt(10, -1, min = 0, max = 100, step = 5))
+        assertEquals(100, SettingsNavigationModel.computeSteppedInt(98, +1, min = 0, max = 100, step = 5))
+        assertEquals(0, SettingsNavigationModel.computeSteppedInt(2, -1, min = 0, max = 100, step = 5))
+        assertEquals(-15, SettingsNavigationModel.computeSteppedInt(-15, -1, min = -15, max = 15, step = 1))
+
+        assertEquals(1, SettingsNavigationModel.computeSteppedOptionIndex(0, +1, optionCount = 3))
+        assertEquals(2, SettingsNavigationModel.computeSteppedOptionIndex(0, -1, optionCount = 3))
+        assertEquals(0, SettingsNavigationModel.computeSteppedOptionIndex(2, +1, optionCount = 3))
+        assertEquals(0, SettingsNavigationModel.computeSteppedOptionIndex(0, +1, optionCount = 0))
+    }
+
+    @Test
+    fun `ScreenTextsSettings round-trips custom Hadith and screen messages and preserves legacy JSON defaults`() {
+        val custom = ScreenTextsSettings(
+            adzanHadith = "Teks kustom adzan masjid",
+            iqomahHadith = "",
+            waktuJumatReminder = "Harap menonaktifkan ponsel sebelum khutbah dimulai.",
+            onlineFinanceFooterQuote = "Laporan kas transparan {{Nama Masjid}}"
+        )
+        val settings = AppStateSettings(screenTexts = custom)
+        val encoded = json.encodeToString(settings)
+        val decoded = json.decodeFromString<AppStateSettings>(encoded)
+        assertEquals("Teks kustom adzan masjid", decoded.screenTexts.adzanHadith)
+        assertEquals("", decoded.screenTexts.iqomahHadith)
+        assertEquals("Harap menonaktifkan ponsel sebelum khutbah dimulai.", decoded.screenTexts.waktuJumatReminder)
+        assertEquals("Laporan kas transparan {{Nama Masjid}}", decoded.screenTexts.onlineFinanceFooterQuote)
+
+        // Legacy backup JSON without screenTexts must deserialize with non-blank default Hadiths/quotes
+        val legacy = json.decodeFromString<AppStateSettings>("""{"schemaVersion":4}""")
+        assertTrue(legacy.screenTexts.adzanHadith.isNotBlank())
+        assertTrue(legacy.screenTexts.iqomahHadith.isNotBlank())
+        assertTrue(legacy.screenTexts.iqomahWarning.isNotBlank())
+    }
+
+    @Test
+    fun `Simulation and audio test actions are restricted strictly to SUPERADMIN role`() {
+        listOf("simulate_state", "test_adzan", "test_beep").forEach { action ->
+            assertTrue("SUPERADMIN must be allowed '$action'", KtorRemoteServer.isActionAllowedForRole(action, UserRole.SUPERADMIN))
+            assertFalse("ADMIN must not be allowed '$action'", KtorRemoteServer.isActionAllowedForRole(action, UserRole.ADMIN))
+            assertFalse("USER must not be allowed '$action'", KtorRemoteServer.isActionAllowedForRole(action, UserRole.USER))
+        }
     }
 }

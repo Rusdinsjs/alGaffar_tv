@@ -265,17 +265,20 @@ fun WaktuJumatFullscreen(
                 }
             }
 
-            Text(
-                text = "“Mohon tenang dan dengarkan pengumuman serta laporan kas masjid sebelum Khotib naik mimbar.”",
-                color = palette.textSecondary,
-                fontSize = 40.sp,
-                lineHeight = 48.sp,
-                fontStyle = FontStyle.Italic,
-                fontWeight = FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
+            val jumatReminder = snapshot.settings.screenTexts.waktuJumatReminder.trim()
+            if (jumatReminder.isNotEmpty()) {
+                Text(
+                    text = "“$jumatReminder”",
+                    color = palette.textSecondary,
+                    fontSize = 40.sp,
+                    lineHeight = 48.sp,
+                    fontStyle = FontStyle.Italic,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }
@@ -477,17 +480,20 @@ fun TarawihFullscreen(
                 }
             }
 
-            Text(
-                text = "“Mohon tenang dan bersiap melaksanakan ibadah Sholat Tarawih & Witir berjamaah.”",
-                color = palette.textSecondary,
-                fontSize = 40.sp,
-                lineHeight = 48.sp,
-                fontStyle = FontStyle.Italic,
-                fontWeight = FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
+            val tarawihReminder = snapshot.settings.screenTexts.tarawihReminder.trim()
+            if (tarawihReminder.isNotEmpty()) {
+                Text(
+                    text = "“$tarawihReminder”",
+                    color = palette.textSecondary,
+                    fontSize = 40.sp,
+                    lineHeight = 48.sp,
+                    fontStyle = FontStyle.Italic,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }
@@ -1205,21 +1211,24 @@ fun HolidayAndQurbanFullscreen(
                 }
             }
 
-            Text(
-                text = when {
-                    isInfoQurbanOnly -> "“Semoga Allah menerima amal ibadah Qurban kita semua dan melimpahkan keberkahan.”"
-                    isIdulFitri -> "“Taqabbalallahu Minna Wa Minkum • Mohon tenang dan bersiap melaksanakan Sholat Idul Fitri.”"
-                    else -> "“Allahu Akbar, Allahu Akbar • Mari bersiap melaksanakan Sholat Idul Adha & Ibadah Qurban.”"
-                },
-                color = palette.textSecondary,
-                fontSize = 40.sp,
-                lineHeight = 48.sp,
-                fontStyle = FontStyle.Italic,
-                fontWeight = FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
+            val holidayReminder = when {
+                isInfoQurbanOnly -> settings.screenTexts.infoQurbanReminder.trim()
+                isIdulFitri -> settings.screenTexts.idulFitriReminder.trim()
+                else -> settings.screenTexts.idulAdhaReminder.trim()
+            }
+            if (holidayReminder.isNotEmpty()) {
+                Text(
+                    text = "“$holidayReminder”",
+                    color = palette.textSecondary,
+                    fontSize = 40.sp,
+                    lineHeight = 48.sp,
+                    fontStyle = FontStyle.Italic,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }
@@ -1722,7 +1731,7 @@ fun MasjidQrFullscreen(
         badgeLabel = "INFAQ & QRIS MASJID",
         badgeIcon = Icons.Default.QrCode2,
         title = qrCfg.label.ifBlank { "Infaq & Sedekah Digital ${snapshot.settings.brand.name}" },
-        guidance = "Pindai QR Code di samping menggunakan aplikasi Mobile Banking atau E-Wallet (QRIS) Anda untuk menyalurkan infaq & sedekah terbaik.",
+        guidance = snapshot.settings.screenTexts.masjidQrGuidance.trim(),
         qrPayload = qrCfg.link.ifBlank { "Infaq Digital ${snapshot.settings.brand.name}" },
         customQrImage = qrCfg.customQrImage,
         bankName = qrCfg.bankName.ifBlank { finance.bankName },

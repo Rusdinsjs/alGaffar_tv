@@ -442,15 +442,19 @@ fun OnlineFinanceFullscreen(
                     .padding(horizontal = 24.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
-                Text(
-                    text = "“Transparansi & akuntabilitas pengelolaan infaq jamaah ${settings.brand.name}. Semoga Allah membalas kebaikan para muhsinin.”",
-                    color = palette.textSecondary,
-                    fontSize = 18.sp,
-                    fontStyle = FontStyle.Italic,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                val footerQuote = settings.screenTexts.onlineFinanceFooterQuote.trim()
+                    .replace("{{Nama Masjid}}", settings.brand.name, ignoreCase = true)
+                if (footerQuote.isNotEmpty()) {
+                    Text(
+                        text = "“$footerQuote”",
+                        color = palette.textSecondary,
+                        fontSize = 18.sp,
+                        fontStyle = FontStyle.Italic,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }

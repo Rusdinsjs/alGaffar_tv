@@ -258,13 +258,17 @@ object AuthManager {
         "userManagement",
         "audio_hardware",
         "prayer",
+        "prayerLocation",
+        "prayerStages",
         "audio",
         "customAudio",
         "state",
         "switches",
         "network",
         "backup",
+        "backupUpdate",
         "logs",
+        "logsDevice",
         "hardware"
     )
 

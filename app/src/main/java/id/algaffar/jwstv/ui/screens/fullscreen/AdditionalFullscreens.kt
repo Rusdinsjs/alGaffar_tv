@@ -462,16 +462,18 @@ fun QrSplitOverlayFullscreen(
                     style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false))
                 )
 
-                Text(
-                    text = "“$guidance”",
-                    color = palette.textSecondary,
-                    fontSize = if (isCompactSlide) 20.sp else 27.sp,
-                    lineHeight = if (isCompactSlide) 28.sp else 36.sp,
-                    fontStyle = FontStyle.Italic,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = if (isCompactSlide) 3 else 4,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (guidance.isNotBlank()) {
+                    Text(
+                        text = "“$guidance”",
+                        color = palette.textSecondary,
+                        fontSize = if (isCompactSlide) 20.sp else 27.sp,
+                        lineHeight = if (isCompactSlide) 28.sp else 36.sp,
+                        fontStyle = FontStyle.Italic,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = if (isCompactSlide) 3 else 4,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
                 if (extraLeftContent != null) {
                     extraLeftContent()
@@ -669,7 +671,7 @@ fun FinanceQrFullscreen(
         badgeLabel = "TRANSPARANSI KAS ONLINE",
         badgeIcon = Icons.Default.AccountBalanceWallet,
         title = "Laporan Keuangan Detail\n${snapshot.settings.brand.name}",
-        guidance = "Pindai QR Code di samping menggunakan kamera smartphone untuk melihat rincian mutasi pemasukan, pengeluaran, dan saldo kas masjid secara real-time.",
+        guidance = snapshot.settings.screenTexts.financeQrGuidance.trim(),
         qrPayload = qrPayload,
         bankName = finance.bankName.ifBlank { qrCfg.bankName },
         nomorRekening = finance.nomorRekening.ifBlank { qrCfg.nomorRekening },

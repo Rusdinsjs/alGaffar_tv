@@ -331,15 +331,6 @@ fun LogoQuickMenuCard(
             onClick = onCycleClockStyle
         )
         LogoQuickMenuItem(
-            icon = Icons.Default.BugReport,
-            label = "Simulasi",
-            subtitle = "Panel uji 31 state & audio",
-            onClick = {
-                onDismiss()
-                onOpenDebugModal()
-            }
-        )
-        LogoQuickMenuItem(
             icon = Icons.Default.Settings,
             label = "Pengaturan",
             subtitle = "Buka pengaturan lengkap",

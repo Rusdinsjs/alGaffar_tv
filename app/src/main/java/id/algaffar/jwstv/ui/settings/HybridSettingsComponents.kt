@@ -1,9 +1,16 @@
 package id.algaffar.jwstv.ui.settings
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,10 +19,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,36 +32,48 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.ToggleOff
-import androidx.compose.material.icons.filled.ToggleOn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -64,6 +85,10 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextRange
@@ -88,9 +113,108 @@ import kotlinx.coroutines.delay
 import java.io.File
 import java.time.LocalDate
 import java.util.Locale
+import kotlin.math.roundToInt
 
-/** High-contrast Amber focus ring color modeled after `MobileSettingsLayout.tsx` for TV D-Pad visibility. */
+/** Unified high-contrast Vibrant Cyan (#38BDF8) focus ring for Android TV D-Pad & Mouse hover. */
+val TvFocusCyan = Color(0xFF38BDF8)
+
+/** Legacy alias kept for Amber badge/status accents; focus rings use [TvFocusCyan]. */
 val TvFocusAmber = Color(0xFFFBBF24)
+
+/** Clean dark surface tokens aligned with Leanback Two-Pane Settings UI. */
+val TvSurfaceCanvas = Color(0xFF0B0F17)
+val TvSurfacePane = Color(0xFF0F1521)
+val TvSurfaceRow = Color(0xFF151E2E)
+val TvSurfaceRowFocused = Color(0xFF1B2940)
+val TvSurfaceBorder = Color(0xFF263348)
+
+/**
+ * In-Canvas Overlay Entry & Host State so Level-3 Drawers and Select Modals render
+ * directly inside `Responsive1080pCanvas` (1920x1080 virtual reference coordinates)
+ * at 1:1 proportional scale instead of escaping into an unscaled Android OS `Dialog` window.
+ */
+class SettingsOverlayEntry(
+    val id: Any,
+    onDismissInit: () -> Unit,
+    contentInit: @Composable () -> Unit
+) {
+    var onDismiss by mutableStateOf(onDismissInit)
+    var content by mutableStateOf(contentInit)
+}
+
+class SettingsOverlayHostState {
+    val entries = mutableStateListOf<SettingsOverlayEntry>()
+    private val lastFocusedByDepth = mutableMapOf<Int, FocusRequester>()
+
+    val hasActiveOverlay: Boolean
+        get() = entries.isNotEmpty()
+
+    fun attach(entry: SettingsOverlayEntry) {
+        if (entries.none { it.id == entry.id }) {
+            entries.add(entry)
+        }
+    }
+
+    fun detach(id: Any) {
+        entries.removeAll { it.id == id }
+    }
+
+    fun dismissTop(): Boolean {
+        val top = entries.lastOrNull() ?: return false
+        top.onDismiss()
+        return true
+    }
+
+    fun dismissAll() {
+        entries.toList().asReversed().forEach { it.onDismiss() }
+    }
+
+    fun recordFocus(depth: Int, requester: FocusRequester) {
+        lastFocusedByDepth[depth] = requester
+    }
+
+    fun lastFocusForDepth(depth: Int): FocusRequester? = lastFocusedByDepth[depth]
+}
+
+val LocalRightPaneOverlayHost = compositionLocalOf<SettingsOverlayHostState?> { null }
+val LocalModalOverlayHost = compositionLocalOf<SettingsOverlayHostState?> { null }
+val LocalOverlayLayerDepth = compositionLocalOf { 0 }
+val LocalIsActiveFocusLayer = compositionLocalOf { true }
+
+/**
+ * Synchronizes Mouse Hover (`PointerEventType.Enter`) directly to D-Pad/Keyboard Focus
+ * so switching between mouse and remote/keyboard continues seamlessly from the hovered item,
+ * while recording per-layer focus memory for automatic restoration on drawer close.
+ */
+@Composable
+fun Modifier.syncHoverToFocus(
+    focusRequester: FocusRequester,
+    enabled: Boolean = true
+): Modifier {
+    val isActiveLayer = LocalIsActiveFocusLayer.current
+    val layerDepth = LocalOverlayLayerDepth.current
+    val rightPaneHost = LocalRightPaneOverlayHost.current
+
+    val tracked = this.onFocusChanged { state ->
+        if (state.isFocused) {
+            rightPaneHost?.recordFocus(layerDepth, focusRequester)
+        }
+    }
+    return if (!enabled || !isActiveLayer) {
+        tracked
+    } else {
+        tracked.pointerInput(focusRequester) {
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent(PointerEventPass.Main)
+                    if (event.type == PointerEventType.Enter) {
+                        runCatching { focusRequester.requestFocus() }
+                    }
+                }
+            }
+        }
+    }
+}
 
 /**
  * Bundled callbacks passed to the modular settings tab screens.
@@ -160,11 +284,11 @@ fun HybridSectionCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(palette.bgSecondary.copy(alpha = 0.72f))
-            .border(1.5.dp, palette.border, RoundedCornerShape(20.dp))
-            .padding(22.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(TvSurfacePane.copy(alpha = 0.92f))
+            .border(1.dp, TvSurfaceBorder, RoundedCornerShape(18.dp))
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -174,16 +298,17 @@ fun HybridSectionCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    color = palette.accent,
-                    fontSize = 19.sp,
+                    color = Color(0xFFF8FAFC),
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 if (subtitle.isNotBlank()) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = subtitle,
-                        color = palette.textSecondary,
-                        fontSize = 13.sp
+                        color = Color(0xFF94A3B8),
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
                     )
                 }
             }
@@ -199,7 +324,7 @@ fun HybridSectionCard(
 @Composable
 fun HybridInfoBanner(
     text: String,
-    accentColor: Color = Color(0xFF38BDF8),
+    accentColor: Color = TvFocusCyan,
     icon: ImageVector = Icons.Default.Info,
     modifier: Modifier = Modifier
 ) {
@@ -207,7 +332,7 @@ fun HybridInfoBanner(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(accentColor.copy(alpha = 0.12f))
+            .background(accentColor.copy(alpha = 0.11f))
             .border(1.dp, accentColor.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -221,7 +346,7 @@ fun HybridInfoBanner(
         )
         Text(
             text = text,
-            color = Color.White.copy(alpha = 0.88f),
+            color = Color(0xFFE2E8F0),
             fontSize = 13.sp,
             lineHeight = 19.sp
         )
@@ -239,28 +364,36 @@ fun HybridButton(
     modifier: Modifier = Modifier
 ) {
     val palette = LocalJwsTheme.current
+    val focusRequester = remember { FocusRequester() }
     var isFocused by remember { mutableStateOf(false) }
 
     val bgColor = when {
-        !enabled -> palette.bgSecondary.copy(alpha = 0.35f)
-        isDanger -> if (isFocused) Color(0xFFEF4444) else Color(0xFF991B1B)
-        isPrimary -> if (isFocused) palette.accentSecondary else palette.accent
-        isFocused -> palette.accent.copy(alpha = 0.35f)
-        else -> palette.bgPrimary.copy(alpha = 0.85f)
+        !enabled -> TvSurfaceRow.copy(alpha = 0.4f)
+        isDanger -> if (isFocused) Color(0xFFDC2626) else Color(0xFF991B1B)
+        isPrimary -> if (isFocused) TvFocusCyan else Color(0xFF0EA5E9)
+        isFocused -> TvSurfaceRowFocused
+        else -> TvSurfaceRow
     }
     val textColor = when {
-        !enabled -> palette.textSecondary.copy(alpha = 0.45f)
+        !enabled -> Color(0xFF64748B)
         isDanger -> Color.White
-        isPrimary -> palette.bgPrimary
-        else -> palette.textPrimary
+        isPrimary -> Color(0xFF04111E)
+        else -> Color(0xFFF8FAFC)
     }
-    val borderColor = if (isFocused) TvFocusAmber else palette.border
+    val borderColor = when {
+        isFocused -> TvFocusCyan
+        isDanger -> Color(0xFFEF4444).copy(alpha = 0.55f)
+        isPrimary -> TvFocusCyan.copy(alpha = 0.7f)
+        else -> TvSurfaceBorder
+    }
 
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(bgColor)
-            .border(if (isFocused) 3.dp else 1.dp, borderColor, RoundedCornerShape(12.dp))
+            .border(if (isFocused) 2.5.dp else 1.dp, borderColor, RoundedCornerShape(12.dp))
+            .focusRequester(focusRequester)
+            .syncHoverToFocus(focusRequester, enabled = enabled)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable(enabled = enabled)
             .clickable(enabled = enabled) { onClick() }
@@ -315,8 +448,8 @@ data class HybridSelectOption(
 )
 
 /**
- * TV D-Pad & Touch friendly select/dropdown control.
- * Renders a compact select box that opens a scrollable modal picker dialog on click/Enter.
+ * TV D-Pad & Mouse friendly select/dropdown control.
+ * Renders a compact select box that opens a focus-trapped scrollable modal picker dialog on click/Enter.
  */
 @Composable
 fun HybridSelectDropdown(
@@ -328,7 +461,7 @@ fun HybridSelectDropdown(
     dialogTitle: String = label,
     modifier: Modifier = Modifier
 ) {
-    val palette = LocalJwsTheme.current
+    val focusRequester = remember { FocusRequester() }
     var isFocused by remember { mutableStateOf(false) }
     var showDialog by remember { mutableStateOf(false) }
 
@@ -342,7 +475,7 @@ fun HybridSelectDropdown(
     ) {
         Text(
             text = label.uppercase(Locale.getDefault()),
-            color = palette.textSecondary,
+            color = if (isFocused) TvFocusCyan else Color(0xFF94A3B8),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
         )
@@ -350,15 +483,14 @@ fun HybridSelectDropdown(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(
-                    if (isFocused) palette.accent.copy(alpha = 0.22f)
-                    else palette.bgPrimary.copy(alpha = 0.85f)
-                )
+                .background(if (isFocused) TvSurfaceRowFocused else TvSurfaceRow)
                 .border(
-                    width = if (isFocused) 3.dp else 1.5.dp,
-                    color = if (isFocused) TvFocusAmber else palette.border,
+                    width = if (isFocused) 2.5.dp else 1.dp,
+                    color = if (isFocused) TvFocusCyan else TvSurfaceBorder,
                     shape = RoundedCornerShape(12.dp)
                 )
+                .focusRequester(focusRequester)
+                .syncHoverToFocus(focusRequester)
                 .onFocusChanged { isFocused = it.isFocused }
                 .focusable()
                 .clickable { showDialog = true }
@@ -369,7 +501,7 @@ fun HybridSelectDropdown(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = selectedOption?.label ?: placeholder,
-                    color = if (selectedOption != null) palette.textPrimary else palette.textSecondary,
+                    color = if (selectedOption != null) Color(0xFFF8FAFC) else Color(0xFF94A3B8),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.ExtraBold,
                     maxLines = 1,
@@ -378,7 +510,7 @@ fun HybridSelectDropdown(
                 if (!selectedOption?.subtitle.isNullOrBlank()) {
                     Text(
                         text = selectedOption!!.subtitle,
-                        color = palette.textSecondary,
+                        color = Color(0xFF94A3B8),
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -389,186 +521,286 @@ fun HybridSelectDropdown(
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
                 contentDescription = null,
-                tint = if (isFocused) TvFocusAmber else palette.accentSecondary,
+                tint = if (isFocused) TvFocusCyan else Color(0xFF94A3B8),
                 modifier = Modifier.size(22.dp)
             )
         }
     }
 
     if (showDialog) {
-        val initialIdx = remember(selectedId, options) {
-            options.indexOfFirst { it.id == selectedId }.coerceAtLeast(0)
+        val modalHost = LocalModalOverlayHost.current
+        val dismissPicker: () -> Unit = {
+            showDialog = false
+            runCatching { focusRequester.requestFocus() }
         }
-        val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIdx)
+        val pickerBody: @Composable () -> Unit = {
+            val initialIdx = remember(selectedId, options) {
+                options.indexOfFirst { it.id == selectedId }.coerceAtLeast(0)
+            }
+            val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIdx)
+            val firstItemFocus = remember { FocusRequester() }
 
-        Dialog(onDismissRequest = { showDialog = false }) {
-            Column(
+            LaunchedEffect(Unit) {
+                delay(16L)
+                runCatching { firstItemFocus.requestFocus() }
+            }
+
+            BackHandler(enabled = true) {
+                dismissPicker()
+            }
+
+            @OptIn(ExperimentalComposeUiApi::class)
+            Box(
                 modifier = Modifier
-                    .widthIn(min = 420.dp, max = 640.dp)
-                    .heightIn(max = 520.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(palette.bgSecondary)
-                    .border(2.dp, palette.accentSecondary.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.68f))
+                    .focusProperties { exit = { FocusRequester.Cancel } }
+                    .focusGroup()
+                    .onPreviewKeyEvent { keyEvent ->
+                        if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Escape) {
+                            dismissPicker()
+                            true
+                        } else false
+                    }
+                    .clickable { dismissPicker() },
+                contentAlignment = Alignment.Center
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = dialogTitle,
-                        color = palette.textPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        modifier = Modifier.weight(1f)
-                    )
-                    HybridButton(
-                        label = "Tutup",
-                        isPrimary = false,
-                        onClick = { showDialog = false }
-                    )
-                }
-
-                LazyColumn(
-                    state = listState,
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f, fill = false),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                        .widthIn(min = 520.dp, max = 720.dp)
+                        .heightIn(max = 640.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(TvSurfacePane)
+                        .border(2.dp, TvFocusCyan.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
+                        .clickable(enabled = false) {}
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(options, key = { it.id }) { opt ->
-                        val isSelected = opt.id == selectedId
-                        var itemFocused by remember { mutableStateOf(false) }
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    when {
-                                        itemFocused -> palette.accent.copy(alpha = 0.28f)
-                                        isSelected -> palette.accent.copy(alpha = 0.16f)
-                                        else -> palette.bgPrimary.copy(alpha = 0.72f)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = dialogTitle,
+                            color = Color(0xFFF8FAFC),
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        HybridButton(
+                            label = "Tutup",
+                            icon = Icons.Default.Close,
+                            onClick = dismissPicker
+                        )
+                    }
+
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(options, key = { it.id }) { opt ->
+                            val isSelected = opt.id == selectedId
+                            val itemRequester = remember { FocusRequester() }
+                            var itemFocused by remember { mutableStateOf(false) }
+                            val isTargetInitial = (opt.id == selectedId) || (selectedOption == null && opt == options.firstOrNull())
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        when {
+                                            itemFocused -> TvSurfaceRowFocused
+                                            isSelected -> TvFocusCyan.copy(alpha = 0.14f)
+                                            else -> TvSurfaceRow
+                                        }
+                                    )
+                                    .border(
+                                        width = if (itemFocused) 2.5.dp else 1.dp,
+                                        color = when {
+                                            itemFocused -> TvFocusCyan
+                                            isSelected -> TvFocusCyan.copy(alpha = 0.65f)
+                                            else -> TvSurfaceBorder
+                                        },
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .then(if (isTargetInitial) Modifier.focusRequester(firstItemFocus) else Modifier.focusRequester(itemRequester))
+                                    .syncHoverToFocus(if (isTargetInitial) firstItemFocus else itemRequester)
+                                    .onFocusChanged { itemFocused = it.isFocused }
+                                    .focusable()
+                                    .clickable {
+                                        onSelect(opt.id)
+                                        dismissPicker()
                                     }
-                                )
-                                .border(
-                                    width = if (itemFocused) 3.dp else 1.dp,
-                                    color = when {
-                                        itemFocused -> TvFocusAmber
-                                        isSelected -> palette.accent
-                                        else -> palette.border
-                                    },
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .onFocusChanged { itemFocused = it.isFocused }
-                                .focusable()
-                                .clickable {
-                                    onSelect(opt.id)
-                                    showDialog = false
-                                }
-                                .padding(horizontal = 14.dp, vertical = 11.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = opt.label,
-                                    color = if (isSelected) palette.accentSecondary else palette.textPrimary,
-                                    fontSize = 15.sp,
-                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold
-                                )
-                                if (opt.subtitle.isNotBlank()) {
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = opt.subtitle,
-                                        color = palette.textSecondary,
-                                        fontSize = 12.sp
+                                        text = opt.label,
+                                        color = if (isSelected) TvFocusCyan else Color(0xFFF8FAFC),
+                                        fontSize = 15.sp,
+                                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold
+                                    )
+                                    if (opt.subtitle.isNotBlank()) {
+                                        Text(
+                                            text = opt.subtitle,
+                                            color = Color(0xFF94A3B8),
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = TvFocusCyan,
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
-                            }
-                            if (isSelected) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = palette.accentSecondary,
-                                    modifier = Modifier.size(20.dp)
-                                )
                             }
                         }
                     }
                 }
             }
         }
+
+        if (modalHost != null) {
+            val entryId = remember { Any() }
+            val entry = remember(entryId) { SettingsOverlayEntry(entryId, dismissPicker, pickerBody) }
+            entry.onDismiss = dismissPicker
+            entry.content = pickerBody
+            DisposableEffect(modalHost, entryId) {
+                modalHost.attach(entry)
+                onDispose { modalHost.detach(entryId) }
+            }
+        } else {
+            Dialog(
+                onDismissRequest = dismissPicker,
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                pickerBody()
+            }
+        }
     }
 }
 
+/**
+ * Tactile Pill Toggle Switch row modeled after Android TV Leanback settings (`d-pad.jpg`).
+ * Single D-Pad focus stop + Mouse hover-to-focus sync.
+ */
 @Composable
 fun HybridToggleRow(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     description: String = "",
+    icon: ImageVector? = null,
     modifier: Modifier = Modifier
 ) {
-    val palette = LocalJwsTheme.current
+    val focusRequester = remember { FocusRequester() }
     var isFocused by remember { mutableStateOf(false) }
+
+    val trackColor by animateColorAsState(
+        targetValue = if (checked) TvFocusCyan else Color(0xFF334155),
+        label = "toggleTrack"
+    )
+    val thumbOffset by animateDpAsState(
+        targetValue = if (checked) 24.dp else 4.dp,
+        label = "toggleThumb"
+    )
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(
-                if (isFocused) palette.accent.copy(alpha = 0.2f)
-                else palette.bgPrimary.copy(alpha = 0.7f)
-            )
+            .background(if (isFocused) TvSurfaceRowFocused else TvSurfaceRow)
             .border(
-                width = if (isFocused) 3.dp else 1.dp,
-                color = if (isFocused) TvFocusAmber else palette.border,
+                width = if (isFocused) 2.5.dp else 1.dp,
+                color = if (isFocused) TvFocusCyan else TvSurfaceBorder,
                 shape = RoundedCornerShape(14.dp)
             )
+            .focusRequester(focusRequester)
+            .syncHoverToFocus(focusRequester)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
             .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = label,
-                color = palette.textPrimary,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
-            )
-            if (description.isNotBlank()) {
-                Text(
-                    text = description,
-                    color = palette.textSecondary,
-                    fontSize = 12.sp
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isFocused || checked) TvFocusCyan else Color(0xFF94A3B8),
+                    modifier = Modifier.size(22.dp)
                 )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    color = Color(0xFFF8FAFC),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (description.isNotBlank()) {
+                    Text(
+                        text = description,
+                        color = Color(0xFF94A3B8),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.width(12.dp))
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
                 text = if (checked) "AKTIF" else "NONAKTIF",
-                color = if (checked) palette.accent else palette.textSecondary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.ExtraBold
+                color = if (checked) TvFocusCyan else Color(0xFF64748B),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 0.6.sp
             )
-            Icon(
-                imageVector = if (checked) Icons.Default.ToggleOn else Icons.Default.ToggleOff,
-                contentDescription = null,
-                tint = if (checked) palette.accent else palette.textSecondary,
-                modifier = Modifier.size(36.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .width(52.dp)
+                    .height(30.dp)
+                    .clip(CircleShape)
+                    .background(trackColor),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Box(
+                    modifier = Modifier
+                        .offset(x = thumbOffset)
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                )
+            }
         }
     }
 }
 
+/**
+ * Single-Focus Inline Numeric Stepper (`< nilai >`).
+ * - D-Pad: Focus the entire row in 1 stop, press Left/Right to decrement/increment immediately.
+ * - Mouse / Touch: Click `<` or `>` chips directly (hover syncs focus to the row).
+ */
 @Composable
 fun HybridNumberStepper(
     label: String,
@@ -579,29 +811,245 @@ fun HybridNumberStepper(
     step: Int = 1,
     unit: String = "menit",
     enabled: Boolean = true,
+    description: String = "",
+    icon: ImageVector? = null,
     modifier: Modifier = Modifier
 ) {
-    val palette = LocalJwsTheme.current
-    var decFocused by remember { mutableStateOf(false) }
-    var incFocused by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    var isFocused by remember { mutableStateOf(false) }
+
+    fun adjust(deltaSteps: Int) {
+        if (!enabled) return
+        val next = SettingsNavigationModel.computeSteppedInt(value, deltaSteps, min, max, step)
+        if (next != value) onValueChange(next)
+    }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(palette.bgPrimary.copy(alpha = if (enabled) 0.7f else 0.35f))
-            .border(1.dp, palette.border, RoundedCornerShape(14.dp))
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .background(
+                when {
+                    !enabled -> TvSurfaceRow.copy(alpha = 0.4f)
+                    isFocused -> TvSurfaceRowFocused
+                    else -> TvSurfaceRow
+                }
+            )
+            .border(
+                width = if (isFocused) 2.5.dp else 1.dp,
+                color = if (isFocused) TvFocusCyan else TvSurfaceBorder,
+                shape = RoundedCornerShape(14.dp)
+            )
+            .focusRequester(focusRequester)
+            .syncHoverToFocus(focusRequester, enabled = enabled)
+            .onFocusChanged { isFocused = it.isFocused }
+            .onPreviewKeyEvent { keyEvent ->
+                if (!enabled || keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (keyEvent.key) {
+                    Key.DirectionLeft -> {
+                        adjust(-1)
+                        true
+                    }
+                    Key.DirectionRight -> {
+                        adjust(+1)
+                        true
+                    }
+                    else -> false
+                }
+            }
+            .focusable(enabled = enabled)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            color = if (enabled) palette.textPrimary else palette.textSecondary.copy(alpha = 0.5f),
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f)
-        )
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isFocused) TvFocusCyan else Color(0xFF94A3B8),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    color = if (enabled) Color(0xFFF8FAFC) else Color(0xFF64748B),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (description.isNotBlank()) {
+                    Text(
+                        text = description,
+                        color = Color(0xFF94A3B8),
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        if (enabled && value > min) {
+                            if (isFocused) TvFocusCyan else Color(0xFF1E293B)
+                        } else Color(0xFF111827)
+                    )
+                    .border(
+                        1.dp,
+                        if (isFocused && enabled) TvFocusCyan else TvSurfaceBorder,
+                        RoundedCornerShape(10.dp)
+                    )
+                    .clickable(enabled = enabled && value > min) { adjust(-1) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ChevronLeft,
+                    contentDescription = "Kurangi",
+                    tint = if (isFocused && enabled && value > min) Color(0xFF04111E) else Color(0xFFF8FAFC),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Text(
+                text = if (unit.isBlank()) "$value" else "$value $unit",
+                color = if (enabled) Color(0xFFF8FAFC) else Color(0xFF64748B),
+                fontSize = 15.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(min = 84.dp)
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        if (enabled && value < max) {
+                            if (isFocused) TvFocusCyan else Color(0xFF1E293B)
+                        } else Color(0xFF111827)
+                    )
+                    .border(
+                        1.dp,
+                        if (isFocused && enabled) TvFocusCyan else TvSurfaceBorder,
+                        RoundedCornerShape(10.dp)
+                    )
+                    .clickable(enabled = enabled && value < max) { adjust(+1) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "Tambah",
+                    tint = if (isFocused && enabled && value < max) Color(0xFF04111E) else Color(0xFFF8FAFC),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Single-Focus Inline Option Stepper (`< Opsi >`) for 2–4 discrete choices.
+ * Modeled directly after `Resolution < 4K 60Hz >` in `d-pad.jpg`.
+ */
+@Composable
+fun HybridInlineOptionStepper(
+    label: String,
+    options: List<Pair<String, String>>,
+    selectedId: String,
+    onSelect: (String) -> Unit,
+    description: String = "",
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    val focusRequester = remember { FocusRequester() }
+    var isFocused by remember { mutableStateOf(false) }
+    val currentIndex = options.indexOfFirst { it.first == selectedId }.coerceAtLeast(0)
+    val currentLabel = options.getOrNull(currentIndex)?.second ?: selectedId
+
+    fun stepOption(delta: Int) {
+        if (!enabled || options.isEmpty()) return
+        val nextIdx = SettingsNavigationModel.computeSteppedOptionIndex(currentIndex, delta, options.size)
+        onSelect(options[nextIdx].first)
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (isFocused) TvSurfaceRowFocused else TvSurfaceRow)
+            .border(
+                width = if (isFocused) 2.5.dp else 1.dp,
+                color = if (isFocused) TvFocusCyan else TvSurfaceBorder,
+                shape = RoundedCornerShape(14.dp)
+            )
+            .focusRequester(focusRequester)
+            .syncHoverToFocus(focusRequester, enabled = enabled)
+            .onFocusChanged { isFocused = it.isFocused }
+            .onPreviewKeyEvent { keyEvent ->
+                if (!enabled || keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (keyEvent.key) {
+                    Key.DirectionLeft -> {
+                        stepOption(-1)
+                        true
+                    }
+                    Key.DirectionRight, Key.DirectionCenter, Key.Enter -> {
+                        stepOption(+1)
+                        true
+                    }
+                    else -> false
+                }
+            }
+            .focusable(enabled = enabled)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isFocused) TvFocusCyan else Color(0xFF94A3B8),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    color = Color(0xFFF8FAFC),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (description.isNotBlank()) {
+                    Text(
+                        text = description,
+                        color = Color(0xFF94A3B8),
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -609,62 +1057,503 @@ fun HybridNumberStepper(
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (decFocused) palette.accent else palette.bgSecondary)
-                    .border(
-                        width = if (decFocused) 3.dp else 1.dp,
-                        color = if (decFocused) TvFocusAmber else palette.border,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    .onFocusChanged { decFocused = it.isFocused }
-                    .focusable(enabled = enabled)
-                    .clickable(enabled = enabled) {
-                        onValueChange((value - step).coerceAtLeast(min))
-                    },
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(if (isFocused) TvFocusCyan else Color(0xFF1E293B))
+                    .clickable(enabled = enabled) { stepOption(-1) },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Remove,
-                    contentDescription = "Kurangi",
-                    tint = if (decFocused) palette.bgPrimary else palette.textPrimary,
+                    imageVector = Icons.Default.ChevronLeft,
+                    contentDescription = "Sebelumnya",
+                    tint = if (isFocused) Color(0xFF04111E) else Color(0xFFF8FAFC),
                     modifier = Modifier.size(20.dp)
+                )
+            }
+            Text(
+                text = currentLabel,
+                color = if (isFocused) TvFocusCyan else Color(0xFFF8FAFC),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.ExtraBold,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(min = 120.dp, max = 230.dp)
+            )
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(if (isFocused) TvFocusCyan else Color(0xFF1E293B))
+                    .clickable(enabled = enabled) { stepOption(+1) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "Berikutnya",
+                    tint = if (isFocused) Color(0xFF04111E) else Color(0xFFF8FAFC),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Horizontal Slider Row (`System Volume ━━━━●━━ 85%`) supporting D-Pad Left/Right & Mouse click/drag.
+ */
+@Composable
+fun HybridSliderRow(
+    label: String,
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    min: Int = 0,
+    max: Int = 100,
+    step: Int = 5,
+    unit: String = "%",
+    description: String = "",
+    icon: ImageVector? = null,
+    modifier: Modifier = Modifier
+) {
+    val focusRequester = remember { FocusRequester() }
+    var isFocused by remember { mutableStateOf(false) }
+    var trackWidthPx by remember { mutableStateOf(1f) }
+    val latestOnValueChange by rememberUpdatedState(onValueChange)
+    val fraction = ((value - min).toFloat() / (max - min).coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+
+    fun updateFromX(xPx: Float) {
+        val ratio = (xPx / trackWidthPx.coerceAtLeast(1f)).coerceIn(0f, 1f)
+        val raw = min + (ratio * (max - min))
+        val snapped = (min + ((raw - min) / step).roundToInt() * step).coerceIn(min, max)
+        if (snapped != value) latestOnValueChange(snapped)
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (isFocused) TvSurfaceRowFocused else TvSurfaceRow)
+            .border(
+                width = if (isFocused) 2.5.dp else 1.dp,
+                color = if (isFocused) TvFocusCyan else TvSurfaceBorder,
+                shape = RoundedCornerShape(14.dp)
+            )
+            .focusRequester(focusRequester)
+            .syncHoverToFocus(focusRequester)
+            .onFocusChanged { isFocused = it.isFocused }
+            .onPreviewKeyEvent { keyEvent ->
+                if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (keyEvent.key) {
+                    Key.DirectionLeft -> {
+                        val next = SettingsNavigationModel.computeSteppedInt(value, -1, min, max, step)
+                        if (next != value) onValueChange(next)
+                        true
+                    }
+                    Key.DirectionRight -> {
+                        val next = SettingsNavigationModel.computeSteppedInt(value, +1, min, max, step)
+                        if (next != value) onValueChange(next)
+                        true
+                    }
+                    else -> false
+                }
+            }
+            .focusable()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isFocused) TvFocusCyan else Color(0xFF94A3B8),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(label, color = Color(0xFFF8FAFC), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                if (description.isNotBlank()) {
+                    Text(description, color = Color(0xFF94A3B8), fontSize = 12.sp)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(220.dp)
+                    .height(28.dp)
+                    .onSizeChanged { trackWidthPx = it.width.toFloat().coerceAtLeast(1f) }
+                    .pointerInput(min, max, step) {
+                        detectTapGestures { offset -> updateFromX(offset.x) }
+                    }
+                    .pointerInput(min, max, step) {
+                        detectHorizontalDragGestures { change, _ ->
+                            change.consume()
+                            updateFromX(change.position.x)
+                        }
+                    },
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF334155))
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction)
+                        .height(6.dp)
+                        .clip(CircleShape)
+                        .background(TvFocusCyan)
+                )
+                val thumbX = (fraction * 200f).dp
+                Box(
+                    modifier = Modifier
+                        .offset(x = thumbX)
+                        .size(if (isFocused) 20.dp else 16.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .border(2.5.dp, TvFocusCyan, CircleShape)
                 )
             }
 
             Text(
-                text = if (unit.isBlank()) "$value" else "$value $unit",
-                color = palette.accentSecondary,
-                fontSize = 16.sp,
+                text = "$value$unit",
+                color = if (isFocused) TvFocusCyan else Color(0xFFF8FAFC),
+                fontSize = 15.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.width(102.dp)
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(56.dp)
             )
+        }
+    }
+}
 
+/**
+ * Level-3 Navigation Row (`Sound Output — [HDMI ARC ❯]`) that opens a Slide-Over Side Drawer or Modal.
+ */
+@Composable
+fun HybridNavigationRow(
+    label: String,
+    valueSummary: String,
+    onClick: () -> Unit,
+    description: String = "",
+    icon: ImageVector? = null,
+    accentBadgeColor: Color = TvFocusCyan,
+    modifier: Modifier = Modifier
+) {
+    val focusRequester = remember { FocusRequester() }
+    var isFocused by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (isFocused) TvSurfaceRowFocused else TvSurfaceRow)
+            .border(
+                width = if (isFocused) 2.5.dp else 1.dp,
+                color = if (isFocused) TvFocusCyan else TvSurfaceBorder,
+                shape = RoundedCornerShape(14.dp)
+            )
+            .focusRequester(focusRequester)
+            .syncHoverToFocus(focusRequester)
+            .onFocusChanged { isFocused = it.isFocused }
+            .onPreviewKeyEvent { keyEvent ->
+                if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionRight) {
+                    onClick()
+                    true
+                } else false
+            }
+            .focusable()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isFocused) TvFocusCyan else accentBadgeColor,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    color = Color(0xFFF8FAFC),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (description.isNotBlank()) {
+                    Text(
+                        text = description,
+                        color = Color(0xFF94A3B8),
+                        fontSize = 12.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(99.dp))
+                .background(if (isFocused) TvFocusCyan.copy(alpha = 0.2f) else Color(0xFF0F172A))
+                .border(
+                    1.dp,
+                    if (isFocused) TvFocusCyan else TvSurfaceBorder,
+                    RoundedCornerShape(99.dp)
+                )
+                .padding(horizontal = 14.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = valueSummary,
+                color = if (isFocused) TvFocusCyan else Color(0xFFE2E8F0),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = if (isFocused) TvFocusCyan else Color(0xFF94A3B8),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Level-3 Detail Panel / Slide-Over Drawer aligned 1:1 with the 70% Right Detail Pane
+ * inside `Responsive1080pCanvas` (`1920x1080` virtual reference coordinates).
+ * Matches exact typography, row heights, padding, and footer bar of the main settings pane,
+ * with strict D-Pad focus containment and `Back` / `Esc` dismissal.
+ */
+@Composable
+fun HybridSideDrawer(
+    title: String,
+    subtitle: String = "",
+    accentColor: Color = TvFocusCyan,
+    onDismiss: () -> Unit,
+    headerAction: (@Composable () -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val rightPaneHost = LocalRightPaneOverlayHost.current
+    val drawerPanel: @Composable () -> Unit = {
+        val closeFocus = remember { FocusRequester() }
+        val bodyFocus = remember { FocusRequester() }
+        var bodyHasFocus by remember { mutableStateOf(false) }
+        val scrollState = rememberScrollState()
+
+        LaunchedEffect(Unit) {
+            delay(16L)
+            runCatching { bodyFocus.requestFocus() }
+            delay(24L)
+            if (!bodyHasFocus) {
+                runCatching { closeFocus.requestFocus() }
+            }
+        }
+
+        BackHandler(enabled = true) {
+            onDismiss()
+        }
+
+        @OptIn(ExperimentalComposeUiApi::class)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(TvSurfaceCanvas)
+                .focusProperties { exit = { FocusRequester.Cancel } }
+                .focusGroup()
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Escape) {
+                        onDismiss()
+                        true
+                    } else false
+                }
+                .clickable(enabled = false) {}
+        ) {
+            // Proportional Right-Pane Header (aligned with Detail Pane 32.dp horizontal rhythm)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(TvSurfaceCanvas)
+                    .padding(horizontal = 32.dp, vertical = 18.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(accentColor.copy(alpha = 0.16f))
+                                .border(1.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "PANEL DETAIL",
+                                color = accentColor,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+                    Text(
+                        text = title,
+                        color = Color(0xFFF8FAFC),
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (subtitle.isNotBlank()) {
+                        Text(
+                            text = subtitle,
+                            color = Color(0xFF94A3B8),
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    headerAction?.invoke()
+                    HybridButton(
+                        label = "Selesai",
+                        icon = Icons.Default.Close,
+                        isPrimary = true,
+                        onClick = onDismiss,
+                        modifier = Modifier.focusRequester(closeFocus)
+                    )
+                }
+            }
+
+            // Divider matching Right Detail Pane
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (incFocused) palette.accent else palette.bgSecondary)
-                    .border(
-                        width = if (incFocused) 3.dp else 1.dp,
-                        color = if (incFocused) TvFocusAmber else palette.border,
-                        shape = RoundedCornerShape(10.dp)
-                    )
-                    .onFocusChanged { incFocused = it.isFocused }
-                    .focusable(enabled = enabled)
-                    .clickable(enabled = enabled) {
-                        onValueChange((value + step).coerceAtMost(max))
-                    },
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(accentColor.copy(alpha = 0.35f))
+            )
+
+            // Scrollable Body matching Right Detail Pane max-width & padding
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 32.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.Start
             ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Tambah",
-                    tint = if (incFocused) palette.bgPrimary else palette.textPrimary,
-                    modifier = Modifier.size(20.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 1160.dp)
+                        .focusRequester(bodyFocus)
+                        .focusGroup()
+                        .onFocusChanged { bodyHasFocus = it.hasFocus },
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    content = content
                 )
+            }
+
+            // Contextual Footer Bar matching Right Detail Pane footer
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(TvSurfacePane)
+                    .border(1.dp, TvSurfaceBorder)
+                    .padding(horizontal = 32.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = SettingsNavigationModel.footerHintForZone(SettingsFocusZone.OVERLAY_DRAWER),
+                    color = Color(0xFF94A3B8),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "FOKUS: PANEL DETAIL",
+                    color = accentColor,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+        }
+    }
+
+    if (rightPaneHost != null) {
+        val entryId = remember { Any() }
+        val entry = remember(entryId) { SettingsOverlayEntry(entryId, onDismiss, drawerPanel) }
+        entry.onDismiss = onDismiss
+        entry.content = drawerPanel
+        DisposableEffect(rightPaneHost, entryId) {
+            rightPaneHost.attach(entry)
+            onDispose { rightPaneHost.detach(entryId) }
+        }
+    } else {
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.66f))
+                    .clickable { onDismiss() },
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(0.70f)
+                ) {
+                    drawerPanel()
+                }
             }
         }
     }
@@ -757,14 +1646,14 @@ fun HybridCoordinateStepper(
                         fontWeight = FontWeight.ExtraBold,
                         textAlign = TextAlign.Center
                     ),
-                    cursorBrush = SolidColor(palette.accent),
+                    cursorBrush = SolidColor(TvFocusCyan),
                     modifier = Modifier
                         .width(128.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(palette.bgSecondary)
+                        .background(TvSurfaceRow)
                         .border(
                             width = if (isFocused) 2.5.dp else 1.dp,
-                            color = if (isFocused) TvFocusAmber else palette.border,
+                            color = if (isFocused) TvFocusCyan else TvSurfaceBorder,
                             shape = RoundedCornerShape(10.dp)
                         )
                         .onFocusChanged { isFocused = it.isFocused }
@@ -891,7 +1780,7 @@ fun HybridTextInput(
             ) {
                 Text(
                     text = label.uppercase(),
-                    color = if (isFocused) TvFocusAmber else palette.textSecondary,
+                    color = if (isFocused) TvFocusCyan else Color(0xFF94A3B8),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -903,7 +1792,7 @@ fun HybridTextInput(
                     }
                     Text(
                         text = hintText,
-                        color = palette.accent,
+                        color = TvFocusCyan,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -944,20 +1833,20 @@ fun HybridTextInput(
                     }
                 ),
                 textStyle = TextStyle(
-                    color = palette.textPrimary,
+                    color = Color(0xFFF8FAFC),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold
                 ),
-                cursorBrush = SolidColor(palette.accent),
+                cursorBrush = SolidColor(TvFocusCyan),
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(
-                        if (isFocused) palette.bgPrimary else palette.bgPrimary.copy(alpha = 0.85f)
+                        if (isFocused) TvSurfaceRowFocused else TvSurfaceRow
                     )
                     .border(
                         width = if (isFocused) 2.5.dp else 1.dp,
-                        color = if (isFocused) TvFocusAmber else palette.border,
+                        color = if (isFocused) TvFocusCyan else TvSurfaceBorder,
                         shape = RoundedCornerShape(12.dp)
                     )
                     .onFocusChanged { state ->
